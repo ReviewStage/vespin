@@ -1,15 +1,11 @@
 import type { FileChip } from "@repo/features/attachment-model";
+import type { InboxRow } from "@repo/features/inbox-digest";
 import {
   inboxCommentFiles,
   inboxLineFiles,
   inboxPreviewPieces,
 } from "@repo/features/inbox-list-model";
-import {
-  INBOX_MESSAGE_AUTHOR,
-  type InboxItem,
-  type InboxMessage,
-  optionFileIds,
-} from "@repo/features/inbox-wire";
+import { INBOX_MESSAGE_AUTHOR, type InboxMessage, optionFileIds } from "@repo/features/inbox-wire";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -31,7 +27,7 @@ import { InboxPicture, InboxPictures } from "./inbox-pictures.js";
 import { LoneLinkCards } from "./lone-link-card.js";
 import { SentWords } from "./skill-chip.js";
 import { TranscriptWords } from "./transcript-blocks.js";
-import { WordsWorkspace } from "./use-link-standing.js";
+import { usePlainLinkNames, WordsWorkspace } from "./use-link-standing.js";
 import type { InboxImageReads } from "./use-task-inbox.js";
 
 /**
@@ -201,10 +197,11 @@ function readUrls(reads: ReadonlyMap<string, InboxFileRead>): ReadonlyMap<string
  * Inbox would read every picture of every latest message just to list them.
  */
 export function useInboxLinePieces(
-  item: InboxItem,
+  item: InboxRow,
   nameOf: Parameters<typeof inboxPreviewPieces>[1],
   ticked: readonly number[],
 ): readonly (string | FileChip)[] {
+  const links = usePlainLinkNames();
   const files = inboxLineFiles(item);
 
   const queries = useQueries({
@@ -219,7 +216,7 @@ export function useInboxLinePieces(
     }),
   );
 
-  return inboxPreviewPieces(item, nameOf, ticked).map((piece) =>
+  return inboxPreviewPieces(item, nameOf, ticked, links).map((piece) =>
     Predicate.isString(piece) ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
   );
 }

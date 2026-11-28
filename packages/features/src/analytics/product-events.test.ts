@@ -23,6 +23,7 @@ import {
   productLoadCount,
   productLoadMilliseconds,
   productOpenMilliseconds,
+  productResumeCounted,
 } from "./product-events.js";
 
 const AT = Date.parse("2026-08-19T12:00:00.000Z");
@@ -320,6 +321,30 @@ test("a launch's load travels its held thread and its one-by-one reads as counts
     }),
     undefined,
   );
+
+  // A return counts as its own only where the app left after the launch's load window closed; one that left inside it is the launch's, which `launch:load` already counts.
+  assert.equal(productResumeCounted(20_000, 180_000), false);
+  assert.equal(productResumeCounted(240_000, 180_000), true);
+
+  // A return from the background travels its first minute the same way, with how long it held at most, what was delivered, and how long the app was away.
+  const resume = {
+    [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 10,
+    [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: 30_000,
+    [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: 10_000,
+    [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
+    [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: 300,
+    [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: PRODUCT_LOAD_WINDOW.WHOLE,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "96",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.RESUME_LOAD,
+      at: AT,
+      properties: { ...resume, agentId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d" },
+    }),
+    { name: PRODUCT_EVENT.RESUME_LOAD, at: AT, properties: resume },
+  );
 });
 
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
@@ -376,6 +401,8 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
         [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
         [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 400,
         [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: PRODUCT_PAGE_DATA.HELD,
+        [PRODUCT_EVENT_PROPERTY.TAP_MS]: 1500,
+        [PRODUCT_EVENT_PROPERTY.PRESSES]: 1,
         threadId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
       },
     }),
@@ -390,6 +417,8 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
         [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
         [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 400,
         [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: PRODUCT_PAGE_DATA.HELD,
+        [PRODUCT_EVENT_PROPERTY.TAP_MS]: 1500,
+        [PRODUCT_EVENT_PROPERTY.PRESSES]: 1,
       },
     },
   );

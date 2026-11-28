@@ -44,7 +44,12 @@ import type { AdmittedConversation } from "../sessions/admitted-conversation.js"
 import { SESSION_TURN } from "../sessions/agent-sessions.js";
 import { runAgentEditDescription } from "./agent-doors.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
-import { runReadChatMessages, runReadChatThread, runSearchChat } from "./manager-chat-tools.js";
+import {
+  runReactChat,
+  runReadChatMessages,
+  runReadChatThread,
+  runSearchChat,
+} from "./manager-chat-tools.js";
 import { runSendToUser } from "./send-to-user-tool.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import {
@@ -270,7 +275,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
   );
 
   it.effect(
-    "a Manager replies in a thread by its parent's or a reply's id, reads its own chat and threads and searches them, and reaches nothing of another Manager's chat",
+    "a Manager replies in a thread by its parent's or a reply's id, reads its own chat and threads and searches them, reacts on its messages and takes its reaction off, and reaches nothing of another Manager's chat",
     () =>
       Effect.gen(function* () {
         const opened = yield* openManager;
@@ -391,7 +396,42 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         );
         assert.equal(secondPage.next_cursor, undefined);
 
-        // Another Manager's chat holds none of it, and its sends reach none of it.
+        // A reaction shows on its message in every read, as Slack's do, given twice standing once, until it is taken off.
+        const reactionsOn = (answer: WireRecord) =>
+          Array.isArray(answer.messages)
+            ? answer.messages.flatMap((message) =>
+                isRecord(message) && message.message_id === "p1" ? [message.reactions ?? null] : [],
+              )
+            : [];
+
+        const reacted = yield* runReactChat(
+          callOf(agent),
+          unparsedWire({ message_id: "p1", name: "thumbsup" }),
+        );
+
+        yield* runReactChat(callOf(agent), unparsedWire({ message_id: "p1", name: "thumbsup" }));
+        assert.equal(reacted.status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.deepEqual(reactionsOn(yield* runReadChatMessages(callOf(agent), unparsedWire({}))), [
+          [{ name: "thumbsup", count: 1, users: ["you"] }],
+        ]);
+
+        yield* runReactChat(
+          callOf(agent),
+          unparsedWire({ message_id: "p1", name: "thumbsup", remove: true }),
+        );
+
+        assert.deepEqual(
+          reactionsOn(yield* runReadChatThread(callOf(agent), unparsedWire({ message_id: "p1" }))),
+          [null],
+        );
+
+        // Another Manager's chat holds none of it, its sends reach none of it, and nor do its reactions.
+        const strangerReaction = yield* runReactChat(
+          callOf(other.agent),
+          unparsedWire({ message_id: "p1", name: "thumbsup" }),
+        );
+
+        assert.equal(strangerReaction.status, ACTION_RESULT_STATUS.REJECTED);
         const strangers = yield* runReadChatMessages(callOf(other.agent), unparsedWire({}));
         assert.deepEqual(strangers.messages, []);
 

@@ -5,16 +5,19 @@
 // how many are working, and the compact one's trailing side ticks the
 // newest turn's time while any works, which the system advances itself, so
 // the island shows work moving. The expanded one and the Lock Screen list
-// up to three, each with its title, a timer from its turn's start, and Stop
-// (`StopAgentIntent`). The count stands by the panel's working mark while
-// agents work, held still since a Live Activity runs no animation of its
-// own (`WorkingMark`), and by its done mark once none does, centered then,
-// since nothing stands beside it, in the working blue or the done green,
-// and copper (`Attention`) marks only what wants the member: the asks
-// waiting, the compact presentation's Inbox glyph, and the keyline while
-// one waits. Nothing in it is a link, so no row or region opens a page of
-// the app: a person swipes it away more often than they open it, and a
-// swipe the system read as a tap opened an agent. A tap still opens the
+// up to three, each with its title, the time its turn has run, and Stop
+// (`StopAgentIntent`). Every such time is an `ElapsedTime`, which fits its
+// widest reading and reads hours and minutes once the screen dims. While
+// agents work the count stands as words alone, with no mark beside it,
+// since a Live Activity runs no animation of its own and a still working
+// mark read as stuck (`CountLabel`); once none does it stands by the
+// panel's done mark, in the same row and place, in the
+// working blue or the done green, and copper (`Attention`) marks only what
+// wants the member: the asks waiting, the compact presentation's Inbox
+// glyph, and the keyline while one waits.
+// Nothing in it is a link, so no row or region opens a page of the app: a
+// person swipes it away more often than they open it, and a swipe the
+// system read as a tap opened an agent. A tap still opens the
 // app, as iOS opens it on any activity. The colors are the brand's, written
 // into this target's asset catalog by `app.config.ts`. Every presentation
 // has a preview at the end of the file.
@@ -42,7 +45,6 @@ struct AgentsLiveActivity: Widget {
       let state = context.state
       return DynamicIsland {
         // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
-        // Note that once none works the header has no rows under it, so it stands in the island's center region instead of its leading one.
         DynamicIslandExpandedRegion(.leading) {
           if state.running > 0 {
             CountLabel(state: state).padding(.leading, ExpandedInset.side)
@@ -53,14 +55,17 @@ struct AgentsLiveActivity: Widget {
             WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
           }
         }
-        DynamicIslandExpandedRegion(.center) {
-          if state.running == 0 {
-            DoneHeader(state: state)
-          }
-        }
+        // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
+        // Note that once none works the header stands alone in the rows' place, below the camera where the island centers it top to bottom, and in from the sides as far as the rows, so the done mark and the asks stand at the edges the count and the asks stood at.
         DynamicIslandExpandedRegion(.bottom) {
-          // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
-          AgentList(state: state).padding(.horizontal, ExpandedInset.side)
+          Group {
+            if state.running > 0 {
+              AgentList(state: state)
+            } else {
+              HeaderRow(state: state)
+            }
+          }
+          .padding(.horizontal, ExpandedInset.side)
         }
       } compactLeading: {
         CompactMark(state: state)
@@ -89,56 +94,69 @@ struct ActivityContentView: View {
         CountLabel(state: state)
         if let agent = state.agents.first {
           Text(agent.title).font(.caption).lineLimit(1)
-          Text(agent.turnStart, style: .timer).font(.caption2).monospacedDigit()
+          ElapsedTime(start: agent.turnStart, fields: ElapsedTime.Fields.row, alignment: .leading)
+            .font(.caption2)
             .foregroundStyle(.secondary)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(8)
     default:
-      if state.running > 0 {
-        VStack(alignment: .leading, spacing: 10) {
-          HStack {
-            CountLabel(state: state)
-            Spacer()
-            WaitingLabel(state: state)
-          }
+      // Note that once none works the header stands alone, in the same row as while agents work, so the done mark and the asks stand where the count and the asks stood, centered top to bottom by the even padding.
+      VStack(alignment: .leading, spacing: 10) {
+        HeaderRow(state: state)
+        if state.running > 0 {
           AgentList(state: state)
         }
-        .padding(16)
-      } else {
-        DoneHeader(state: state)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .padding(16)
       }
+      .padding(16)
     }
   }
 }
 
-/// How many agents are working, or that they all finished, by the panel's working mark or its done mark, in the working blue or the done green.
+/// How many agents are working, in words alone, or that they all finished, by the panel's done mark, in the working blue or the done green.
+///
+/// Note that no mark stands beside the working count, since a Live Activity
+/// is drawn once and archived: only time-driven text and a timer's progress
+/// advance on their own, and anything else moves only in the two seconds
+/// after an update, and never with the screen dimmed (WidgetKit's
+/// "Animating data updates in widgets and Live Activities"). So the panel's
+/// working mark stood frozen mid-lap and read as stuck, and the elapsed
+/// times are what show work moving.
 struct CountLabel: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    Label {
-      Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
-    } icon: {
-      StateMark(state: state)
+    Group {
+      if state.running > 0 {
+        count
+      } else {
+        Label {
+          count
+        } icon: {
+          Image("TaskStatusDone").accessibilityHidden(true)
+        }
+      }
     }
     .font(.subheadline.weight(.semibold))
     .monospacedDigit()
     .foregroundStyle(state.tone)
     .lineLimit(1)
   }
+
+  private var count: some View {
+    Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
+  }
 }
 
-/// The header once none works: the done mark and its words, with any ask still waiting beside them, centered, since no rows stand under it.
-struct DoneHeader: View {
+/// The header: the count or the done mark at the leading edge and any asks waiting at the trailing edge, the same row while agents work and once none does.
+struct HeaderRow: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    HStack(spacing: 12) {
+    HStack {
       CountLabel(state: state)
+      Spacer()
       WaitingLabel(state: state)
     }
   }
@@ -189,13 +207,10 @@ struct AgentRow: View {
       HStack(spacing: 4) {
         Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
         Spacer(minLength: 4)
-        Text(agent.turnStart, style: .timer)
+        ElapsedTime(start: agent.turnStart, fields: ElapsedTime.Fields.row, alignment: .trailing)
           .contentTransition(.numericText(countsDown: false))
           .font(.caption)
-          .monospacedDigit()
           .foregroundStyle(.secondary)
-          .multilineTextAlignment(.trailing)
-          .frame(maxWidth: 56, alignment: .trailing)
       }
       Button(intent: StopAgentIntent(agentId: agent.id)) {
         // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, in the ground on an ink circle, as the composer's Stop stands.
@@ -235,94 +250,85 @@ enum ExpandedInset {
   static let side: CGFloat = 8
 }
 
-/// The compact island's leading mark: the Inbox glyph in copper while an ask needs the member, else the status mark in its tone.
+/// The compact island's leading side: the Inbox glyph in copper while an ask needs the member, else how many work, beside the trailing side's ticking time, or the done mark once none does.
 struct CompactMark: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
     if state.waiting > 0 {
       Image("Inbox").foregroundStyle(Color("Attention"))
+    } else if state.running > 0 {
+      RunningCount(state: state)
     } else {
-      StateMark(state: state).foregroundStyle(state.tone)
+      Image("TaskStatusDone").foregroundStyle(state.tone).accessibilityHidden(true)
     }
-  }
-}
-
-/// Where the agents stand, as the panel marks it: its working mark while any works, its done mark once none does.
-struct StateMark: View {
-  let state: AgentsActivityAttributes.ContentState
-
-  var body: some View {
-    if state.running > 0 {
-      WorkingMark()
-    } else {
-      Image("TaskStatusDone")
-    }
-  }
-}
-
-/// The panel's working mark (`@repo/ui`'s `WorkingMark`): eight 3 pt cells
-/// lapped round a 3×3 grid 2 pt apart in a 16 pt side, faint, and two
-/// chasers each with a fainter tail, in the ink around it. Note that it
-/// stands on the panel's resting frame, mid-lap, which lights four cells
-/// and reads as working, since a Live Activity is drawn once for each
-/// update rather than frame by frame, as the app holds its own mark still
-/// where the reader reduces motion.
-struct WorkingMark: View {
-  private static let cell: CGFloat = 3
-  private static let pitch: CGFloat = 5
-  private static let side: CGFloat = 16
-  private static let inset = (Self.side - (2 * Self.pitch + Self.cell)) / 2
-
-  /// The cells of the track, column and row, in the order the chasers lap them.
-  private static let track: [(column: Int, row: Int)] = [
-    (0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1),
-  ]
-
-  /// The chasers and their tails on the resting frame: the track cell each stands on, and how strong it stands.
-  private static let dots: [(cell: Int, shade: Double)] = [(1, 1), (0, 0.6), (5, 1), (4, 0.6)]
-
-  var body: some View {
-    ZStack(alignment: .topLeading) {
-      ForEach(Self.track.indices, id: \.self) { index in
-        square(index).opacity(0.3)
-      }
-      ForEach(Self.dots.indices, id: \.self) { index in
-        square(Self.dots[index].cell).opacity(Self.dots[index].shade)
-      }
-    }
-    .frame(width: Self.side, height: Self.side, alignment: .topLeading)
-    .accessibilityHidden(true)
-  }
-
-  /// The rounded square on the track cell at `index`.
-  private func square(_ index: Int) -> some View {
-    let place = Self.track[index]
-
-    return RoundedRectangle(cornerRadius: Self.cell / 4)
-      .frame(width: Self.cell, height: Self.cell)
-      .offset(
-        x: Self.inset + CGFloat(place.column) * Self.pitch,
-        y: Self.inset + CGFloat(place.row) * Self.pitch)
   }
 }
 
 /// The compact island's trailing side: while any agent works, the time the newest turn has run, which the system ticks every second, so the island always shows work moving; the count once none does. Note that the count still stands in the minimal presentation and in the expanded island and Lock Screen headers.
 struct CompactTrailing: View {
-  /// The timer's widest, in points, since timer text otherwise reserves room for its longest reading.
-  private static let width: CGFloat = 44
-
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
     if state.running > 0 {
-      Text(timerInterval: state.newestTurnStart...Date.distantFuture, countsDown: false)
-        .monospacedDigit()
-        .multilineTextAlignment(.trailing)
+      ElapsedTime(start: state.newestTurnStart, fields: ElapsedTime.Fields.compact, alignment: .trailing)
         .foregroundStyle(state.tone)
-        .frame(maxWidth: Self.width, alignment: .trailing)
     } else {
       RunningCount(state: state)
+    }
+  }
+}
+
+/// How long a turn has run since `start`, which the system advances itself.
+///
+/// Lit, it reads as a timer of at most `fields` fields, so the compact
+/// island's two read "4:05" under an hour and "22:38", hours and minutes,
+/// past it, where its seconds would make it too wide for the island. Dimmed,
+/// as Always On stands the screen, it reads hours and minutes, "0:04" and
+/// "22:38", in place of the timer: the system drops a timer's seconds there,
+/// since it redraws too seldom to tick them, and spells what is left out in
+/// words ("22 hours, 38 minutes"), too wide for any of the places it stands.
+///
+/// Note that such text fills every width it is offered, since the system lays
+/// a widget out once and cannot measure the readings to come (Apple's
+/// `Text.init(_:format:)`), so it stands in a hidden template of its widest
+/// reading, which sizes it to the font it is drawn in: a turn runs a day at
+/// most (`TURN_DEADLINE.CAP_MS` in `@repo/features/turn-deadline`), so two
+/// digits of hours always fit.
+struct ElapsedTime: View {
+  /// The most fields the lit timer shows where each stands.
+  enum Fields {
+    /// The compact island's narrow side: minutes and seconds, or hours and minutes.
+    static let compact = 2
+    /// A row's room: hours, minutes, and seconds.
+    static let row = 3
+  }
+
+  @Environment(\.isLuminanceReduced) private var dimmed
+  let start: Date
+  let fields: Int
+  /// The edge the reading stands against within its template's width.
+  let alignment: HorizontalAlignment
+
+  /// The widest reading at `fields`, with every digit a zero, which a monospaced digit draws as wide as any.
+  private var template: String { fields > Fields.compact ? "00:00:00" : "00:00" }
+
+  var body: some View {
+    Text(template)
+      .hidden()
+      .overlay(alignment: Alignment(horizontal: alignment, vertical: .center)) {
+        reading
+          .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+      }
+      .monospacedDigit()
+      .lineLimit(1)
+  }
+
+  @ViewBuilder private var reading: some View {
+    if dimmed {
+      Text(.durationOffset(to: start), format: .time(pattern: .hourMinute(padHourToLength: 1, roundSeconds: .down)))
+    } else {
+      Text(.currentDate, format: .timer(countingUpIn: start..<Date.distantFuture, maxFieldCount: fields))
     }
   }
 }
@@ -378,6 +384,17 @@ extension AgentsActivityAttributes.ContentState {
         startedAt: Date.now.addingTimeInterval(-8).timeIntervalSince1970 * 1000),
     ])
   fileprivate static let waitingOnYou = Self(running: 2, waiting: 1, agents: Array(working.agents.prefix(2)))
+  /// Turns past an hour, the newest 22 hours and 38 minutes in, where the timers read their widest.
+  fileprivate static let longRunning = Self(
+    running: 2, waiting: 1,
+    agents: [
+      .init(
+        id: "a4", title: "Migrate the billing ledger",
+        startedAt: Date.now.addingTimeInterval(-(22 * 3600 + 38 * 60 + 12)).timeIntervalSince1970 * 1000),
+      .init(
+        id: "a5", title: "Watch the release",
+        startedAt: Date.now.addingTimeInterval(-(23 * 3600 + 59 * 60)).timeIntervalSince1970 * 1000),
+    ])
   fileprivate static let done = Self(running: 0, waiting: 0, agents: [])
 }
 
@@ -386,6 +403,7 @@ extension AgentsActivityAttributes.ContentState {
 } contentStates: {
   AgentsActivityAttributes.ContentState.working
   AgentsActivityAttributes.ContentState.waitingOnYou
+  AgentsActivityAttributes.ContentState.longRunning
   AgentsActivityAttributes.ContentState.done
 }
 
@@ -394,6 +412,7 @@ extension AgentsActivityAttributes.ContentState {
 } contentStates: {
   AgentsActivityAttributes.ContentState.working
   AgentsActivityAttributes.ContentState.waitingOnYou
+  AgentsActivityAttributes.ContentState.longRunning
 }
 
 #Preview("Minimal", as: .dynamicIsland(.minimal), using: AgentsActivityAttributes()) {
@@ -408,5 +427,6 @@ extension AgentsActivityAttributes.ContentState {
 } contentStates: {
   AgentsActivityAttributes.ContentState.working
   AgentsActivityAttributes.ContentState.waitingOnYou
+  AgentsActivityAttributes.ContentState.longRunning
   AgentsActivityAttributes.ContentState.done
 }

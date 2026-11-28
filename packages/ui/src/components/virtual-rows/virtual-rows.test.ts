@@ -318,6 +318,7 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
           scroller,
           keys,
           estimate: 100,
+          anchor: VIRTUAL_ROWS_ANCHOR.END,
           children: (index: number) => createElement("p", null, keys[index]),
         }),
       ),
@@ -371,6 +372,70 @@ test("a run anchored to its end draws its last rows on its first draw, before it
   const drawn = [...container.querySelectorAll("p")].map((row) => row.textContent);
   assert.ok(drawn.includes("row-499"), "the last row is drawn");
   assert.ok(!drawn.includes("row-0"), "the first row is not");
+});
+
+test("a run anchored to its end, taken far from it before its first frame has painted, draws only the rows near where it was taken", () => {
+  vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+  holdFrames();
+  // Note that the scroller is laid out at 600px over the 50,000px its 500 rows of 100px stand in, and a scroll written to it is heard back, as the browser hears one.
+  let top = 0;
+  const isScroller = (element: Element) => element.id === "scroller";
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isScroller(this) ? 600 : 0;
+  });
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isScroller(this) ? 50_000 : 0;
+  });
+  vi.spyOn(Element.prototype, "scrollTop", "get").mockImplementation(function (this: Element) {
+    return isScroller(this) ? top : 0;
+  });
+  vi.spyOn(Element.prototype, "scrollTop", "set").mockImplementation(function (
+    this: Element,
+    to: number,
+  ) {
+    if (!isScroller(this) || to === top) return;
+    top = to;
+    this.dispatchEvent(new Event("scroll"));
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value(this: HTMLElement, options?: ScrollToOptions) {
+      if (options?.top !== undefined) this.scrollTop = options.top;
+    },
+  });
+  const keys = Array.from({ length: 500 }, (_, index) => `row-${index}`);
+  const scroller = createRef<HTMLDivElement>();
+  const handle = createRef<VirtualRowsHandle>();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      createElement(
+        "div",
+        { id: "scroller", ref: scroller },
+        createElement(VirtualRows, {
+          scroller,
+          keys,
+          estimate: 100,
+          anchor: VIRTUAL_ROWS_ANCHOR.END,
+          handle,
+          children: (index: number) => createElement("p", null, keys[index]),
+        }),
+      ),
+    ),
+  );
+  act(() => {
+    handle.current?.bringIn("row-5");
+  });
+  const drawn = [...container.querySelectorAll("p")].map((row) => row.textContent);
+  assert.ok(drawn.includes("row-5"), "the row it was taken to is drawn");
+  assert.ok(!drawn.includes("row-499"), "the rows at its end are let go");
+  assert.ok(drawn.length <= 20, `${drawn.length} rows are drawn`);
 });
 
 type Held = { runs?: VirtualRuns };

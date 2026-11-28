@@ -1,6 +1,6 @@
 // held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny, Always allow and Allow under its line in the transcript, and a banner over the composer for a call no row draws.
 
-import { HStack, Image, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, Image, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   font,
@@ -17,6 +17,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

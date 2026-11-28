@@ -11,8 +11,10 @@
  * are laid on main's document too, as the host lays them.
  */
 
+import { ACT_KIND } from "@repo/host/acts";
 import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { fixtureMoved } from "./fixture-moves.js";
 
 type TasksModule = typeof import("./tasks-fixture.js");
 
@@ -72,9 +74,22 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
     fixturePlace: tasks.fixturePlace,
     fixtureOpensTasks: tasks.fixtureOpensTasks,
     fixtureTasksView,
-    fixtureActAnswer: (run, kind, payload) =>
-      inbox.inboxActAnswer(run.profile, kind, payload) ??
-      tasks.fixtureActAnswer(run, kind, payload),
+    fixtureActAnswer: (run, kind, payload) => {
+      const staged = inbox.inboxActAnswer(run.profile, kind, payload);
+
+      // Note that a reaction or an edit the Inbox's Manager chat keeps, and a page of older items read, or a search's found items, moves its stage, so the window stages its document again to draw it.
+      if (
+        staged !== undefined &&
+        (kind === ACT_KIND.AGENTS_CHAT_REACT ||
+          kind === ACT_KIND.AGENTS_CHAT_EDIT ||
+          kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE ||
+          kind === ACT_KIND.AGENTS_INBOX_SEARCH)
+      ) {
+        fixtureMoved();
+      }
+
+      return staged ?? tasks.fixtureActAnswer(run, kind, payload);
+    },
     fixtureAppState: (state) =>
       inbox.inboxAppState(tasks.fixtureAppState(state), tasks.FIXTURE_WORKSPACE_IDS),
     fixtureReader: (run) => inbox.inboxReader(run.profile),

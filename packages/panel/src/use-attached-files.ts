@@ -4,6 +4,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
+import { PRODUCT_ATTACHMENT_KIND } from "@repo/features/analytics";
 import { base64Of } from "@repo/features/attached-files";
 import {
   attachedPictureName,
@@ -11,9 +12,11 @@ import {
   writableName,
   writtenMarkers,
 } from "@repo/features/file-marker";
+import { isStillGif } from "@repo/features/gif-frames";
 import { pastedFile } from "@repo/features/long-paste";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
+import { attachmentKindOf, countAttachmentTooLarge } from "./attachment-too-large.js";
 import { reportShownFailure } from "./failure-report.js";
 import { encodeImage } from "./feedback-images.js";
 import { isPictureFile } from "./picture-files.js";
@@ -38,11 +41,15 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  *
  * Only a file the developer handed the box is read, and only its bytes and
  * its own name: never a path, never a file beside it. An image is kept as
- * it is while it is PNG, JPEG, or WebP and small enough, and re-encoded
- * smaller as WebP otherwise, as a feedback screenshot is
- * (`./feedback-images.ts`); a PDF is kept as it is; anything else comes
+ * it is while it is PNG, JPEG, WebP, or a GIF of one frame, and small
+ * enough, and re-encoded smaller as WebP otherwise, as a feedback
+ * screenshot is (`./feedback-images.ts`), an animated GIF as its first
+ * frame, since no model takes an animation (`@repo/features/gif-frames`);
+ * a PDF is kept as it is; anything else comes
  * as a text file where its bytes spell UTF-8 with no NUL in them, whatever
- * its extension, since code arrives under every extension there is. Each
+ * its extension, since code arrives under every extension there is, and as
+ * a file of any other kind (`AGENT_ATTACHMENT_TYPE.OTHER`) where they do
+ * not, whatever its extension says, which the agent opens from its machine. Each
  * is held to its type's bound, a message to ten files and to 3 MB
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
@@ -67,7 +74,6 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
 
 /** Why a file did not come, in the words the box's note says. */
 const REFUSAL = {
-  KIND: (name: string) => `${name} can't be attached. Attach images, PDFs, or text files.`,
   TOO_LARGE: (name: string) => `${name} is too large to attach.`,
   EMPTY: (name: string) => `${name} is empty.`,
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
@@ -91,10 +97,28 @@ function spellsText(bytes: Uint8Array): boolean {
 /** One file read: what the message carries of it, or why it cannot come. */
 type FileRead = { readonly attachment: AgentAttachment } | { readonly refusal: string };
 
+/** A GIF's bytes in base64 where it is a still within an image's bound; none for an animation, a larger one, or a file that could not be read, which is re-encoded instead. */
+async function stillGifOf(file: File): Promise<string | undefined> {
+  if (file.type !== AGENT_ATTACHMENT_TYPE.GIF || file.size > AGENT_BOUNDS.MAX_IMAGE_BYTES) {
+    return undefined;
+  }
+
+  const bytes = await file.arrayBuffer().then(
+    (buffer) => new Uint8Array(buffer),
+    () => undefined,
+  );
+
+  return bytes !== undefined && isStillGif(bytes) ? base64Of(bytes) : undefined;
+}
+
 /** One file read into what a message carries, or why it cannot come. */
 async function attachmentOf(file: File): Promise<FileRead> {
   // Note that the name needs no bound of its own here, because macOS bounds a file's name inside the wire's.
   const { name } = file;
+  const gif = await stillGifOf(file);
+
+  if (gif !== undefined)
+    return { attachment: { name, mediaType: AGENT_ATTACHMENT_TYPE.GIF, data: gif } };
 
   if (isPictureFile(file)) {
     const read = await encodeImage(file, AGENT_BOUNDS.MAX_IMAGE_BYTES);
@@ -106,9 +130,17 @@ async function attachmentOf(file: File): Promise<FileRead> {
   }
 
   const pdf = file.type === AGENT_ATTACHMENT_TYPE.PDF || name.toLowerCase().endsWith(".pdf");
-  const bound = pdf ? AGENT_BOUNDS.MAX_PDF_BYTES : AGENT_BOUNDS.MAX_TEXT_BYTES;
 
-  if (file.size > bound) return { refusal: REFUSAL.TOO_LARGE(name) };
+  // Note that a file's kind is known only once its bytes are read, so it is held to the larger of the bounds it may come under first.
+  const bound = pdf
+    ? AGENT_BOUNDS.MAX_PDF_BYTES
+    : Math.max(AGENT_BOUNDS.MAX_TEXT_BYTES, AGENT_BOUNDS.MAX_FILE_BYTES);
+
+  if (file.size > bound) {
+    countAttachmentTooLarge(pdf ? PRODUCT_ATTACHMENT_KIND.PDF : attachmentKindOf(file), file.size);
+
+    return { refusal: REFUSAL.TOO_LARGE(name) };
+  }
 
   const bytes = await file.arrayBuffer().then(
     (buffer) => new Uint8Array(buffer),
@@ -124,8 +156,11 @@ async function attachmentOf(file: File): Promise<FileRead> {
 
   if (bytes.length === 0) return { refusal: REFUSAL.EMPTY(name) };
 
-  if (!pdf && !spellsText(bytes)) return { refusal: REFUSAL.KIND(name) };
-  const mediaType = pdf ? AGENT_ATTACHMENT_TYPE.PDF : AGENT_ATTACHMENT_TYPE.TEXT;
+  const mediaType = pdf
+    ? AGENT_ATTACHMENT_TYPE.PDF
+    : spellsText(bytes)
+      ? AGENT_ATTACHMENT_TYPE.TEXT
+      : AGENT_ATTACHMENT_TYPE.OTHER;
 
   return { attachment: { name, mediaType, data: base64Of(bytes) } };
 }

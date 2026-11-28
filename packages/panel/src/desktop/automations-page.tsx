@@ -1,3 +1,4 @@
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
   AUTOMATION_NEXT,
@@ -6,9 +7,12 @@ import {
   AUTOMATIONS_ORDER_WORDS,
   type AutomationGroup,
   type AutomationsOrder,
+  automationFoldsWith,
   automationGroups,
+  automationManager,
   automationNext,
   automationOwner,
+  automationRanLine,
   automationRunStanding,
   automationTriggerText,
   DEFAULT_AUTOMATIONS_ORDER,
@@ -23,11 +27,14 @@ import {
 } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
+  AUTOMATION_LIST_GROUP,
   AUTOMATION_SCOPE,
+  type AutomationListGroup,
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import {
+  AUTOMATION_FINISHED,
   AUTOMATION_PHONE_WORDS,
   AUTOMATION_RUN_REFUSAL_WORDS,
   AUTOMATION_SUGGESTION_WORDS,
@@ -43,8 +50,10 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -66,7 +75,6 @@ import {
   FailedMark,
   FiringGlyph,
   GAP,
-  type GroupFold,
   Inline,
   ListRow,
   NOT_FOUND_THING,
@@ -80,6 +88,7 @@ import {
   SuggestionCard,
   SuggestionCards,
   type SuggestionNeeds,
+  SwitchRoom,
   TIME_LOOK,
   Time,
   TOOLBAR_INSET,
@@ -94,6 +103,7 @@ import {
   ArrowDownAZIcon,
   CalendarClockIcon,
   CalendarPlusIcon,
+  ClockIcon,
   GLYPH,
   HistoryIcon,
   PowerIcon,
@@ -121,11 +131,17 @@ import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { useTaskListCollections } from "../task-list-collections.js";
+import { agentActor } from "../tasks/agent-model.js";
+import { SendingAgent } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { useOpenPlace } from "../tasks/use-open-link.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useToast } from "../toast.js";
-import { keptKey, useKept } from "../use-kept.js";
-import { useExperimentsIn } from "../workspace-experiments.js";
+import { appStateQuery, selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { type KeptEarlier, useAccountChoice } from "../view-choices.js";
+import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
@@ -140,6 +156,7 @@ import {
 } from "./automation-editor.js";
 import {
   AutomationGroupList,
+  AutomationListHeads,
   AutomationListSkeleton,
   AutomationOwnerFrame,
   AutomationRowMeta,
@@ -169,8 +186,8 @@ import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
  * building for the workspace and a lock for Only you. A row's glyph wears
  * where its newest run stands, a failure keeps its mark at the row's end,
  * and an automation turned off reads "Off" where its next run would.
- * View options orders each owner's automations, by when each was made,
- * its name, its latest run, or its next, the newest made first until the
+ * View options orders each owner's automations, by when each was made or
+ * last changed, its name, its latest run, or its next, the newest made first until the
  * reader chooses, and keeps the choice on this Mac, as the Tasks page keeps
  * its view; the owners' groups and Finished stand whatever the order.
  * Under the list, or under the line saying there is none yet, stand the
@@ -186,6 +203,15 @@ import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
  * brief to make it (`new-task-composer.tsx`).
  */
 
+/** No Manager read yet, or none listed, the same array every render. */
+const NO_MANAGERS: readonly ListedAgent[] = [];
+
+/** What a phone's row's menu says before its Manager's name, opening the Manager's page. */
+const OPEN_MANAGER = "Open";
+
+/** What a finished one-time automation's row says before when it ran. */
+const RAN_WORD = "Ran";
+
 /** What an automation's row is, which names its ⋯ and its menu. */
 const ROW_THING = "Automation";
 
@@ -199,9 +225,14 @@ const CREATE_WITH_AGENT = CREATE_WITH_AGENT_WORDS.TITLE;
 /** What the list says where it could not be read. */
 const UNREAD_LINE = "The automations could not be read.";
 
-/** The heading over the one-time automations that ran, folded at first, since nothing more of them is due. */
-const FINISHED = "Finished";
-const FINISHED_FOLD = { defaultOpen: false } as const satisfies GroupFold;
+/** Which of the list's groups stand folded until the reader folds or opens one: Finished alone. */
+const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
+
+/** Nothing kept in this window before the account kept the folds, since the folds were kept on the account from the first. */
+const NOTHING_KEPT_EARLIER: KeptEarlier<readonly AutomationListGroup[]> = [
+  undefined,
+  () => undefined,
+];
 
 /** What the Runs tab says where its runs could not be read, and while they are first read. */
 const RUNS_UNREAD_LINE = "The runs could not be read.";
@@ -216,12 +247,13 @@ const NO_WORKSPACE_HINT = "Choose a workspace first";
 /** Each order's glyph on View options' Order by, the Tasks page's own where it orders alike. */
 const ORDER_ICON = {
   [AUTOMATIONS_ORDER.CREATED]: <CalendarPlusIcon />,
+  [AUTOMATIONS_ORDER.UPDATED]: <ClockIcon />,
   [AUTOMATIONS_ORDER.NAME]: <ArrowDownAZIcon />,
   [AUTOMATIONS_ORDER.LAST_RUN]: <HistoryIcon />,
   [AUTOMATIONS_ORDER.NEXT_RUN]: <CalendarClockIcon />,
 } as const satisfies Record<AutomationsOrder, React.JSX.Element>;
 
-/** Where the list's order is kept on this Mac. */
+/** Where an earlier build kept the list's order on this Mac, moved up to the account once. */
 const KEPT_ORDER = keptKey(
   "app.automationsOrder",
   Schema.fromJsonString(Schema.Literals(Object.values(AUTOMATIONS_ORDER))),
@@ -330,6 +362,22 @@ function MakerCell({
   );
 }
 
+/** The Manager an automation's runs land on, as its row draws it: its face and its name, its whole name on hover where the column cuts it short. */
+function ManagerMark({ manager }: { manager: ListedAgent }): React.JSX.Element {
+  const name = agentName(manager);
+
+  return (
+    <Tooltip label={name}>
+      <span className="automation-manager inline-flex min-w-0 items-center gap-item-gap">
+        <ActorMark actor={agentActor(manager, name)} size={ACTOR_SIZE.INLINE} />
+        <OneLine className="automation-manager-name" words={name}>
+          <ReplayMask>{name}</ReplayMask>
+        </OneLine>
+      </span>
+    </Tooltip>
+  );
+}
+
 type UseRunNowResult = { readonly running: boolean; readonly run: () => void };
 
 /**
@@ -414,6 +462,8 @@ function useTakeOver(
 interface AutomationRowProps {
   automation: AutomationSummary;
   workspace: Workspace | undefined;
+  /** The workspace's Managers, whose face and name a row draws where its runs land on one; none where the list names no Manager, as a Manager's own Settings lists its automations. */
+  managers: readonly ListedAgent[] | undefined;
   now: number;
   onOpen: () => void;
   onToggle: (enabled: boolean) => Promise<AutomationWriteAnswer>;
@@ -425,8 +475,8 @@ interface AutomationRowProps {
 
 /**
  * One automation's row: its tile, the glyph of what fires it wearing where its newest run
- * stands, its name over what fires it, who made it, when it runs next with a
- * failure's mark before it, and its switch, hanging the automation's card. The maker and the next run each keep a column of their
+ * stands, its name over what fires it, the Manager its runs land on, who made it, when it runs next with a
+ * failure's mark before it, and its switch, hanging the automation's card. The Manager, the maker, and the next run each keep a column of their
  * own, so they line up down the list whatever each row says. Everything but the switch is one press
  * that opens its page, as a sidebar task's row is, so the row opens wherever
  * it is pressed and the switch beside the press only switches. Its ⋯,
@@ -447,6 +497,7 @@ function AutomationRow({
 function WideAutomationRow({
   automation,
   workspace,
+  managers,
   now,
   onOpen,
   onToggle,
@@ -467,7 +518,14 @@ function WideAutomationRow({
 
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
-  const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
+  // Note that a one-time automation that ran says what its run started in place of what fires it, since nothing will fire it again.
+  const ran = next.kind === AUTOMATION_NEXT.RAN ? automation.lastRun : null;
+
+  const line =
+    ran === null
+      ? automationTriggerText(automation.trigger, automation.repositories ?? [])
+      : automationRanLine(ran);
+
   const hiddenWorking = working === undefined ? null : <VisuallyHidden>{working}</VisuallyHidden>;
   const coarse = useCoarsePointer();
 
@@ -480,16 +538,26 @@ function WideAutomationRow({
         title={<span className="automation-row-name">{automation.name}</span>}
         muted={!automation.enabled}
         titleReplayMasked
-        description={trigger}
+        description={line}
         descriptionReplayMasked
+        // Note that the Manager's column presses to its page, so the columns stand beside the row's press, a press on them elsewhere still opening the automation.
+        metaPresses
         meta={
           <AutomationRowMeta
             lead={hiddenWorking}
+            manager={managerColumn(automation, managers)}
             owner={<MakerCell automation={automation} workspace={workspace} />}
             next={
               <>
                 {stateEndMark(state, true)}
-                {next.kind === AUTOMATION_NEXT.AT ? (
+                {ran !== null ? (
+                  <OneLine className="automation-row-when" words={nextWords}>
+                    <ReplayUnmask>
+                      {RAN_WORD}{" "}
+                      <Time at={ran.firedAt} now={now} look={TIME_LOOK.PROVENANCE} hint />
+                    </ReplayUnmask>
+                  </OneLine>
+                ) : next.kind === AUTOMATION_NEXT.AT ? (
                   <OneLine className="automation-row-when" words={nextWords}>
                     <ReplayUnmask>
                       Next: <Time at={next.at} now={now} look={TIME_LOOK.SCHEDULED} hint />
@@ -504,7 +572,14 @@ function WideAutomationRow({
             }
           />
         }
-        actions={<AutomationSwitch automation={automation} write={onToggle} />}
+        // Note that a one-time automation that ran offers no switch, since turning it on runs nothing, and keeps the switch's room so its columns stand over the others'.
+        actions={
+          ran === null ? (
+            <AutomationSwitch automation={automation} write={onToggle} />
+          ) : (
+            <SwitchRoom />
+          )
+        }
         hint={{ Hint: RowHint, label: automation.name }}
         onPress={onOpen}
         onOpenInTab={openInTab}
@@ -522,6 +597,25 @@ function WideAutomationRow({
         more={!coarse}
       />
     </RowHintOptions>
+  );
+}
+
+/** A wide row's Manager column: the Manager's face and name, hanging its card and opening its page on a press, empty for one that hands its runs to none, and no column where the list names none. */
+function managerColumn(
+  automation: AutomationSummary,
+  managers: readonly ListedAgent[] | undefined,
+): React.ReactNode {
+  if (managers === undefined) return undefined;
+  const manager = automationManager(automation, managers);
+
+  if (manager === undefined) return null;
+  const name = agentName(manager);
+
+  // Note that the Manager is named as an agent is wherever it speaks: its face, its card while the pointer rests on it, and its page on a press.
+  return (
+    <ReplayMask>
+      <SendingAgent actor={agentActor(manager, name)} agentId={manager.id} />
+    </ReplayMask>
   );
 }
 
@@ -543,14 +637,16 @@ function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.
  * A narrow room's row, a phone's, as the iOS app's list draws it: the mark of
  * what fires it, which its newest run's mark takes the place of while that
  * works or failed; its name; when it runs next and what fires it, or "Off"
- * and what fires it; how its newest run went; and at its end when that run
+ * and what fires it; the Manager its runs land on, where one is, and how its newest run went; and at its end when that run
  * fired and a chevron, faded while it is off. It draws no switch: its menu,
- * a long press or its ⋯, turns it on or off beside Run now, then Copy link,
- * Take over where it may, and Delete.
+ * a long press or its ⋯, opens its Manager's page first where its runs land
+ * on one, turns it on or off beside Run now, then Copy link, Take over where
+ * it may, and Delete.
  */
 function PhoneAutomationRow({
   automation,
   workspace,
+  managers,
   now,
   onOpen,
   onToggle,
@@ -564,6 +660,22 @@ function PhoneAutomationRow({
   const coarse = useCoarsePointer();
   const run = automation.lastRun;
   const working = run !== null && automationRunStanding(run) === AUTOMATION_RUN_STANDING.WORKING;
+  const manager = managers === undefined ? undefined : automationManager(automation, managers);
+  const openPlace = useOpenPlace();
+
+  // Note that the Manager stands inside the row's press on a phone, so its page opens from the row's menu, as the iOS app's long press opens it.
+  const openManager =
+    manager === undefined || openPlace === undefined
+      ? undefined
+      : {
+          label: `${OPEN_MANAGER} ${agentName(manager)}`,
+          icon: (
+            <ActorMark actor={agentActor(manager, agentName(manager))} size={ACTOR_SIZE.INLINE} />
+          ),
+          onSelect: () => openPlace({ kind: LINK_DESTINATION.AGENT, agentId: manager.id }),
+          // Note that the Manager's name is a person's words, masked in a screen recording though the menu's own words are not.
+          replayMasked: true,
+        };
 
   return (
     <RowHintOptions
@@ -576,7 +688,16 @@ function PhoneAutomationRow({
         titleReplayMasked
         description={automationPhoneLine(automation, now)}
         descriptionReplayMasked
-        foot={<ReplayUnmask>{automationLastRunWords(automation)}</ReplayUnmask>}
+        foot={
+          manager === undefined ? (
+            <ReplayUnmask>{automationLastRunWords(automation)}</ReplayUnmask>
+          ) : (
+            <Inline gap={GAP.TIGHT}>
+              <ManagerMark manager={manager} />
+              <ReplayUnmask>· {automationLastRunWords(automation)}</ReplayUnmask>
+            </Inline>
+          )
+        }
         // Note that a run at work says so by its mark, so it is timed only once it settled.
         meta={
           run === null || working ? undefined : (
@@ -591,6 +712,7 @@ function PhoneAutomationRow({
         menu={rowMenu(
           ROW_THING,
           automationActionGroups({
+            openManager,
             links,
             runNow: runNowAction(runNow.running, runNow.run),
             turn: {
@@ -615,6 +737,7 @@ function PhoneAutomationRow({
 /** What every row of the list is handed: the room it stands in, and the presses on it. */
 interface AutomationRowsShown {
   workspace: Workspace | undefined;
+  managers: readonly ListedAgent[] | undefined;
   now: number;
   narrow: boolean;
   onOpen: (automation: AutomationSummary) => void;
@@ -638,6 +761,7 @@ function AutomationGroupRows({
           key={automation.id}
           automation={automation}
           workspace={shown.workspace}
+          managers={shown.managers}
           now={shown.now}
           narrow={shown.narrow}
           onOpen={() => shown.onOpen(automation)}
@@ -651,12 +775,16 @@ function AutomationGroupRows({
 }
 
 /**
- * The list, each owner's automations in a list, under its own heading where
- * more than one list stands, or in a narrow room, whose rows name no owner,
- * each heading counting its rows there, and last the finished one-time automations, folded under Finished until
- * opened, since nothing more of them is due. Note that a lone owner's list
- * is still a region named by its owner, as a headed one is by its heading,
- * so a reader moving by landmark hears whose automations they are either way.
+ * The list, under the heads of its columns in a wide room: each owner's
+ * automations, the workspace's first, then the one-time automations that
+ * ran under Finished, as their history. Each group stands under the head the
+ * sidebar's groups wear, led by its owner's picture, the workspace's tile or
+ * the reader's own, and Finished by its glyph, and folds on a press, counting
+ * its rows while folded, and at rest on a phone, as the sidebar's and the iOS
+ * app's do. Which groups stand folded is one of the account's view choices
+ * (`VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED`), so it follows the reader to every
+ * device, Finished folded until opened, since nothing more of it is due; a
+ * fixture run folds and keeps nothing.
  */
 function AutomationList({
   groups,
@@ -666,27 +794,54 @@ function AutomationList({
   groups: readonly AutomationGroup[];
   finished: readonly AutomationSummary[];
 }): React.JSX.Element {
-  const headed = groups.length + (finished.length === 0 ? 0 : 1) > 1 || shown.narrow;
-  // Note that a phone's headings count their rows, as the iOS app's sections do.
-  const counted = (rows: readonly AutomationSummary[]) => (shown.narrow ? rows.length : undefined);
+  const coarse = useCoarsePointer();
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+
+  const folds = useAccountChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED,
+    null,
+    FOLDED_AT_FIRST,
+    staged,
+    NOTHING_KEPT_EARLIER,
+  );
+
+  // Note that a press folds or opens the group as the folds stand as it is pressed, so a fold another device made since is kept.
+  const fold = (group: AutomationListGroup) => ({
+    folded: folds.value.includes(group),
+    // Note that a press asks for the fold it saw undone, laid over the folds as they stand, so folds read after it was pressed never turn it back.
+    onToggle: () => {
+      const asked = !folds.value.includes(group);
+      folds.change((standing) => automationFoldsWith(standing, group, asked));
+    },
+  });
 
   return (
     <>
+      {/* Note that a list with no rows stands no heads, since they would head nothing under the line saying there are none yet. */}
+      {shown.narrow || (groups.length === 0 && finished.length === 0) ? null : (
+        <AutomationListHeads managers={shown.managers !== undefined} more={!coarse} />
+      )}
       {groups.map((group) => {
-        const name = automationOwnerName(
-          group.owner,
-          shown.workspace?.name,
-          group.automations.every((automation) => automation.mine === true),
-        );
+        const mine = group.automations.every((automation) => automation.mine === true);
+        const name = automationOwnerName(group.owner, shown.workspace?.name, mine);
 
-        // A phone's lone owner's list is headed too, since its rows name no owner.
         return (
           <AutomationGroupList
             key={group.owner}
             name={name}
             nameMasked={group.owner === AUTOMATION_SCOPE.WORKSPACE}
-            headed={headed}
-            count={counted(group.automations)}
+            headed
+            glyph={
+              <OwnerMark
+                owner={group.owner}
+                workspace={shown.workspace}
+                mine={mine}
+                size={OWNER_MARK_SIZE.INLINE}
+              />
+            }
+            fold={fold(group.owner)}
+            count={group.automations.length}
+            phone={shown.narrow}
           >
             <AutomationGroupRows automations={group.automations} shown={shown} />
           </AutomationGroupList>
@@ -694,11 +849,13 @@ function AutomationList({
       })}
       {finished.length === 0 ? null : (
         <AutomationGroupList
-          name={FINISHED}
+          name={AUTOMATION_FINISHED}
           nameMasked={false}
           headed
-          fold={FINISHED_FOLD}
-          count={counted(finished)}
+          glyph={<HistoryIcon />}
+          fold={fold(AUTOMATION_LIST_GROUP.FINISHED)}
+          count={finished.length}
+          phone={shown.narrow}
         >
           <AutomationGroupRows automations={finished} shown={shown} />
         </AutomationGroupList>
@@ -1001,6 +1158,7 @@ export function AutomationRows({
   listed,
   order,
   workspace,
+  managers,
   narrow,
   automations,
   onOpen,
@@ -1009,6 +1167,8 @@ export function AutomationRows({
   listed: readonly AutomationSummary[];
   order: AutomationsOrder;
   workspace: Workspace | undefined;
+  /** The workspace's Managers, which each row names where its runs land on one; none where the list names no Manager. */
+  managers?: readonly ListedAgent[] | undefined;
   narrow: boolean;
   automations: Pick<ReturnType<typeof useAutomations>, "toggle" | "change">;
   onOpen: (automation: AutomationSummary) => void;
@@ -1022,8 +1182,9 @@ export function AutomationRows({
     <>
       <AutomationList
         groups={automationGroups(listed, order)}
-        finished={finishedAutomations(listed, order)}
+        finished={finishedAutomations(listed)}
         workspace={workspace}
+        managers={managers}
         now={now}
         narrow={narrow}
         onOpen={onOpen}
@@ -1059,7 +1220,24 @@ function ListPage({
   const workspacesRead = useWorkspacesRead();
   const { read, reload } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
-  const [order, onOrder] = useKept(KEPT_ORDER, DEFAULT_AUTOMATIONS_ORDER);
+
+  const { value: order, choose: onOrder } = useAccountChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+    null,
+    DEFAULT_AUTOMATIONS_ORDER,
+    useAppStateSlice(selectFixtureStaged) === true,
+    useKeptLeaving(KEPT_ORDER),
+  );
+
+  const managersListed =
+    useWorkspaceExperiment(workspace?.id, EXPERIMENT.MANAGERS) && tasks.signedIn;
+
+  // Note that the column stands whether or not the Managers are read yet, so the rows do not move as they land.
+  const { managers = NO_MANAGERS } = useWorkspaceManagers(
+    workspace?.id,
+    managersListed,
+    tasks.agentsCarried,
+  );
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
@@ -1111,6 +1289,7 @@ function ListPage({
           listed={listed}
           order={order}
           workspace={workspace}
+          managers={managers}
           narrow={room === SHELL_ROOM.NARROW}
           automations={automations}
           onOpen={(automation) =>

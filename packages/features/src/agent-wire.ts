@@ -135,6 +135,12 @@ export const AGENT_BOUNDS = {
   MAX_TEXT_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes a text file is inlined whole for the model at: about 25,000 tokens of code. A larger one is written into the agent's machine, its first lines inlined (`isInlinedText`). */
   MAX_INLINED_TEXT_BYTES: 100_000,
+  /**
+   * The most bytes one file of any other kind may hold (`AGENT_ATTACHMENT_TYPE.OTHER`): as many as
+   * the message's files together, as a PDF's, since a message's files ride base64 inside its request,
+   * whose body a function bounds (`request-body-limit.ts`), and one archive or document may be all it carries.
+   */
+  MAX_FILE_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit (`request-body-limit.ts`). */
   MAX_ATTACHMENTS_BYTES: MAX_REQUEST_FILES_BYTES,
 } as const;
@@ -278,20 +284,12 @@ export type AgentSource = typeof agentSourceSchema.Type;
 
 /**
  * Where an agent's runner and checkout live: a Vercel Sandbox, as every
- * agent from before the column does, one of the starter's devices, or a
- * machine the agent's workspace owns, each agent in its own VM there; a
- * device and a workspace's machine both take their work as rows their host
- * follows (`@repo/features/device-agent-wire`).
- *
- * Note that a build before `HOSTED_API_VERSION` 7 reads an agent's machine
- * only as the cloud or a device, so the service answers it no agent on a
- * workspace's machine (`workspace-machine-reads.ts`), and an automation's
- * place still names the cloud or a device alone (`personalRunsOnSchema`).
+ * agent from before the column does, or one of the starter's devices, which
+ * takes its work as rows it follows (`@repo/features/device-agent-wire`).
  */
 export const AGENT_MACHINE = {
   VERCEL: "vercel",
   DEVICE: "device",
-  WORKSPACE: "workspace",
 } as const;
 
 export type AgentMachineKind = (typeof AGENT_MACHINE)[keyof typeof AGENT_MACHINE];
@@ -557,25 +555,28 @@ export type AgentTurn = typeof agentTurnSchema.Type;
 
 /**
  * The files a message may carry, by the media type each travels as: an
- * image or a PDF, which the model reads as a file, or a text file of any
+ * image or a PDF, which the model reads as a file; a text file of any
  * extension, which travels as its UTF-8 bytes and is inlined for the model
  * as fenced text under its name, or written into its machine where it is
- * too large to inline (`isInlinedText`).
+ * too large to inline (`isInlinedText`); or any other file, which is never
+ * handed to the model but written into its machine, and named by its path
+ * for the agent to open with its own tools.
  */
 export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
-  /**
-   * A still GIF (`gif-frames.ts`). Note that no client sends one yet, but
-   * re-encodes it as it does any other picture, because a message box's file
-   * may be kept and served back as its type (a comment's, an Inbox reply's,
-   * a queued message's), which a client released before this reads under
-   * types without it.
-   */
+  /** A still GIF (`gif-frames.ts`); a message box sends an animated one as its first frame. */
   GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
+  /**
+   * Any other file, a document, a spreadsheet, an archive, or a binary,
+   * whatever type its machine gave it, since its name says what it is and a
+   * file is served back under the type it travels as, which this one names
+   * no reader to run.
+   */
+  OTHER: "application/octet-stream",
 } as const;
 
 export type AgentAttachmentType =
@@ -584,8 +585,19 @@ export type AgentAttachmentType =
 const AGENT_ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
 
 /** Whether a type read off the wire is one a message's file may be. */
-export function isAgentAttachmentType(type: string): type is AgentAttachmentType {
+function isAgentAttachmentType(type: string): type is AgentAttachmentType {
   return AGENT_ATTACHMENT_TYPES.has(type);
+}
+
+/**
+ * The type a message's file read back off the wire is carried as: its own
+ * where this build knows it, and a file of any other kind otherwise
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`). Note that a type a later build adds is
+ * read so, because its file still opens and travels as bytes to save, where
+ * refusing it would drop the file or close the edit that holds it.
+ */
+export function agentAttachmentTypeOf(type: string): AgentAttachmentType {
+  return isAgentAttachmentType(type) ? type : AGENT_ATTACHMENT_TYPE.OTHER;
 }
 
 /** The most bytes one file of each type may hold. */
@@ -596,6 +608,7 @@ const AGENT_ATTACHMENT_BYTES = {
   [AGENT_ATTACHMENT_TYPE.GIF]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.PDF]: AGENT_BOUNDS.MAX_PDF_BYTES,
   [AGENT_ATTACHMENT_TYPE.TEXT]: AGENT_BOUNDS.MAX_TEXT_BYTES,
+  [AGENT_ATTACHMENT_TYPE.OTHER]: AGENT_BOUNDS.MAX_FILE_BYTES,
 } as const satisfies Record<AgentAttachmentType, number>;
 
 /** The characters base64 spells a count of bytes in, padded, as an attachment's data carries them. */
@@ -769,15 +782,12 @@ const agentStartFromSchema = EffectSchema.Struct({
 export type AgentStartFrom = typeof agentStartFromSchema.Type;
 
 /**
- * A place of the cloud or of one member's own: the cloud, or one of their
- * devices by its id. It is where an automation's runs start
- * (`automation-wire.ts`) and the place a member's last pick keeps
- * (`runs-on-pick.ts`), neither of which names a machine a workspace owns:
- * an automation's place is read by every build in its list, one before
- * `HOSTED_API_VERSION` 7 reads no such machine, and a pick is read by a
- * Start in any of the member's workspaces.
+ * Where a Start's agent runs, as a request names it: the cloud, or one of
+ * the starting member's own devices (a Mac's desktop app or a host) by its
+ * id, which the service checks is theirs, registered, and not away before
+ * it makes the agent there.
  */
-export const personalRunsOnSchema = EffectSchema.Union([
+export const agentRunsOnRequestSchema = EffectSchema.Union([
   EffectSchema.Struct({ machine: EffectSchema.Literal(AGENT_MACHINE.VERCEL) }),
   EffectSchema.Struct({
     machine: EffectSchema.Literal(AGENT_MACHINE.DEVICE),
@@ -785,27 +795,9 @@ export const personalRunsOnSchema = EffectSchema.Union([
   }),
 ]);
 
-export type PersonalRunsOn = typeof personalRunsOnSchema.Type;
-
-/**
- * Where a Start's agent runs, as a request names it: the cloud, one of the
- * starting member's own devices (a Mac's desktop app or a host) by its id,
- * which the service checks is theirs, registered, and not away, or a
- * machine the agent's workspace owns by its id, which the service checks
- * that workspace owns and is ready to run agents in VMs, before it makes
- * the agent there.
- */
-export const agentRunsOnRequestSchema = EffectSchema.Union([
-  ...personalRunsOnSchema.members,
-  EffectSchema.Struct({
-    machine: EffectSchema.Literal(AGENT_MACHINE.WORKSPACE),
-    deviceId: wireUuidSchema,
-  }),
-]);
-
 export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
 
-/** A move of an agent to another place in the same agent: the cloud, one of its starter's own devices, or a machine its workspace owns (`coder-host/move.ts`). */
+/** A move of an agent to another place in the same agent: the cloud, or one of its starter's own devices (`coder-host/move.ts`). */
 export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });
 
 /** A branch a Start names for a checkout to be cloned at: a name git takes, with no space and none of the characters a ref refuses. */
@@ -1192,11 +1184,18 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
  * Moving the asking member's own read mark of a Manager's chat (PATCH): a
- * look reads it through the service's now, never back, and a mark by hand
- * changes nothing. A coder's mark moves too, though nothing reads it. The
- * answer is the agent as it then stands.
+ * look reads it through the service's now, never back. A mark by hand
+ * naming a message of the chat (`unreadFrom`, its id) moves the mark back
+ * to just before it, as Mark unread does, and one naming none changes
+ * nothing. A coder's mark moves too, though nothing reads it. The answer is
+ * the agent as it then stands.
  */
-export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
+export const agentReadRequestSchema = EffectSchema.Struct({
+  readMark: readMarkSchema,
+  unreadFrom: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+});
+
+export type AgentReadRequest = typeof agentReadRequestSchema.Type;
 
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
@@ -1348,17 +1347,17 @@ export const agentSummarySchema = EffectSchema.Struct({
   face: EffectSchema.optionalKey(managerFaceSchema),
   /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
   readThrough: EffectSchema.optionalKey(countedNumber),
+  /** That the reader marked a Manager's chat unread (Mark as unread) and has not opened it since, which reads it unread whoever wrote after `readThrough`; absent otherwise, and from a service older than it. */
+  markedUnread: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
   saidAt: EffectSchema.optionalKey(countedNumber),
-  /** Where its runner runs, said only of an agent on its starter's device or on a machine its workspace owns; absent for one in a sandbox, and from a service older than it. */
-  machine: EffectSchema.optionalKey(
-    EffectSchema.Literals([AGENT_MACHINE.DEVICE, AGENT_MACHINE.WORKSPACE]),
-  ),
+  /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
+  machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
   sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
-   * The Mac a local agent runs on, or the workspace's machine an agent on
-   * one runs on, by its own name, and the epoch milliseconds it last beat, which a reader holds against its own clock
+   * The Mac a local agent runs on, by its own name, and the epoch
+   * milliseconds it last beat, which a reader holds against its own clock
    * (`deviceStanding`), though a window judges a device by its shared presence
    * read (`hosts.presence`) rather than by this; absent for an agent in a sandbox,
    * for one whose Mac is gone, from a read that does not name it, and from a
@@ -1649,6 +1648,8 @@ const agentPageSchema = EffectSchema.Struct({
   origin: EffectSchema.optionalKey(agentOriginSchema),
   workspaceId: EffectSchema.String,
   repository: EffectSchema.NullOr(EffectSchema.String),
+  /** Every repository it works in as `owner/name`, `repository` first and the rest it was started in after it; none for one with none, and absent from a service before it. */
+  repositories: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** The branch checked out in its sandbox as its last turn ended, pushed or not; absent before a turn ends, where the checkout stood detached, and from a service before it. */
   branch: EffectSchema.optionalKey(EffectSchema.String),
 });
@@ -1763,10 +1764,17 @@ export type ListedAgent = typeof listedAgentSchema.Type;
  * a surface that draws an agent the list doesn't hold, such as one a link
  * names, draws it as it draws a listed one. Note that a page names no
  * automation by null where the list leaves the key out, and carries the run
- * that started it and its branch, which the list's row doesn't.
+ * that started it, its branch, and every repository it works in, which the
+ * list's row doesn't.
  */
 export function listedAgentOfPage(page: AgentPage): ListedAgent {
-  const { automationId, origin: _origin, branch: _branch, ...agent } = page;
+  const {
+    automationId,
+    origin: _origin,
+    branch: _branch,
+    repositories: _repositories,
+    ...agent
+  } = page;
 
   return automationId === null ? agent : { ...agent, automationId };
 }

@@ -25,7 +25,7 @@ on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
 app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
 and an iPad, and uploads each one's screenshots as a `mobile-screenshots-*`
 artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
-desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
+desktop app's tests on a Mac: the release job (`release.yml`'s `xcode-27` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
 
@@ -159,12 +159,22 @@ component, or add the component or variant there.
   `show_media`'s pictures are
   (`packages/service/src/agents/browser/browser-tool.ts`), which the stored
   conversation names by id, which that transcript shows to the members who can
-  open the task, and which is deleted with the conversation, at once on a
-  delete of its task or agent or of the account. None of it ever goes into a
+  open the task, and which, on a delete of the conversation, its task or
+  agent, or the account, becomes unreachable at once and is purged from
+  storage within about a minute. These bytes, and those of every attachment
+  below, are kept in a private Vercel Blob store beside the service. None of it ever goes into a
   trace, a counted event, or a fixture, and session replay
   masks the live view and the transcript's screenshots; the cookies a member
   types into it stay in that agent's sandbox, and its snapshots, for the
-  sandbox's life. An agent may record its browser as a video (`record` and
+  sandbox's life. A member who may message the agent may pick elements of a
+  tab's page to note (`packages/service/src/browser-live/pick.ts`): each
+  element's selector, ref, role, name, opening tag, words, and a crop of it go
+  to that member's panel alone and are held in its window until sent, and the
+  notes go to the agent as the member's own message, its crops attached, so
+  their words, the page's address and title among them, reach the agent's
+  transcript, the model, and its traces as a typed line does, and the crops
+  are kept as a message's pictures are; none of it goes into a counted event
+  or a fixture. An agent may record its browser as a video (`record` and
   `stop_recording`), whose frames the recorder in its sandbox writes to that
   sandbox's disk until the next recording clears them, and whose WebM the
   service keeps beside the transcript the call is written to as it keeps a
@@ -175,20 +185,23 @@ component, or add the component or variant there.
   one of its workspace's channels
   (`packages/service/src/agents/coder-host/inbox-image.ts`), kept beside the
   thread's message, up to 4 MB, as a picture posted there is, shown to whoever
-  may read that thread and deleted with it, and none of it goes into a trace,
+  may read that thread, and on its delete unreachable at once and purged
+  from storage within about a minute, and none of it goes into a trace,
   a counted event, or a fixture. Such a recording may also be added to its
   task's plan, from the file viewer's Add to plan or an agent's `edit_plan`,
   kept beside the plan as its pictures are
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
-  who can open the task and deleted with the plan; `look_at_picture` refuses
+  who can open the task, and on a delete of the plan unreachable at once and
+  purged from storage within about a minute; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
   and none of it goes into a trace, a counted event, or a fixture. An agent may likewise show, or post to a thread, a sound clip it made in its sandbox (a WAV, MP3, M4A, AAC, or Ogg file, up to 4 MB), and a clip may be added to its task's description, from the file viewer's Add to description or an agent's `edit_description`, kept, shown, and deleted on the terms of a recording, with an AAC copy kept beside an Ogg one for a phone that plays no Ogg; `look_at_picture` refuses it, so no model is handed it, and none of it goes into a trace, a counted event, or a fixture. And a window on a member's own Mac,
   which an agent's `computer` tool reads only for an app the member allowed,
   reaches the model as a bounded copy, and its full-size copy and the app's
   icon are kept beside the transcript the call is written to, as
   `show_media`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
-  shown to the members who can open the task and deleted with the
-  conversation; session replay masks the transcript's screenshots, and none
+  shown to the members who can open the task, and on a delete of the
+  conversation unreachable at once and purged from storage within about a
+  minute; session replay masks the transcript's screenshots, and none
   of it ever goes into a trace, a counted event, or a fixture. And an app's
   window on a member's own Mac may be recorded as a video by the `computer`
   tool's `record` and `stop_recording`, only for an app the member allowed:
@@ -198,12 +211,24 @@ component, or add the component or variant there.
   its command's row until the call reads it and the row goes, then keeps it
   beside the transcript the call is written to as `show_media`'s pictures
   are (`packages/service/src/agents/computer-tool.ts`), shown to the members
-  who can open the task and deleted with the conversation, and saves a copy
+  who can open the task, and on a delete of the conversation unreachable at
+  once and purged from storage within about a minute, and saves a copy
   on the agent's own machine, its sandbox or its starter's Mac, from which it
   may be posted to a thread or added to its task's plan on the terms above.
   The model is never handed it, session replay masks its address so its
   player records empty (`packages/panel/src/session-replay.ts`), and none of
-  it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
+  it goes into a trace, a counted event, or a fixture. And a picture a coding
+  agent's own tool answered on its machine (an image or a PDF's page a CLI or
+  MCP tool read or made), which its runner posts to the service apart from its
+  events (`POST /api/agents/runner-pictures`,
+  `packages/service/src/agents/native-events/runner-pictures-app.ts`), is kept
+  beside the transcript the call is written to, as `show_media`'s pictures
+  are, up to 4 MB each and 200 MB a conversation, shown to the members who can
+  open the task, and on a delete of the conversation, its task or agent, or
+  the account, unreachable at once and purged from storage within about a
+  minute. The model sees it only as its harness handed it, never from the
+  store; session replay masks the transcript's pictures; and none of it goes
+  into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's
@@ -221,6 +246,14 @@ component, or add the component or variant there.
   what leaves the machine is layout and the app's own words, not a person's;
   an unmasked attribute or a new way of drawing words is what would change
   that.
+- The iOS app's session replay is Sentry's mobile replay
+  (`apps/mobile/src/crash-reports.ts`), recorded every session with everything
+  masked (`REPLAY_MASKING`: every word, field, symbol, vector, and picture the
+  app did not ship with drawn as a box, and web views, video, PDFs and Safari
+  sheets always), filed under no account, and stopped with the SDK by Share
+  usage data; nothing is unmasked, since `@repo/ui-native` has no mark for the
+  app's own words, and an unmask option, a network detail allowed for an
+  address, or a way of drawing the SDK cannot mask is what would change that.
 - Never push PR media to a branch but `pr-assets`, under `pr-<number>/`, if
   you add any. PR media is not required.
 - Never add to this file (`AGENTS.md`, which `CLAUDE.md` links to) unless the

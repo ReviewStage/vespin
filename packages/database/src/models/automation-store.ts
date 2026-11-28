@@ -1,4 +1,4 @@
-import { AGENT_MACHINE, type PersonalRunsOn } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_RUN_REASON,
@@ -128,7 +128,7 @@ export const AUTOMATION_COLUMNS = {
 };
 
 /** The machine an automation's runs start on, as a Start names it; none where it was made naming none, or its row holds a machine this release does not know or a device with no id. */
-export function automationRunsOn(made: Automation): PersonalRunsOn | null {
+export function automationRunsOn(made: Automation): AgentRunsOnRequest | null {
   if (made.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
 
   if (made.runsOnMachine === AGENT_MACHINE.DEVICE && made.runsOnDeviceId !== null) {
@@ -139,7 +139,7 @@ export function automationRunsOn(made: Automation): PersonalRunsOn | null {
 }
 
 /** The columns a machine is kept in: the machine, and a device's id beside it, both null for none. */
-function runsOnColumns(runsOn: PersonalRunsOn | null) {
+function runsOnColumns(runsOn: AgentRunsOnRequest | null) {
   return {
     runsOnMachine: runsOn?.machine ?? null,
     runsOnDeviceId: runsOn?.machine === AGENT_MACHINE.DEVICE ? runsOn.deviceId : null,
@@ -170,7 +170,7 @@ export interface NewAutomation {
   /** The suggestion it is made from; none where left out. No change names it again. */
   readonly preset?: AutomationPresetName | null;
   /** The machine its runs start on; none where left out, so a run is placed as a Start naming none is. */
-  readonly runsOn?: PersonalRunsOn | null;
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 /**
@@ -193,7 +193,7 @@ export interface AutomationChanges {
   readonly archiveSuccessful?: boolean;
   readonly slackDelivery?: boolean;
   /** The machine its runs start on, null for none, which places a run as a Start naming none is. */
-  readonly runsOn?: PersonalRunsOn | null;
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 const RunRowSchema = Schema.Struct({
@@ -662,13 +662,17 @@ const writeSpent = SqlSchema.void({
 });
 
 const writeLeaverPaused = SqlSchema.findAll({
-  Request: Schema.Struct({ organizationId: Schema.String, userId: Schema.String }),
+  Request: Schema.Struct({
+    organizationId: Schema.String,
+    userId: Schema.String,
+    now: Schema.Date,
+  }),
   Result: AutomationRowSchema,
-  execute: ({ organizationId, userId }) =>
+  execute: ({ organizationId, userId, now }) =>
     Database.use((db) =>
       db
         .update(automation)
-        .set({ enabled: false })
+        .set({ enabled: false, updatedAt: now })
         .where(
           and(
             eq(automation.organizationId, organizationId),
@@ -890,14 +894,14 @@ const writeAgentAdopted = SqlSchema.findAll({
     id: Schema.String,
     held: Schema.NullOr(Schema.String),
     agentId: Schema.String,
-    now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ id, held, agentId, now }) =>
+  // Note that a run adopts the agent, and no run moves `updatedAt`, which the list orders Last updated by.
+  execute: ({ id, held, agentId }) =>
     Database.use((db) =>
       db
         .update(automation)
-        .set({ targetAgentId: agentId, updatedAt: now })
+        .set({ targetAgentId: agentId })
         .where(
           and(
             eq(automation.id, id),
@@ -1358,7 +1362,9 @@ export function pauseAutomationsOfLeaver(
   organizationId: string,
   userId: string,
 ): TaskStoreEffect<readonly Automation[]> {
-  return writeLeaverPaused({ organizationId, userId });
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    writeLeaverPaused({ organizationId, userId, now }),
+  );
 }
 
 /** The archivable agents of the run the agent belongs to, each read with how many agents the run has, so its reader can tell the run read whole. */
@@ -1577,11 +1583,9 @@ export function adoptAutomationAgent(
   held: string | null,
   agentId: string,
 ): TaskStoreEffect<boolean> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(
-      writeAgentAdopted({ id: automationId, held, agentId, now }),
-      (rows) => rows.length > 0,
-    ),
+  return Effect.map(
+    writeAgentAdopted({ id: automationId, held, agentId }),
+    (rows) => rows.length > 0,
   );
 }
 

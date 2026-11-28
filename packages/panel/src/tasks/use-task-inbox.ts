@@ -12,6 +12,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { type InboxFields, inboxRowOf } from "@repo/features/inbox-digest";
 import { EMPTY_INBOX_DRAFT, type InboxDraft, inboxThreadSend } from "@repo/features/inbox-draft";
 import { awaitsNod } from "@repo/features/inbox-list-model";
 import {
@@ -248,19 +249,19 @@ export interface TaskInboxControl {
   /** Lets go of an item's note once what it said no longer stands, as an agent unarchived from it; nothing where a later send has said something else since. */
   readonly onDropNote: (itemId: string, note: InboxNote) => void;
   /** What the developer has put on the item's card so far, at the revision it stands at, as it stands at the moment of asking; an empty card where nothing, or where the agent has changed the item since. */
-  readonly draftOf: (item: InboxItem) => InboxDraft;
+  readonly draftOf: (item: InboxFields) => InboxDraft;
   /** Where the item's card keeps its draft, which its box reads its words at, so a word typed draws the box and not what stands around it. */
-  readonly placeOf: (item: InboxItem) => DraftPlace;
+  readonly placeOf: (item: InboxFields) => DraftPlace;
   /** Whether a card holds a draft for its item as it now stands, which the Inbox tab marks with the pencil (`draft-mark.tsx`). */
   readonly drafted: boolean;
   /** Keeps what the developer has put on the item's card, at its revision. */
-  readonly onDraft: (item: InboxItem, draft: InboxDraft) => void;
+  readonly onDraft: (item: InboxFields, draft: InboxDraft) => void;
   /** Keeps the options, fields, steps, and press picked on the item's card, at its revision, its words and files as they stand. */
-  readonly onPicks: (item: InboxItem, picks: InboxPicks) => void;
+  readonly onPicks: (item: InboxFields, picks: InboxPicks) => void;
   /** Moves the words and files on the item's card on together from what they are as the write lands: every change its box makes, and a refused send put back (`refused-send.ts`). */
-  readonly onHeld: (item: InboxItem, next: Parameters<HeldUpdate>[0]) => void;
+  readonly onHeld: (item: InboxFields, next: Parameters<HeldUpdate>[0]) => void;
   /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
-  readonly onAcknowledge: (item: InboxItem, held?: InboxAcknowledger) => void;
+  readonly onAcknowledge: (item: InboxFields, held?: InboxAcknowledger) => void;
   /** Sends the box's words and files as a message on the item's thread, open or settled, with the answer attached to the thread's open ask where one is, after every message of the item's on its way; nothing where it holds nothing the service takes or a nod is out. `taken` is called once the service took it, never where it refused it. */
   readonly onMessage: (item: InboxItem, draft: InboxDraft, taken?: () => void) => void;
   /** How a card's image is read, by its item and attachment, and kept as the window's pictures are (`../picture-query.ts`). */
@@ -422,7 +423,7 @@ export interface InboxImageReads {
 }
 
 /** Where an item's card keeps its draft: the item, whatever its revision or status, so a message landing on it never moves the words being written. */
-function draftPlace(item: InboxItem, taskId: string | null): InboxPlace {
+function draftPlace(item: InboxFields, taskId: string | null): InboxPlace {
   return { kind: DRAFT_PLACE.INBOX, taskId: taskId, agentId: item.agentId, itemId: item.id };
 }
 
@@ -717,7 +718,7 @@ export function useHeldTaskInbox(input: {
   // Note that a nod is keyed by the revision it nods to, so a press again after a lost reply is
   // taken once, and a nod to the notice posted over since goes under a key of its own.
   const onAcknowledge = useCallback(
-    (item: InboxItem, held?: InboxAcknowledger) => {
+    (item: InboxFields, held?: InboxAcknowledger) => {
       if (out.current.has(item.id)) return;
       out.current.add(item.id);
       const words = JSON.stringify([item.revision, INBOX_REPLY.ACKNOWLEDGED]);
@@ -744,7 +745,11 @@ export function useHeldTaskInbox(input: {
         // A nod behind a reply that settled the notice at this revision has nothing left to nod to, and says nothing.
         const settled = answered.current.get(item.id);
 
-        if (settled !== undefined && settled.revision === item.revision && !awaitsNod(settled)) {
+        if (
+          settled !== undefined &&
+          settled.revision === item.revision &&
+          !awaitsNod(inboxRowOf(settled))
+        ) {
           release();
 
           return;
@@ -856,8 +861,13 @@ export function useHeldTaskInbox(input: {
 
       // Note that a nod on its way holds the box, so nothing goes behind it.
       if (message === undefined || out.current.has(item.id)) return;
+
       // Note that a reply on a notice names the revision shown, so it settles that notice and never one posted since.
-      const sent = { ...message, revision: awaitsNod(item) ? item.revision : undefined };
+      const sent = {
+        ...message,
+        revision: awaitsNod(inboxRowOf(item)) ? item.revision : undefined,
+      };
+
       const key = keyFor(attempts.current, item.id, sentWords(sent));
       note(item.id, undefined);
       // Note that the box lets go of what it sent at once, as the agent's box does, and never takes it back.
@@ -1036,7 +1046,7 @@ export function useInboxCardDrafts(
   const items = useMemo(() => [...board.open, ...board.settled], [board]);
 
   const draftOf = useCallback(
-    (item: InboxItem): InboxDraft => {
+    (item: InboxFields): InboxDraft => {
       const found = drafts.find((each) => each.place.itemId === item.id);
 
       // Note that the list stands as its drafts were but for their words, which are read as they stand now.
@@ -1061,14 +1071,14 @@ export function useInboxCardDrafts(
     [drafts, writer],
   );
 
-  const placeOf = useCallback((item: InboxItem) => draftPlace(item, draftsOn), [draftsOn]);
+  const placeOf = useCallback((item: InboxFields) => draftPlace(item, draftsOn), [draftsOn]);
 
   const drafted = drafts.some((kept) =>
     items.some((item) => item.id === kept.place.itemId && !holdsNothing(draftOfItem(kept, item))),
   );
 
   const onDraft = useCallback(
-    (item: InboxItem, draft: InboxDraft) =>
+    (item: InboxFields, draft: InboxDraft) =>
       writer.update(draftPlace(item, draftsOn), (was) => ({
         ...was,
         revision: item.revision,
@@ -1083,7 +1093,7 @@ export function useInboxCardDrafts(
   );
 
   const onPicks = useCallback(
-    (item: InboxItem, picks: InboxPicks) =>
+    (item: InboxFields, picks: InboxPicks) =>
       writer.update(draftPlace(item, draftsOn), (was) => ({
         ...was,
         revision: item.revision,
@@ -1096,7 +1106,7 @@ export function useInboxCardDrafts(
   );
 
   const onHeld = useCallback(
-    (item: InboxItem, next: Parameters<HeldUpdate>[0]) =>
+    (item: InboxFields, next: Parameters<HeldUpdate>[0]) =>
       heldUpdateOver<Draft>((moved) => writer.update(draftPlace(item, draftsOn), moved))(next),
     [writer, draftsOn],
   );

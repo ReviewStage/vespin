@@ -38,6 +38,7 @@ import {
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
 import {
   type DrawnSection,
+  NEW_SECTION,
   placeMemberWrites,
   placeWrites,
   type SectionMember,
@@ -56,7 +57,12 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { renamedTasks, repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
+import {
+  REPOSITORY_TOP_WORDS,
+  renamedTasks,
+  repositoryPageUrl,
+  TASK_MARK,
+} from "@repo/features/tasks-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -93,7 +99,6 @@ import {
   type ResizeEdgeHandle,
   reachedKey,
   rovingItemIn,
-  SCROLL_FADE,
   ScrollArea,
   SearchIcon,
   SelectionRegion,
@@ -148,7 +153,6 @@ import {
 } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlaceOf } from "../automations-route.js";
-import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
@@ -251,7 +255,6 @@ import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
   LIST_SKELETON,
   layoutSlot,
-  NEW_SECTION,
   PINNED_DROP_ZONE,
   SidebarSections,
   sectionLayout,
@@ -1605,12 +1608,12 @@ function repositoryActionGroups(
 
   const top: MenuAction = tasks.pinnedRepositories.includes(repository)
     ? {
-        label: "Stop keeping at top",
+        label: REPOSITORY_TOP_WORDS.STOP,
         icon: <ArrowDownFromLineIcon />,
         onSelect: () => tasks.onPinRepository(repository, false),
       }
     : {
-        label: "Keep at top",
+        label: REPOSITORY_TOP_WORDS.KEEP,
         icon: <ArrowUpToLineIcon />,
         onSelect: () => tasks.onPinRepository(repository, true),
       };
@@ -2382,7 +2385,6 @@ function SidebarColumn({
   const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
-  const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
   const [carrying, setCarrying] = useState(false);
@@ -3162,7 +3164,7 @@ function SidebarColumn({
           for the scroll bar stands in the column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
-          <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
+          <ScrollArea ref={scroller}>
             <ChosenTasksContext value={selection.chosenOf}>
               <SelectionRegion
                 id={selection.regionId}
@@ -3346,8 +3348,8 @@ function SidebarColumn({
                             )}
                           </NoteLine>
                         ) : null}
-                        {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
-                        {tasks.listFailed && (connected || unlisted) ? (
+                        {/* Note that the line says nothing while the app is offline, since the Offline mark says why (`ServiceReachedByWindow`). */}
+                        {tasks.listFailed ? (
                           <ErrorState
                             failure={unreadShown(FAILURE_SURFACE.TASKS_READ)}
                             onRetry={tasks.onRetryList}

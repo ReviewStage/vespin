@@ -27,11 +27,7 @@ import {
   startFailureWords,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import {
-  AGENT_MACHINE,
-  type AgentAttachment,
-  type AgentRunsOnRequest,
-} from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
 import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import { modelLabel } from "@repo/features/model-label";
@@ -45,12 +41,7 @@ import {
   modelSpeedOf,
   standardModelIdOf,
 } from "@repo/features/models-wire";
-import {
-  everyPlace,
-  type RunsOnPlace,
-  type RunsOnPlaces,
-  runsOnPlaces,
-} from "@repo/features/runs-on-places";
+import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { TASK_CREATE_RELATION_KIND, type TaskCreateRelation } from "@repo/features/task-wire";
 import {
   recentRepositories,
@@ -68,8 +59,9 @@ import {
   selectAgentDefault,
   selectModels,
   selectRepositoryList,
+  selectRunsOnPick,
 } from "@repo/host/app-state-reads";
-import { CHOICE_MARK, type Glyph, type PickOption, runsOnGlyph } from "@repo/ui-native";
+import { CHOICE_MARK, type PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useMemo, useState } from "react";
@@ -77,13 +69,15 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedTasks } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useMenuRepositoryPictures } from "../menu-photos.js";
-import { useOfferedWorkspaceMachines } from "../workspace-machines.js";
 
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
 
 /** No devices read yet. */
 const NO_DEVICES: readonly MacOffer[] = [];
+
+/** The row Runs on picks for the cloud, beside each device's id. */
+export const CLOUD = "cloud";
 
 /** What a start that did not go says, or the agent or task it started. */
 export type StartAnswer =
@@ -266,31 +260,39 @@ export function useModelPick(seed?: ModelChoice): ModelPick {
   };
 }
 
-/** The glyph a place leads with: the cloud's, or its machine's platform's. */
-export function placeGlyph(place: RunsOnPlace): Glyph {
-  return runsOnGlyph({
-    cloud: place.runsOn.machine === AGENT_MACHINE.VERCEL,
-    platform: place.platform,
-  });
+/** Runs on's options: Cloud, then each device that may run the agent, by its name. */
+export function runsOnOptions(devices: readonly MacOffer[]): readonly PickOption[] {
+  return [
+    { id: CLOUD, label: RUNS_ON_WORDS.CLOUD },
+    ...devices.map((device) => ({ id: device.deviceId, label: device.name })),
+  ];
 }
 
-/** Runs on's places as a picker's options, each led by its glyph, in the order they are listed. */
-export function runsOnOptions(places: RunsOnPlaces): readonly PickOption[] {
-  return everyPlace(places).map((place) => ({
-    id: place.id,
-    label: place.label,
-    symbol: placeGlyph(place),
-  }));
+/**
+ * Runs on's pick: the account's last, the place its last Start named on any
+ * device (`selectRunsOnPick`), where that device is offered, else Cloud,
+ * until the sheet picks another.
+ */
+export function useRunsOnPick(
+  devices: readonly MacOffer[],
+): readonly [string, (place: string) => void] {
+  const { data: last } = useQuery({ ...appStateQuery, select: selectRunsOnPick });
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+
+  const lastRow =
+    last?.machine === AGENT_MACHINE.DEVICE &&
+    devices.some((device) => device.deviceId === last.deviceId)
+      ? last.deviceId
+      : CLOUD;
+
+  return [picked ?? lastRow, setPicked];
 }
 
-/** Runs on's places for a start in `workspaceId`: Cloud, the member's devices `pick` read, and the machines that workspace owns, followed while the sheet stands. */
-export function useRunsOnPlaces(pick: ModelPick, workspaceId: string | undefined): RunsOnPlaces {
-  return runsOnPlaces(pick.devices, useOfferedWorkspaceMachines(workspaceId));
-}
-
-/** What a start names of where its agent runs: nothing for the cloud, as an untouched sheet starts there, and the place otherwise. */
-function runsOnNamed(runsOn: AgentRunsOnRequest) {
-  return runsOn.machine === AGENT_MACHINE.VERCEL ? undefined : { runsOn };
+/** Where a start runs its agent, as it names it: the cloud, or a device by its id. */
+export function runsOnOf(place: string) {
+  return place === CLOUD
+    ? { machine: AGENT_MACHINE.VERCEL }
+    : { machine: AGENT_MACHINE.DEVICE, deviceId: place };
 }
 
 /* ----- The repository ----- */
@@ -410,7 +412,7 @@ interface StartAsk {
   /** The pictures attached, in the order attached; none where nothing is. */
   readonly attachments: readonly AgentAttachment[] | undefined;
   readonly picked: ModelChoice | undefined;
-  readonly runsOn: AgentRunsOnRequest;
+  readonly runsOn: string;
 }
 
 /** What a start hands its agent: the words, or nothing for Talk's blank start. */
@@ -434,7 +436,7 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
       ...briefOf(prompt),
       ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
-      ...runsOnNamed(runsOn),
+      ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
     }).catch(unanswered("The agent's start"));
 
     if ("failure" in answer) return { refused: startRefusalWords(answer) };
@@ -531,7 +533,7 @@ export function useStartTask(
         ...briefOf(prompt),
         ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
         ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
-        ...runsOnNamed(runsOn),
+        ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
       },
     }).catch(unanswered("The task's start"));
 

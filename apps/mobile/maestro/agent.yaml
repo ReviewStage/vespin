@@ -38,9 +38,6 @@ env:
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 30000
-# The file the account sent with that line stands as its chip over the
-# line's bubble, its kind and its count of lines under its name.
-- assertVisible: "expired-invites.csv.*3 lines"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest
@@ -54,6 +51,24 @@ env:
 - assertVisible: "Always allow won.t ask again for pnpm test \\* in any of your agents\\."
 - assertVisible: "Waiting on you · 1 approval"
 - takeScreenshot: agent-held
+# The file the account sent with that line stands as its chip over the
+# line's bubble, its kind and its count of lines under its name. Note that it
+# is scrolled to, since the page opens at its newest row's end, which a short
+# window such as the iPhone Duo's stands the chip above.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "expired-invites.csv.*3 lines"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+# Note that a scroll to the chip is undone by Jump to latest, which stands only
+# once the page has moved off its end, so the calls below stand where the page
+# opened them rather than behind the composer.
+- tapOn:
+    text: "Jump to latest"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
 # A call opens in place on its body: a command as a terminal, its prompt over
 # what it printed.
 - tapOn: "Edited.*"
@@ -351,24 +366,24 @@ env:
 - inputText: "Invite by email"
 - tapOn: "Rename"
 - assertVisible: "Invite by email"
-# Pinned, Unpin stands in its place. Note that a landscape iPad's sidebar
-# leads its Pinned row with a glyph heard as "Pin" too, which comes first in
-# the tree, so there the bar's Pin is found right of that row; a window with
-# no Pinned row standing holds one "Pin" alone.
+# Pinned, Unpin stands in its place. Note that an iPad's sidebar and list
+# lead their Pinned groups with a glyph heard as "Pin" too, so there the bar's
+# Pin is found by the Archive beside it, which only the bar holds; a compact
+# window's ⋯ holds one "Pin" alone.
 - runFlow:
     file: subflows/bar-act.yaml
     env:
       ACT: Pin
 - runFlow:
     when:
-      visible: "Pinned"
+      true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn:
           text: "Pin"
-          rightOf: "Pinned"
+          rightOf: "Archive"
 - runFlow:
     when:
-      notVisible: "Pinned"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - tapOn: "Pin"
 - runFlow:
@@ -445,7 +460,7 @@ env:
 # Its threads line stands over the box, as the panel's threads dock does:
 # the Inbox's glyph, and how many of the threads it posted wait on the
 # reader (the fixture's invitations agent posted several, some open). A
-# press opens the oldest waiting on the agent's own tab, over its page.
+# press opens the agent's own Inbox, listing the threads it posted alone.
 - launchApp:
     clearState: true
     arguments:

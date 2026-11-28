@@ -611,6 +611,22 @@ function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
 }
 
 /**
+ * `held` as no follow stands on it any longer: what it holds is no longer
+ * known to be caught up, so a window that holds it again waits on the next
+ * follow's page, while one holding it beside a follow that stands reads its
+ * word as caught up at once.
+ */
+function letGo(held: HeldTranscript): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const rows = held.rows();
+
+    if (rows?.word?.caughtUp !== true) return Effect.void;
+
+    return held.answered({ ...rows, word: { ...rows.word, caughtUp: false } });
+  });
+}
+
+/**
  * The transcript followed until interrupted, each page laid on what the
  * windows hold of it (`held`) as it is read: where they hold a window to
  * read on from, it stands drawn and nothing is read before the page past
@@ -631,6 +647,8 @@ function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
  * and let go, so a follow after it reads anew; a page the service did not
  * answer is told as such and read again after `resealWait`, doubling while
  * the pages go unanswered in a row, or as soon as the service answers again.
+ * A follow interrupted, let go or closed, leaves what it held no longer
+ * caught up (`letGo`).
  */
 export function followTranscript<Key>(
   follows: TranscriptFollows<Key>,
@@ -640,6 +658,8 @@ export function followTranscript<Key>(
 ): Effect.Effect<void> {
   return Effect.scoped(
     Effect.gen(function* () {
+      // Note that a follow let go says its transcript is no longer caught up, so caught up on the slice means a follow stands and has read to the end.
+      yield* Effect.addFinalizer(() => letGo(held));
       /** The queue revision the last page read past a cursor was read at, which its queue is at least as new as, and every page told after it carries. */
       let revision: number | undefined;
       const followedAt = yield* Clock.currentTimeMillis;
@@ -851,8 +871,16 @@ export function followTranscript<Key>(
           return live;
         });
 
-        // Note that the page past the window's cursor is read at once, beside the live read's first read rather than after it, so a window held or newly read is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile.
-        let wake: Effect.Effect<unknown> = Effect.void;
+        /** The live read's first rows landed, which a page read past the cursor then misses nothing written before. */
+        const firstRows = Effect.flatMap(liveRead, (stood) =>
+          SubscriptionRef.changes(stood).pipe(
+            Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
+            Stream.runHead,
+          ),
+        );
+
+        // Note that a window held is read past its cursor at once, beside the live read's first read rather than after it, so it is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile. A newest page was read just now up to its cursor, so a read past it at once would answer nearly nothing the read as the first rows land does not, and is not asked.
+        let wake: Effect.Effect<unknown> = Option.isSome(recalled) ? Effect.void : firstRows;
 
         /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
         let last: AgentTranscriptPage | undefined;
@@ -970,11 +998,7 @@ export function followTranscript<Key>(
 
           // Note that a page read before the live read stood is read again once its first rows land, since what was written between the two is in neither.
           if (following === undefined) {
-            const stood = yield* liveRead;
-            wake = SubscriptionRef.changes(stood).pipe(
-              Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
-              Stream.runHead,
-            );
+            wake = firstRows;
             continue;
           }
 

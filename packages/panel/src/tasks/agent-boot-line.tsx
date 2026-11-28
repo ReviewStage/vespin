@@ -126,21 +126,13 @@ function startingSaid(
 ): StartingSaid {
   const words = bootStartingWords(machine, host?.name);
 
-  switch (machine) {
-    case AGENT_MACHINE.VERCEL:
-      return { words };
-    // Note that a workspace's machine is named in words, since a machine's chip draws a member's own (`workspace-machines.tsx`).
-    case AGENT_MACHINE.WORKSPACE:
-      return { words };
-    case AGENT_MACHINE.DEVICE:
-      return host?.deviceId === undefined
-        ? { words }
-        : {
-            words: BOOT_WORDS.STARTING_ON_BEFORE,
-            after: <OnMachine machine={{ id: host.deviceId, name: host.name }} />,
-            heard: words,
-          };
-  }
+  if (machine === AGENT_MACHINE.VERCEL || host?.deviceId === undefined) return { words };
+
+  return {
+    words: BOOT_WORDS.STARTING_ON_BEFORE,
+    after: <OnMachine machine={{ id: host.deviceId, name: host.name }} />,
+    heard: words,
+  };
 }
 
 /** The empty transcript's line while the agent's first launch stands, as `line` says it. */
@@ -168,7 +160,7 @@ export function AgentBootLine({
     case BOOT_LINE.HANDING_OFF:
       return <WorkingLine startedAt={undefined} words={BOOT_WORDS.HANDING_OFF} />;
     case BOOT_LINE.READY:
-      // Note that it neither shimmers nor counts, because nothing runs until the edit ends.
+      // Note that it does not count, because nothing runs until the edit ends.
       return <ReadyLine byReader={line.byReader} />;
     case BOOT_LINE.FAILED:
       return (

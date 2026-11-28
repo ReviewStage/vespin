@@ -212,6 +212,7 @@ import {
   type MachineName,
   type MachinePlace,
   type MachineRunning,
+  PHONE_COPY,
   type RecordedRunner,
   RUNNER_RECORD,
   type RunnerCredential,
@@ -220,7 +221,15 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
-import { phoneAudioAsk, phoneAudioOf, phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
+import {
+  copyUploaded,
+  phoneAudioAsk,
+  phoneAudioOf,
+  phoneAudioUploadAsk,
+  phoneVideoAsk,
+  phoneVideoOf,
+  phoneVideoUploadAsk,
+} from "./phone-video.js";
 import {
   firewallSessionOf,
   repositoryFirewallOver,
@@ -228,6 +237,7 @@ import {
   runUnder,
   type SandboxRunner,
 } from "./sandbox-checkout.js";
+import { fileProbeOf, probeFileAsk, uploadFileAsk } from "./sandbox-upload.js";
 
 /** Our state folder on the agent's own drive, beside the checkout, which a sandbox made again mounts as it stood. */
 const DRIVE_STATE_FOLDER = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}`;
@@ -853,6 +863,30 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
       Effect.flatMap(runningSession(session), (running) =>
         Effect.map(api.run(running, phoneAudioAsk(path)), phoneAudioOf),
       ),
+
+    selfUpload: (session) =>
+      Effect.succeed({
+        probe: (path, headBytes) =>
+          Effect.flatMap(runningSession(session), (running) =>
+            Effect.map(api.run(running, probeFileAsk(path, headBytes)), fileProbeOf),
+          ),
+        upload: (path, upload) =>
+          Effect.flatMap(runningSession(session), (running) =>
+            Effect.asVoid(api.run(running, uploadFileAsk(path, upload))),
+          ),
+        uploadPhoneCopy: (path, kind, upload) =>
+          Effect.flatMap(runningSession(session), (running) =>
+            Effect.map(
+              api.run(
+                running,
+                kind === PHONE_COPY.VIDEO
+                  ? phoneVideoUploadAsk(path, upload)
+                  : phoneAudioUploadAsk(path, upload),
+              ),
+              copyUploaded,
+            ),
+          ),
+      }),
   };
 }
 

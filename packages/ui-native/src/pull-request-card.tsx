@@ -1,28 +1,33 @@
 // pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as regular bordered buttons under it.
 
-import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Spacer, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityIdentifier,
   background,
   buttonStyle,
   font,
   foregroundStyle,
   lineLimit,
-  monospacedDigit,
   padding,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestMarkState } from "@repo/features/pull-request-model";
 import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { LineCounts } from "./line-counts.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn. */
 const HAIRLINE = 0.5;
+
+/** What a flow finds a pull request's card by, wherever it stands, such as an agent's transcript or the task list. */
+const PULL_REQUEST_CARD_ID = "pull-request-card";
 
 /** One act a pull request offers under its card, such as Review or Merge. */
 export type PullRequestAct = {
@@ -47,13 +52,6 @@ type PullRequestCardProps = {
   readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
-/** A line count as the card ends with it: "+1.9k", "−312". */
-export function lineCount(sign: string, count: number): string {
-  const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
-
-  return `${sign}${short}`;
-}
-
 /**
  * A pull request on a page: its state's glyph in GitHub's color, the one
  * status tone the card carries, its number and title in the row title's style, and its added
@@ -76,12 +74,12 @@ export function PullRequestCard({
 }: PullRequestCardProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
-  const count = [font({ textStyle: TYPE_ROLE.TIME }), monospacedDigit()];
 
   const card = (
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
+        accessibilityIdentifier(PULL_REQUEST_CARD_ID),
         padding({ horizontal: SPACE.EDGE - 4, vertical: SPACE.ROW }),
         background(
           colors.SURFACE,
@@ -107,15 +105,8 @@ export function PullRequestCard({
         {number === undefined ? title : `#${number} ${title}`}
       </Text>
       <Spacer />
-      {additions === undefined ? null : (
-        <Text modifiers={[...count, foregroundStyle(colors.COMPLETE)]}>
-          {lineCount("+", additions)}
-        </Text>
-      )}
-      {deletions === undefined ? null : (
-        <Text modifiers={[...count, foregroundStyle(colors.DANGER_TEXT)]}>
-          {lineCount("−", deletions)}
-        </Text>
+      {additions === undefined || deletions === undefined ? null : (
+        <LineCounts additions={additions} deletions={deletions} />
       )}
     </HStack>
   );

@@ -40,6 +40,7 @@ import {
   type MentionDrawer,
   type PlacedPicture,
   type PlacedWords,
+  type RawDrawer,
   rootAria,
   sameAria,
   type TaskBoxDrawer,
@@ -55,7 +56,7 @@ import {
   documentTook,
   type HeldSources,
   lineEndingOf,
-  RawBlock,
+  rawBlockNode,
   sourcesOf,
   withLf,
   withLineEnding,
@@ -170,7 +171,6 @@ const NUMBERED_ITEM = /^[^\S\n]*\d{1,9}[.)](?:\s|$)/u;
 /** A line TipTap's ordered list reads as an item: a number, a roman numeral, or one or two letters, then `.` or `)`. */
 const TIPTAP_ITEM = /^\s*(?:\d+|[ivxlcdmIVXLCDM]+|[a-zA-Z]{1,2})[.)]\s+/u;
 
-/** How far a line is indented. */
 function indentOf(line: string): number {
   return line.length - line.trimStart().length;
 }
@@ -454,6 +454,7 @@ export function markdownExtensions(
   drawCodeHeader?: CodeHeaderDrawer | undefined,
   colorCode?: CodeColorer | undefined,
   drawDiagram?: DiagramDrawer | undefined,
+  drawRaw?: RawDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -480,7 +481,7 @@ export function markdownExtensions(
     drawnTaskItem(drawTaskBox),
     TableKit,
     pictureNode(pictures),
-    RawBlock,
+    rawBlockNode(drawRaw),
     mentionNode(drawMention),
     SoftBreak,
     linkLook(namesChip),
@@ -508,7 +509,6 @@ function placeholderOf(description: string, offersBlocks: boolean) {
   };
 }
 
-/** Whether a top-level block opens a section. */
 function opensSection(node: PmNode): boolean {
   return node.type.name === "heading" && SECTION_LEVELS.has(Number(node.attrs.level));
 }
@@ -523,7 +523,6 @@ function sectionStarts(doc: PmNode): number[] {
   return starts;
 }
 
-/** The section the caret stands in. */
 function caretSection(editor: Editor): number {
   const index = editor.state.selection.$from.index(0);
 
@@ -745,6 +744,7 @@ export function mountDescriptionEditor(
     onLeaveUp,
     mentions,
     drawDiagram,
+    drawRaw,
     drawTaskBox,
     drawCodeHeader,
     colorCode,
@@ -763,6 +763,7 @@ export function mountDescriptionEditor(
     drawCodeHeader,
     colorCode,
     drawDiagram,
+    drawRaw,
   );
 
   const manager = documentManager(extensions);
@@ -800,7 +801,7 @@ export function mountDescriptionEditor(
 
   const editor: Editor = new Editor({
     element: host,
-    // Note that TipTap's own base rules would go in as an inline `<style>`, which the panel's policy (`style-src 'self'`: the desktop's `renderer/index.html` and the web's `vercel.json`) refuses; `planning.css` styles the text instead.
+    // Note that TipTap's own base rules would go in as an inline `<style>`, which the panel's policy (`style-src 'self'`: the desktop's `renderer/index.html` and the web's `vercel.json`) refuses; `tasks.css` styles the text instead.
     injectCSS: false,
     extensions: [
       ...extensions,

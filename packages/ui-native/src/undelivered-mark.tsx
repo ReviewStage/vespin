@@ -1,6 +1,6 @@
 // undelivered-mark.tsx -- the mark under a message of the reader's that did not go, an Inbox reply's or a line sent to an agent: the alert and "Not delivered" in the danger ink, whose press opens the system's menu headed by why, with Retry, Edit, and Delete.
 
-import { HStack, Image, Menu, Section, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import { HStack, Image, Menu, Section, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
@@ -10,6 +10,7 @@ import {
 import { UNDELIVERED_WORDS } from "@repo/features/inbox-undelivered";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

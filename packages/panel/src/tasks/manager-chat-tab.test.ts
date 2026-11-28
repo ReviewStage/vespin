@@ -2,7 +2,12 @@
 
 import assert from "node:assert/strict";
 import type { ApprovalAnswerRequest } from "@repo/features/agent-approval-wire";
-import { AGENT_CALL_FAILURE, type ManagerChatSending } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentMarkReadParams,
+  type ManagerChatReactParams,
+  type ManagerChatSending,
+} from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_KIND,
@@ -12,6 +17,8 @@ import {
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import { CHAT_REACTION_REFUSED_WORDS } from "@repo/features/manager-chat-view";
+import { READ_MARK } from "@repo/features/read-mark";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -24,10 +31,10 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { FindScope } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
-import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
+import { OpenPersonProvider } from "../person-door.js";
+import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
 import {
-  composerWords,
   editorBundleLanded,
   installEditorLayout,
   pressInComposer,
@@ -38,6 +45,8 @@ import { menuItem } from "../testing/desktop-inbox.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
+import { standingToastWords } from "../testing/toast.js";
+import { ToastHost } from "../toast.js";
 import { ManagerChatTab, ManagerThreadTab } from "./manager-chat-tab.js";
 import { ThreadDoorsProvider } from "./manager-chat-threads.js";
 
@@ -45,12 +54,12 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
  * the left, each sender named over their run; an ended turn's work a press
- * away from the Manager's first message of the turn, and found by ⌘F; Reply beside any message,
- * the Manager's or a person's, quoting it whole into the box, which sends it
- * to the chat; a call the Manager holds for an answer standing at the chat's
+ * away from the Manager's first message of the turn, and found by ⌘F; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
- * files; and a thread opening beside the chat, as the page's side panel
- * opens it, its box the chat's own composer replying in it. Synthetic words.
+ * files; a 👍 drawn under its message from its press until its ask settles; and a thread opening beside the chat, as the page's side panel
+ * opens it, its box the chat's own composer replying in it; and New over
+ * the first message after the reader's mark, which Mark as unread moves
+ * back and holds there as the page closes. Synthetic words.
  */
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -164,6 +173,10 @@ async function drawChat(
     readonly alone?: boolean;
     /** Whether a find may open over the chat, as the page's scope lets ⌘F open one. */
     readonly findable?: boolean;
+    /** What a reaction pressed is answered with, once it settles; refused at once where none is named. */
+    readonly reactAnswer?: Promise<FakeActAnswer>;
+    /** The message whose Mark as unread the service refuses, by its id. */
+    readonly unreadRefused?: string;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -177,6 +190,12 @@ async function drawChat(
   const keys: (readonly [string, boolean])[] = [];
   // Each older page asked for, by the `seq` it stands before.
   const older: number[] = [];
+  // Each reaction pressed, as the window asked it.
+  const reacted: ManagerChatReactParams[] = [];
+  // Each person's page a press opened, by their account.
+  const people: string[] = [];
+  // Each move of the reader's mark of the chat, as the window asked it.
+  const marks: AgentMarkReadParams[] = [];
 
   fakeActs({
     act: (request) => {
@@ -188,6 +207,22 @@ async function drawChat(
       }
 
       if (request.kind === ACT_KIND.AGENTS_MANAGER_CHAT_OLDER) older.push(request.payload.before);
+
+      if (request.kind === ACT_KIND.AGENTS_MARK_READ) {
+        marks.push(request.payload);
+
+        if (request.payload.unreadFrom?.messageId === held.unreadRefused) {
+          return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
+        }
+
+        return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { agent: manager } });
+      }
+
+      if (request.kind === ACT_KIND.AGENTS_CHAT_REACT) {
+        reacted.push(request.payload);
+
+        if (held.reactAnswer !== undefined) return held.reactAnswer;
+      }
 
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
     },
@@ -235,20 +270,25 @@ async function drawChat(
   await act(async () =>
     root.render(
       withQueryClient(
-        createElement(MemberDirectory, {
-          workspace: { id: "workspace-acme", memberCount: 2 },
-          readerId: DEAN.userId,
-          children: createElement(
-            FindScope,
-            { active: held.findable === true, subject: { agent: manager.id } },
-            createElement(ChatBesideThread, {
-              agent: manager,
-              control,
-              opened: held.opened,
-              alone: held.alone === true,
-            }),
-          ),
-        }),
+        createElement(
+          OpenPersonProvider,
+          { value: (userId: string) => people.push(userId) },
+          createElement(MemberDirectory, {
+            workspace: { id: "workspace-acme", memberCount: 2 },
+            readerId: DEAN.userId,
+            children: createElement(
+              FindScope,
+              { active: held.findable === true, subject: { agent: manager.id } },
+              createElement(ChatBesideThread, {
+                agent: manager,
+                control,
+                opened: held.opened,
+                alone: held.alone === true,
+              }),
+              createElement(ToastHost),
+            ),
+          }),
+        ),
       ),
     ),
   );
@@ -257,7 +297,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads, keys, older };
+  return { container, root, sent, carried, answered, threads, keys, older, reacted, people, marks };
 }
 
 /** Each row a scope draws, the greeting aside: its sender's name where its run opens, and its words. */
@@ -274,8 +314,8 @@ function rowsIn(scope: Element) {
   );
 }
 
-test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
-  const { container, sent, threads } = await drawChat([
+test("each message is a row under its sender's name where their run opens, a teammate's name opens their page, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
+  const { container, sent, threads, people } = await drawChat([
     row("dean", 1, "Ship the invite flow.", DEAN),
     row("charles", 2, "Seven days.", CHARLES),
     row("charles-more", 3, "Not five.", CHARLES),
@@ -290,6 +330,13 @@ test("each message is a row under its sender's name where their run opens, a thr
     [null, "Not five."],
     ["Iris", "On it."],
   ]);
+
+  const teammate = [
+    ...container.querySelectorAll<HTMLButtonElement>(".ui-channel-message-head button"),
+  ].find((button) => button.textContent === CHARLES.name);
+
+  act(() => teammate?.click());
+  assert.deepEqual(people, [CHARLES.userId]);
 
   const count = [...container.querySelectorAll("button")].find(
     (button) => button.textContent?.endsWith("2 replies") === true,
@@ -351,13 +398,119 @@ test("a message's menu, a right-click or a long press, leads with Reply in threa
   const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ["Reply in thread", "Reply", "Copy"],
+    ["Reply in thread", "Copy", "Mark as unread"],
   );
 
   act(() => items[0]?.click());
   await settleQueries();
 
   assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
+});
+
+/** The words of the row New stands over, none where it stands nowhere. */
+function newOver(container: Element): string | null | undefined {
+  return container
+    .querySelector(".ui-new-messages-rule")
+    ?.parentElement?.querySelector(".ui-channel-message-words")?.textContent;
+}
+
+test("New stands over the first message after the mark the page opened on, the reader's own aside, and Mark as unread on their own last line moves the mark back to just before it, New with it, and holds it there as the page closes", async () => {
+  const { container, root, marks } = await drawChat(
+    [row("first", 1, "On it."), row("second", 2, "Shipped."), row("mine", 3, "Thanks.", DEAN)],
+    { manager: { ...MANAGER, readThrough: 1_500, saidAt: 2_000 } },
+  );
+
+  assert.equal(newOver(container), "Shipped.");
+
+  const words =
+    [...container.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "Thanks.",
+    ) ?? assert.fail("the message stands");
+
+  act(() => {
+    words.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+  act(() => menuItem("Mark as unread").click());
+  await settleQueries();
+
+  assert.equal(newOver(container), "Thanks.");
+  act(() => root.unmount());
+  roots.splice(roots.indexOf(root), 1);
+  await settleQueries();
+
+  assert.deepEqual(marks, [
+    { agentId: MANAGER.id, readMark: READ_MARK.READ },
+    {
+      agentId: MANAGER.id,
+      readMark: READ_MARK.UNREAD,
+      unreadFrom: { messageId: "mine", sentAt: 3_000 },
+    },
+  ]);
+});
+
+test("a Mark as unread the service refuses lets New go back to where it stood: to an earlier mark the stay holds, which stays held, and else to where the page opened, its looks going on", async () => {
+  /** Marks the message holding `text` unread from its menu. */
+  const markUnreadOn = async (container: Element, text: string) => {
+    const words =
+      [...container.querySelectorAll(".ui-channel-message-words")].find(
+        (each) => each.textContent === text,
+      ) ?? assert.fail("the message stands");
+
+    act(() => {
+      words.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+      );
+    });
+    act(() => menuItem("Mark as unread").click());
+    await settleQueries();
+  };
+
+  const rows = [row("first", 1, "On it."), row("second", 2, "Shipped.")];
+  // The chat opens read, with no New.
+  const manager = { ...MANAGER, readThrough: 2_500, saidAt: 2_000 };
+
+  // Marked unread from the second message, then refused on the first: New goes back over the second, held as the page closes.
+  const earlier = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(earlier.container, "Shipped.");
+  await markUnreadOn(earlier.container, "On it.");
+  const heldOver = newOver(earlier.container);
+  act(() => earlier.root.unmount());
+  roots.splice(roots.indexOf(earlier.root), 1);
+  await settleQueries();
+
+  // Refused with nothing marked before: New goes back to where the page opened, nowhere, and its looks go on.
+  const alone = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(alone.container, "On it.");
+  const openedOver = newOver(alone.container);
+  act(() => alone.root.unmount());
+  roots.splice(roots.indexOf(alone.root), 1);
+  await settleQueries();
+
+  assert.deepEqual(
+    [
+      heldOver,
+      earlier.marks.map((mark) => mark.readMark),
+      openedOver,
+      alone.marks.map((mark) => mark.readMark),
+    ],
+    [
+      "Shipped.",
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.UNREAD],
+      undefined,
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.SEEN, READ_MARK.SEEN],
+    ],
+  );
+});
+
+test("a chat the reader marked unread from their own last line opens with New over it", async () => {
+  const { container } = await drawChat(
+    [row("first", 1, "On it."), row("mine", 2, "Thanks.", DEAN)],
+    { manager: { ...MANAGER, readThrough: 1_999, saidAt: 1_000, markedUnread: true } },
+  );
+
+  assert.equal(newOver(container), "Thanks.");
 });
 
 test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {
@@ -382,7 +535,7 @@ test("a person's picture stands as its chip where their words name it, not as a 
   );
 });
 
-test("a message on its way stands in its sender's run as its row will, under the message before it", async () => {
+test("a message on its way stands in its sender's run as its row will, under the message before it, and the Manager working on it says so over the box, never in a row of the chat", async () => {
   const { container } = await drawChat(
     [
       row("ask", 1, "Ship the invite flow.", DEAN),
@@ -401,13 +554,14 @@ test("a message on its way stands in its sender's run as its row will, under the
     },
   );
 
-  // Note that the working line the send opens stands under it, which is no message.
-  assert.deepEqual(rowsIn(container).slice(0, 4), [
+  // Note that the Manager at work on it draws no row of the chat, only the line over the box.
+  assert.deepEqual(rowsIn(container), [
     [DEAN.name, "Ship the invite flow."],
     ["Iris", "On it."],
     [DEAN.name, "Seven days."],
     [null, "Not five."],
   ]);
+  assert.equal(container.querySelector("[data-manager-working]")?.textContent, "Iris is working…");
 });
 
 test("a thread's reply the service refused stands marked in its thread, and Retry sends it again there under its own key, with its files", async () => {
@@ -621,38 +775,45 @@ test("⌘F finds words in an ended turn's work while it stands closed, deep in a
   );
 });
 
-test.each([
-  ["the Manager's", "told"],
-  ["a teammate's", "seven"],
-])(
-  "Reply beside %s message quotes the whole message into the box, which sends it to the chat with the words after it",
-  async (_sender, messageId) => {
-    const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
+test("a 👍 pressed beside a message stands under it at once as the reader's, and goes once the service refuses it, saying so", async () => {
+  const { promise: reactAnswer, resolve: answer } = Promise.withResolvers<FakeActAnswer>();
 
-    const { container, sent } = await drawChat([
-      row("ask", 1, "What first?", DEAN),
-      row("told", 2, told),
-      row("seven", 3, told, CHARLES),
-    ]);
+  const { container, reacted } = await drawChat(
+    [row("ask", 1, "What first?", DEAN), row("told", 2, "The invite flow.")],
+    { reactAnswer },
+  );
 
-    // The pointer comes onto the message, which draws its actions at once.
-    const message = container.querySelector(`[data-message-id="${messageId}"]`);
-    assert.ok(message, "the message is drawn");
-    pointerCross(document.body, message);
+  const message = container.querySelector('[data-message-id="told"]');
+  assert.ok(message, "the message is drawn");
 
-    const reply = message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
-    assert.ok(reply, "Reply stands beside the message");
-    act(() => reply.click());
-    await settleQueries();
-    typeInComposer(container, "Ship it");
-    pressInComposer(container, "Enter");
-    await settleQueries();
+  /** The reactions under the message, by what each says to a reader. */
+  const reactions = () =>
+    [...message.querySelectorAll(".ui-reactions button")].map((chip) =>
+      chip.getAttribute("aria-label"),
+    );
 
-    assert.deepEqual(sent, [
-      `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
-    ]);
-  },
-);
+  assert.deepEqual(reactions(), []);
+  pointerCross(document.body, message);
+  const thumbsUp = message.querySelector<HTMLButtonElement>('button[aria-label="Thumbs up"]');
+  assert.ok(thumbsUp, "Thumbs up stands beside the message");
+  await act(async () => thumbsUp.click());
+  // Note that the press is written to the document at once but drawn one notify tick later, which a loaded runner can stretch.
+  await settleQueries();
+
+  assert.deepEqual(reacted, [
+    { agentId: MANAGER.id, messageId: "told", kind: "thumbsup", reacted: true },
+  ]);
+  assert.deepEqual(reactions(), ["You reacted with thumbs up"]);
+  assert.equal(thumbsUp.getAttribute("aria-pressed"), "true");
+
+  // The service refuses it, which the host answers rather than fails, and the chat it holds never carried it.
+  await act(async () =>
+    answer({ status: FAKE_ANSWER.DONE, value: { failure: AGENT_CALL_FAILURE.UNANSWERED } }),
+  );
+  await settleQueries();
+  assert.deepEqual(reactions(), []);
+  assert.deepEqual(standingToastWords(), [CHAT_REACTION_REFUSED_WORDS]);
+});
 
 test("a chat longer than its first page asks once for the page before it as it opens, and one that did not answer offers Retry", async () => {
   const { container, older } = await drawChat([row("later", 7, "Shipped.")], { before: 7 });
@@ -683,35 +844,6 @@ test("a thread whose message is older than the pages read asks for the page it m
   await settleQueries();
 
   assert.deepEqual(older, [7, 7]);
-});
-
-test("Reply on a message in a thread quotes it into the thread's box, and the chat's own box holds nothing of it", async () => {
-  const { container } = await drawChat(
-    [
-      row("first", 1, "On it."),
-      { ...row("asked", 2, "Which repo?", CHARLES), threadRoot: "first" },
-    ],
-    { opened: "first" },
-  );
-
-  const thread =
-    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread's tab stands");
-
-  const message =
-    thread.querySelector('[data-message-id="asked"]') ?? assert.fail("the reply is drawn");
-
-  pointerCross(document.body, message);
-
-  const reply =
-    message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]') ??
-    assert.fail("Reply stands beside the reply");
-
-  act(() => reply.click());
-  await settleQueries();
-
-  const chat = container.querySelector(".agent-tab") ?? assert.fail("the chat stands");
-  assert.equal(composerWords(thread).trim(), "Which repo?");
-  assert.equal(composerWords(chat), "");
 });
 
 test("a call the Manager holds for an answer stands at the chat's foot, whose Allow sends the answer", async () => {

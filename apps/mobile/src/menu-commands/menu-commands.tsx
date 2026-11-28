@@ -1,6 +1,7 @@
 // menu-commands.tsx -- the iPad menu bar's commands, routed: what stands in front told to the native menu, so each command is enabled and worded for it, and each press acted on as the screen's own press would.
 
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { holderTask, holderWorkspaceId, isUnread } from "@repo/features/inbox-list-model";
 import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
@@ -39,8 +40,9 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAgentPinned, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
+import { windowRows } from "@repo/host/read-window";
 import { BUZZ, ConfirmAsk, useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { and, type Collection, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, type Collection, eq, isUndefined } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import {
@@ -54,12 +56,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
-import { useSidebarShown } from "../sidebar-shown.js";
+import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useHeldTasksNamed } from "../tasks/use-found-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -301,15 +304,19 @@ function useWorkingAgents(taskId: string | undefined): number {
   const { agents } = useTaskListCollections();
 
   // Note that the query's identity is the values it captures, as TanStack DB 1.0 derives it, so it is made again only for another task.
-  const { data: onTask } = useLiveQuery((q) =>
-    taskId === undefined
-      ? undefined
-      : q
-          .from({ agent: agents })
-          .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+  const onTask = windowRows(
+    useWindow((q) =>
+      taskId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+    ),
   );
 
-  return (onTask ?? []).filter((agent) => agentStillWriting(agent.status)).length;
+  // Note that the rows are matched to the task again, since a read rebuilt for another task holds the last task's rows until it answers.
+  return onTask.filter((agent) => agent.taskId === taskId && agentStillWriting(agent.status))
+    .length;
 }
 
 /** The question a command asks before it acts. */
@@ -346,9 +353,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const workspaceNames = workspaces.map(({ name }) => name);
   const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
   const sidebar = useSidebarShown();
-  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, as a two-column split view's own button does.
+  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, as a two-column split view's own button does, but an iPad's, whose sidebar is the system's split view's own column, shown and hidden by its own button, swipe and command.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const sidebarStands = signedIn && regular;
+  const sidebarStands = signedIn && regular && !APP_SIDEBAR;
 
   // Note that Back pops a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const root: NavigatorState = useRootNavigationState();
@@ -492,7 +499,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.TOGGLE_READ:
-        if (subject.thread !== undefined) inbox.mark(subject.thread, !subject.threadUnread);
+        if (subject.thread !== undefined)
+          inbox.mark(inboxRowOf(subject.thread), !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
           const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;

@@ -618,6 +618,11 @@ choice is the window the context ring reads, nothing more. The read is the
 `ModelCatalog` service `src/runtime.ts`'s layer builds once per instance, cached
 for an hour on a success and for no time on a failure, so an outage at the
 gateway is retried on the next request rather than answered for the hour.
+Only a read that needs the models waits on it (a Start's check, the model list,
+usage's prices): the agent tools that only name a model by it answer from the
+copy the instance holds (`held`) and never fetch, and a Start whose choice is
+no Cursor model never reads Cursor's list, which an expired account's list
+answers at once and is read again after the response.
 The catalog is public and the same for every account, but the answer is the
 account's: the bearer is resolved before the read, and the offer is cut to
 it. `fastNotEnabled` marks a model whose fast versions are dropped because
@@ -664,6 +669,23 @@ traced, logged, or counted. The account's preferences live read
 (`/api/live/account-preferences`) carries each sound's id, name, and hash,
 never its bytes, and the choices, so a client fetches a sound again only once
 its hash changed.
+
+## Accounts' view choices
+
+`src/accounts/view-choices-procedures.ts` answers `/api/account/view-choices`
+(`PUT`) on the hosted oRPC router: one of the account's view choices (a sort,
+a filter, a fold), kept for a workspace or for the account, or forgotten
+with a null value (`@repo/database/models/account-view-choices`, the
+`account_view_choice` table, deleted with its account or its workspace).
+Each key is declared once in `@repo/features/view-choice-wire`'s
+`VIEW_CHOICE`, with whether it is a workspace's or the account's and the
+Schema its value reads through; a value its key does not hold, or a place
+that is not its key's, is refused as invalid, and a workspace the account is
+not in as not found. The account's live read of them
+(`/api/live/view-choices`, `src/live/reads/view-choices.ts`) carries its own
+choices alone, none of a workspace it has since left. A value's shape never
+changes under its key; a choice whose shape must change is declared again
+under a new key, so a released client never reads a shape it does not know.
 
 ## Accounts' own provider keys
 

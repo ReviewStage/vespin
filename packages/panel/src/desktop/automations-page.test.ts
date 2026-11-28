@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
+import { AUTOMATIONS_ORDER } from "@repo/features/automation-list-model";
 import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
+  AUTOMATION_FIRING,
+  AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -13,8 +16,10 @@ import {
 } from "@repo/features/automation-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act } from "react";
 import { test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
@@ -27,6 +32,7 @@ import {
   CI_DIGEST,
   DIGEST,
   FAILING,
+  groupHeadings,
   layIntegrations,
   layStanding,
   listed,
@@ -53,9 +59,8 @@ import {
 import { layContainersAt } from "../testing/container-width.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
-import { playMotions } from "../testing/pane-motion.js";
-import { relayout } from "../testing/resize-observer.js";
 import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 
 /**
  * automations-page.test.ts -- the Automations page as the window draws it: the listed workspace's automations, the workspace's before the personal ones, each naming its owner, an automation turned off saying so, a failed run marked, a switch's write taken in place, a read that did not land said with a retry, and an automation's editor, its schedule, its prompt, and the agent its runs go to.
@@ -143,10 +148,7 @@ test("the listed workspace's automations stand before the personal ones, under a
   await settle();
 
   assert.deepEqual(listed(), [WORKSPACE.id]);
-  assert.deepEqual(
-    [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme", "Only you"],
-  );
+  assert.deepEqual(groupHeadings(page), ["Acme", "Only you"]);
   assert.deepEqual(rows(page), [
     ["Nightly flaky-test sweep", "Acme"],
     ["Dependency bumps", "Acme"],
@@ -154,13 +156,54 @@ test("the listed workspace's automations stand before the personal ones, under a
   ]);
 });
 
-test("one owner's automations alone stand under no heading, still naming their owner", async () => {
+test("one owner's automations alone still stand under their owner's heading, as the sidebar heads a lone group, each row naming their owner", async () => {
   world.standing = [DIGEST];
   const page = mount();
   await settle();
 
-  assert.equal(page.querySelectorAll(".automation-group h2").length, 0);
+  assert.deepEqual(groupHeadings(page), ["Only you"]);
   assert.deepEqual(rows(page), [["Morning digest", "Only you"]]);
+});
+
+test("a one-time automation that ran stands under Finished, counted while folded, and says what its run started once opened", async () => {
+  const due = Date.UTC(2026, 10, 20, 9);
+
+  const launched = automation(9, {
+    name: "Launch-day smoke test",
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    enabled: false,
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: "2026-11-20T09:00", timezone: "UTC" },
+    lastRun: {
+      id: "1c2d3e4f-5a6b-4c7d-8e9f-000000000009",
+      firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: due },
+      status: AUTOMATION_RUN_STATUS.STARTED,
+      reason: null,
+      agent: {
+        id: "8c1a6a4f-3d2e-4d8b-8b66-000000000009",
+        title: "Smoke-test the release",
+        status: AGENT_STATUS.COMPLETED,
+      },
+      firedAt: due,
+      settledAt: due + 60_000,
+    },
+  });
+
+  world.standing = [DIGEST, launched];
+  const page = mount();
+  await settle();
+  assert.deepEqual(groupHeadings(page), ["Only you", "Finished1 automation"]);
+  assert.deepEqual(rows(page), [["Morning digest", "Only you"]], "Finished stands folded");
+
+  const finished = [...page.querySelectorAll(".automation-group h2 button")].find((head) =>
+    head.textContent?.includes("Finished"),
+  );
+
+  assert.ok(finished instanceof HTMLElement);
+  act(() => finished.click());
+  assert.match(
+    rowOf(page, "Launch-day smoke test").textContent ?? "",
+    /Started “Smoke-test the release”/u,
+  );
 });
 
 test("an automation turned off reads Off where its next run would, and a failed newest run is marked at its row's end", async () => {
@@ -302,6 +345,11 @@ test("with no automations the page says what one is, and with no workspace liste
   await settle();
 
   assert.match(page.textContent ?? "", /No automations yet\./u);
+  assert.equal(
+    page.querySelector(".ui-list-heads") === null,
+    true,
+    "no column heads stand over no rows",
+  );
   act(() => world.root?.unmount());
   world.root = undefined;
 
@@ -327,8 +375,8 @@ test("the list's title is its bar's heading, and View options, Create with an ag
   );
 });
 
-test("View options orders each owner's automations by name, and the order is kept on this Mac", async () => {
-  window.localStorage.clear();
+test("View options orders each owner's automations by name, and the order is kept on the account", async () => {
+  const written = keepViewChoices();
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
@@ -349,13 +397,24 @@ test("View options orders each owner's automations by name, and the order is kep
   ];
 
   assert.deepEqual(rows(page), byName);
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+      [
+        {
+          key: VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+          workspaceId: null,
+          value: AUTOMATIONS_ORDER.NAME,
+        },
+      ],
+    ),
+  );
   act(() => world.root?.unmount());
   document.body.innerHTML = "";
 
   const again = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
   assert.deepEqual(rows(again), byName, "kept as it was left");
-  window.localStorage.clear();
 });
 
 test("with no workspace chosen the bar's two acts stay reachable by keyboard, press nothing, and say why on hover", async () => {
@@ -524,6 +583,11 @@ test("a new automation is created only once it is named and told its task, and t
     page.querySelector<HTMLInputElement>("h1 input[aria-label='Automation name']")?.placeholder,
     "New automation",
     "a page not yet made stands as New automation until it is named",
+  );
+  assert.equal(
+    promptEditor(page).getAttribute("aria-placeholder"),
+    "Tell the agent what to do each run",
+    "the empty prompt asks for one rather than reading as one already written",
   );
   assert.equal(crumbs(page), "Automations");
 
@@ -832,10 +896,7 @@ test("a personal automation another member made is not called Only you, in its r
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
-  assert.deepEqual(
-    [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme", "Personal"],
-  );
+  assert.deepEqual(groupHeadings(page), ["Acme", "Personal"]);
   assert.deepEqual(rows(page).at(-1), ["Their digest", "Personal"]);
   act(() => world.root?.unmount());
 
@@ -953,35 +1014,6 @@ test("the Runs panel hides and shows by its toggle and by the side panel's chord
   act(() => runAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL));
   assert.ok(again.querySelector("aside[aria-label='Runs']"), "⌥⌘B brings it back");
   window.localStorage.clear();
-});
-
-test("the Runs panel slides out past the page's right edge as it is hidden, held drawn and out of reach until it has, and slides back in as it is shown", async () => {
-  window.localStorage.clear();
-  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
-  await settle();
-  const pane = () => page.querySelector<HTMLElement>(".automation-runs-pane");
-  const motions = playMotions();
-
-  try {
-    act(() => button("Hide runs").click());
-    const leaving = pane() ?? assert.fail("the panel is held drawn through its slide out");
-    assert.ok(leaving.hasAttribute("data-leaving"), "it has left the layout");
-    assert.ok(leaving.hasAttribute("inert"), "nothing in it is reached on its way out");
-    const exit = motions.played.find((each) => each.element === leaving);
-    assert.deepEqual(exit?.keyframes.at(-1), { transform: "translateX(100%)" });
-
-    act(() => exit?.finish());
-    assert.equal(pane() === null, true, "it is let go once its slide has played");
-
-    act(() => button("Show runs").click());
-    const arriving = pane() ?? assert.fail("it stands again");
-    assert.equal(arriving.hasAttribute("data-leaving"), false);
-    const entry = motions.played.find((each) => each.element === arriving);
-    assert.deepEqual(entry?.keyframes, [{ transform: "translateX(100%)" }, { transform: "none" }]);
-  } finally {
-    motions.remove();
-    window.localStorage.clear();
-  }
 });
 
 test("the Runs panel's edge resizes it within its bounds, and the width stands on the next page", async () => {

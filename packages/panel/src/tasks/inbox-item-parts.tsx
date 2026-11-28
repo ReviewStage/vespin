@@ -12,6 +12,7 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
+import type { InboxRow } from "@repo/features/inbox-digest";
 import {
   holderTask,
   INBOX_LINE,
@@ -27,12 +28,7 @@ import {
   readersItem,
 } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import {
-  INBOX_STATUS,
-  type InboxItem,
-  type InboxPerson,
-  inboxWaitsOn,
-} from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxPerson, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -58,14 +54,14 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { CheckIcon, GLYPH, PenLineIcon, SquareCheckIcon } from "@repo/ui/icons";
-import { useQuery } from "@tanstack/react-query";
+
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
 import { HolderGlyph } from "../entities/holder-glyph.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { StateGlyph } from "../state-glyph.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject } from "./agent-ref.js";
 import { TaskChipCard } from "./chip-cards.js";
@@ -200,12 +196,12 @@ export function inboxLineGlyph(kind: InboxLineKind): React.JSX.Element | null {
  * what it asks, as its row's second line leads with it (`inboxLineGlyph`),
  * or the thread's glyph where it asks nothing.
  */
-export function inboxItemGlyph(item: InboxItem): React.JSX.Element {
+export function inboxItemGlyph(item: InboxRow): React.JSX.Element {
   return inboxLineGlyph(inboxLineKind(item)) ?? <GLYPH.THREAD />;
 }
 
 /** Where an item stands, as its row's card says it under its title. */
-function standingWords(item: InboxItem, needsYou: boolean, starter: Actor | undefined): string {
+function standingWords(item: InboxRow, needsYou: boolean, starter: Actor | undefined): string {
   if (needsYou) return NEEDS_YOU.LABEL;
 
   if (item.status === INBOX_STATUS.OPEN) {
@@ -275,7 +271,7 @@ export function InboxItemCard({
  * because the chip already leads with the task's.
  */
 function HolderDetail({ holder }: { holder: InboxHolder }): React.JSX.Element {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const workspaceName = workspaces?.find((each) => each.id === holder.task.workspaceId)?.name;
 
   return (

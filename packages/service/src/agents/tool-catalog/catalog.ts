@@ -164,13 +164,16 @@ import { INBOX_TOOLS, postThreadToolOf } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import {
+  REACT_CHAT_TOOL,
   READ_CHAT_MESSAGES_TOOL,
   READ_CHAT_THREAD_TOOL,
+  runReactChat,
   runReadChatMessages,
   runReadChatThread,
   runSearchChat,
   SEARCH_CHAT_TOOL,
 } from "../coder-host/manager-chat-tools.js";
+import { CREATE_MANAGER_TOOL, runCreateManager } from "../coder-host/manager-create.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
 import {
@@ -657,7 +660,7 @@ const CATALOG = [
   served(LIST_MACHINES_TOOL, (admitted, input, { standing }) =>
     Option.isNone(standing.agent)
       ? Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT))
-      : runAgentListMachines(standing.agent.value, admitted.target, input),
+      : runAgentListMachines(standing.agent.value.userId, admitted.target, input),
   ),
   // Tasks and sections.
   agentTool(LIST_TASKS_TOOL, runListTasks),
@@ -734,6 +737,10 @@ const CATALOG = [
   }),
   agentTool(READ_CHAT_THREAD_TOOL, runReadChatThread, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
   agentTool(SEARCH_CHAT_TOOL, runSearchChat, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
+  // A Manager's reaction on a message of its chat, as Slack's reactions are added and removed.
+  agentTool(REACT_CHAT_TOOL, runReactChat, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
+  // A Manager a Manager makes for the member who asked for one.
+  agentTool(CREATE_MANAGER_TOOL, runCreateManager, { gates: [TOOL_GATE.MANAGER] }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

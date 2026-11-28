@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { PRODUCT_ATTACHMENT_KIND } from "@repo/features/analytics";
 import { base64Of } from "@repo/features/attached-files";
 import {
   descriptionAttachmentAddress,
@@ -41,6 +42,7 @@ import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "
 import { createPortal } from "react-dom";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
+import { countAttachmentTooLarge } from "../attachment-too-large.js";
 import { copyPictureWithWordsThroughShell } from "../copy-feedback.js";
 import {
   type DescriptionEditorHandle,
@@ -185,7 +187,11 @@ function dataUrlOf(mediaType: string, base64: string): string {
 
 /** The PDF a file is, as it is, within a PDF's bound, as a `data:` URL; or why it cannot be one. */
 async function pdfUrl(file: File): Promise<{ readonly url: string } | { readonly reason: string }> {
-  if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) return { reason: UPLOAD_WORDS.PDF_TOO_LARGE };
+  if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) {
+    countAttachmentTooLarge(PRODUCT_ATTACHMENT_KIND.PDF, file.size);
+
+    return { reason: UPLOAD_WORDS.PDF_TOO_LARGE };
+  }
 
   const bytes = await file.arrayBuffer().then(
     (buffer) => new Uint8Array(buffer),

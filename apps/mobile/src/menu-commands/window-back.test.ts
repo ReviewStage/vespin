@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";
 
 // The root state as expo-router 58 answers it: its own `__root` slot, the app's
-// root stack under it, the tabs in that stack, and each tab's own stack.
+// group under it, the app's stack in that, the tabs in the stack, and each tab's own stack.
 function rootState(front: NavigatorState["routes"][number]): NavigatorState {
-  return { index: 0, routes: [{ name: "__root", state: { index: 0, routes: [front] } }] };
+  const app = { name: "(app)", state: { index: 0, routes: [front] } };
+
+  return { index: 0, routes: [{ name: "__root", state: { index: 0, routes: [app] } }] };
 }
 
 const tasksWith = (pages: number) => ({

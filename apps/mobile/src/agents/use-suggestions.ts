@@ -18,7 +18,7 @@ import {
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { iosAgentRoute } from "@repo/features/ios-app-links";
-import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { type LinkDestination, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import {
   REPLY_BUTTON_ACTION,
   type ReplyButtonLink,
@@ -120,19 +120,19 @@ function buttonQuery(
 }
 
 /**
- * The address of an agent whose suggestion a line in the workspace's
- * transcripts was sent from, which the line's head opens, as the panel's
- * Suggested by chip does; none until the workspace is read.
+ * The address of a place of the workspace's transcripts, which a line's head
+ * opens: the agent a line was suggested by, as the panel's Suggested by chip
+ * opens it, and the line's sender, as the panel's sender opens theirs; none
+ * until the workspace is read.
  */
-export function useSuggestionAddress(
+export function usePlaceAddress(
   workspaceId: string | undefined,
-): (agentId: string) => string | undefined {
+): (place: LinkDestination) => string | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const step = workspaces === undefined ? undefined : linkWorkspaceStep(workspaceId, workspaces);
 
   const address = useCallback(
-    (agentId: string) =>
-      step === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
+    (place: LinkDestination) => (step === undefined ? undefined : linkOf(place, step)),
     [step],
   );
 

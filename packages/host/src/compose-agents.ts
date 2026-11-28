@@ -43,6 +43,8 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ManagerChatEditParams,
+  type ManagerChatReactParams,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
@@ -53,7 +55,15 @@ import {
 } from "@repo/features/analytics";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_SOURCE, githubImageOf } from "@repo/features/github-image";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
+import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_READ,
+  INBOX_SEARCH_READ,
+  inboxOfLiveRows,
+  TASK_INBOX_READ,
+} from "@repo/features/inbox-live";
+import type { AgentInboxSearchAnswer, InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -71,7 +81,8 @@ import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
-import { markedAs } from "@repo/features/read-mark";
+import { markedAs, unreadThroughOf } from "@repo/features/read-mark";
+import type { TaskListLiveRows } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -85,7 +96,18 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import { Clock, Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
+import {
+  Clock,
+  Deferred,
+  Effect,
+  FiberHandle,
+  FiberSet,
+  Option,
+  RcMap,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountGateDependencies,
@@ -137,10 +159,14 @@ import {
   accountWideReads,
   INBOX_CHANGE,
   INBOX_ITEM,
+  INBOX_SCOPED_ITEM,
   type InboxChange,
   type InboxWritten,
   inboxSent,
+  type PlacedInboxItem,
+  placedItem,
 } from "./inbox-collections.js";
+import { type OlderInboxItems, olderInboxItems } from "./inbox-older-items.js";
 import {
   AgentPictureKey,
   GitHubImageKey,
@@ -254,6 +280,8 @@ export type AgentClient = Pick<
   | "messagesNewest"
   | "messagesBefore"
   | "message"
+  | "chatReact"
+  | "chatEdit"
   | "chatSend"
   | "choose"
   | "rename"
@@ -333,6 +361,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   focus: WindowFocus;
   /** The member signed in now, as an answer or a close drawn before the service says how it stands names them; none where nobody is. */
   reader?: () => InboxReader | undefined;
+  /** Whether the platform keeps the Inbox kind on disk (`LocalCopy.keepsCollections`), so a plan's inbox read stands apart from the kept feed it would otherwise be drawn in; none keeps none. */
+  keepsInbox?: boolean;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -353,11 +383,22 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** Marks the task list now and answers how to draw rows read after the mark into it as cold tasks (`TasksComposer.coldMarked`), as the older Inbox items' tasks and agents are; none while it cannot be read outside of, and none where nothing draws them. */
+  coldMarked?: () => ((rows: TaskListLiveRows) => Effect.Effect<void>) | undefined;
   /** The task list's summaries of the tasks named, of those it holds now, which the account's kept Inbox keeps beside its items (`account-items-follow.ts`); none keeps none. */
   tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Counts a product event, as the rows the account's items read left out are counted (`dropped-rows.ts`). */
   recordProductEvent: RecordProductEvent;
 }
+
+/** One page of the account's older items as its parts decode, none where one does not. */
+const decodeOlderPage = Schema.decodeUnknownOption(INBOX_OLDER_READ.rows);
+
+/** The rows of a read past the feed, an older page's or a search's, which carry the same parts. */
+type PastFeedRows = typeof INBOX_OLDER_READ.rows.Type;
+
+/** The items a search found as their parts decode, none where one does not. */
+const decodeSearchHits = Schema.decodeUnknownOption(INBOX_SEARCH_READ.rows);
 
 /** The kind each part of the account's items read counts its dropped rows as. */
 const ACCOUNT_ITEMS_ROW_KIND = {
@@ -556,6 +597,7 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
+      ...(dependencies.keepsInbox === true ? { kind: INBOX_SCOPED_ITEM } : undefined),
     });
 
     const accounts = yield* accountInboxes({
@@ -567,6 +609,15 @@ export function composeAgents(
 
     const tellItems = (read: AppInboxRead) =>
       Effect.sync(() => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_ITEMS_CHANGED, carried(read)));
+
+    const older = olderInboxItems({
+      pool: dependencies.pool,
+      tell: (read) => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_OLDER_CHANGED, carried(read)),
+      tellFound: (found) =>
+        dependencies.kernel.emit(GATEWAY_EVENT.INBOX_FOUND_CHANGED, carried(found)),
+    });
+
+    const searchFibers = yield* FiberSet.make<void>();
 
     const holders = yield* holderInboxes(inboxes, {
       gate,
@@ -627,7 +678,11 @@ export function composeAgents(
       tellItems(UNREAD),
     );
 
+    // Note that the older items stand beside the pool for as long as the session's feed does, on the account's database it stands on.
     const followItems = (userId: string) =>
+      Effect.scoped(Effect.andThen(older.stand, followAccount(userId)));
+
+    const followAccount = (userId: string) =>
       followAccountItems(
         {
           // Note that the items are always read polled, their rows inline, and past a sync id the service holds the read until something moves.
@@ -642,6 +697,7 @@ export function composeAgents(
           pool: dependencies.pool,
           accountWide,
           dropped: (part, count) => countDropped(ACCOUNT_ITEMS_ROW_KIND[part], count),
+          carried: older.carried,
           ...(dependencies.tasksListed === undefined
             ? undefined
             : { tasksListed: dependencies.tasksListed }),
@@ -713,7 +769,7 @@ export function composeAgents(
       { transcripts, slice: transcriptSlice, queues },
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
-      { reads: sessionReads, followItems, preferences, holdPreferences },
+      { reads: sessionReads, followItems, preferences, holdPreferences, older, searchFibers },
       { repositoryChapters, origins, managerChats },
       fetched,
       { parts, repositoryParts },
@@ -750,7 +806,27 @@ interface SessionReads {
   /** The account's preferences row, held for the session by `holdPreferences`. */
   readonly preferences: HeldSlice<string>;
   readonly holdPreferences: (userId: string) => Effect.Effect<void>;
+  /** The account's settled items older than its feed holds, the pages All read of them, and the items each place's search found, held for the session. */
+  readonly older: OlderInboxItems;
+  /** The fibers asking each place's searches of the service, one a place at a time. */
+  readonly searchFibers: FiberSet.FiberSet<void>;
 }
+
+/** Words a place asks the service for, and the asker waiting on their answer. */
+interface SearchAsked {
+  readonly query: string;
+  readonly answered: Deferred.Deferred<AgentInboxSearchAnswer>;
+}
+
+/** Where one place's searches stand: the words it asks now, the words waiting for the search out to answer, and whether a search is out. */
+interface PlaceSearches {
+  latest: string | undefined;
+  waiting: SearchAsked | undefined;
+  out: boolean;
+}
+
+/** What an asker hears of words newer words from the place replaced, before they were asked or while they were out. */
+const SEARCH_REPLACED = { replaced: true } as const;
 
 /** The live follows' reads the windows hold (`contract/live-follow.ts`), each held through its stream's scope. */
 interface LiveFollows {
@@ -834,7 +910,14 @@ function composed(
   /** What waits across the account, and main's one follow of it. */
   { accounts, followed: accountFollow }: AccountFollow,
   /** The session's account reads, every item the account reaches and its preferences among them. */
-  { reads: sessionReads, followItems, preferences, holdPreferences }: SessionReads,
+  {
+    reads: sessionReads,
+    followItems,
+    preferences,
+    holdPreferences,
+    older,
+    searchFibers,
+  }: SessionReads,
   /** The pull requests' chapters, the agents' origins, and the Managers' chats the windows hold. */
   { repositoryChapters, origins, managerChats }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
@@ -855,6 +938,219 @@ function composed(
   ) => (gate() ? kept.answer(key, dependencies.accountId, asked(call), carries) : asked(call));
 
   const listed = dependencies.listed ?? (() => Effect.void);
+
+  /** What the window hears of an older page the service did not answer, or the host could not read in. */
+  const olderUnanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
+  /**
+   * A page of the account's settled items older than its feed holds, past
+   * the page `before` names, read into the session's older items
+   * (`inbox-older-items.ts`), and the tasks and agents they stand on into
+   * the task list as cold tasks where it holds them not, so an Inbox groups
+   * the page under them; answered the cursor the next page reads past, held
+   * nowhere, once both are drawn. Note that the list is marked before the
+   * page is asked, as any read outside it is, so a task its follow lets go
+   * meanwhile is not drawn back by the page; and that a page answered after
+   * its account signed out is drawn nowhere.
+   */
+  const olderPage = (before: string | undefined) =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const drawHolders = dependencies.coldMarked?.();
+
+      if (!gate() || userId === undefined || drawHolders === undefined) return olderUnanswered;
+
+      const sealed = yield* asked(
+        client.liveRead(
+          INBOX_OLDER_READ,
+          { userId, ...(before === undefined ? undefined : { before }) },
+          {},
+        ),
+      );
+
+      if ("failure" in sealed) return olderUnanswered;
+      const { stamps, items, messages, files, tasks, agents } = sealed.queries;
+
+      const rows = decodeOlderPage({
+        stamps: stamps.rows,
+        items: items.rows,
+        messages: messages.rows,
+        files: files.rows,
+        tasks: tasks.rows,
+        agents: agents.rows,
+      });
+
+      const placed = yield* placedPastFeed(userId, drawHolders, rows);
+
+      if (placed === undefined) return olderUnanswered;
+      older.took(placed);
+
+      return sealed.next === undefined ? {} : { next: sealed.next };
+    });
+
+  /**
+   * The items a read past the feed answered, an older page or a search's
+   * hits, each on its plan, once the tasks and agents they stand on are
+   * drawn into the task list as cold tasks where it holds them not
+   * (`drawHolders`), so an Inbox groups them under them; none where the
+   * rows did not decode, or the account `userId` names signed out meanwhile.
+   */
+  const placedPastFeed = (
+    userId: string,
+    drawHolders: (rows: TaskListLiveRows) => Effect.Effect<void>,
+    rows: Option.Option<PastFeedRows>,
+  ) =>
+    Effect.gen(function* () {
+      if (Option.isNone(rows) || dependencies.accountId() !== userId) return undefined;
+      yield* drawHolders({ tasks: rows.value.tasks, agents: rows.value.agents });
+
+      if (dependencies.accountId() !== userId) return undefined;
+      const placedOn = new Map(rows.value.stamps.map((stamp) => [stamp.id, stamp.taskId]));
+
+      return inboxOfLiveRows(rows.value).flatMap((item) => {
+        const taskId = placedOn.get(item.id);
+
+        return taskId === undefined ? [] : [placedItem(item, taskId)];
+      });
+    });
+
+  /** Where each place's searches stand, by the place; a sign-out lets every one go. */
+  let placeSearches = new Map<InboxSearchPlace, PlaceSearches>();
+
+  /** Whether `query` is still the words `at` asks, its `searches` not let go by a sign-out since, so an answer to them may be drawn. */
+  const stillAsked = (at: InboxSearchPlace, searches: PlaceSearches, query: string) =>
+    placeSearches.get(at) === searches && searches.latest === query;
+
+  /**
+   * The items the service's search finds by `query` (`INBOX_SEARCH_READ`),
+   * of any age, read into the session's found items for `at`, and the tasks
+   * and agents they stand on into the task list as cold tasks, as an older
+   * page's are; answered once both are drawn. An answer to words the place
+   * no longer asks draws nothing and answers that they were replaced. Words
+   * the service did not answer find nothing for the place, so the items its
+   * words before found never stand for these. Note that the list is marked
+   * before the search is asked, as for an older page.
+   */
+  const searchFound = (at: InboxSearchPlace, searches: PlaceSearches, query: string) =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const drawHolders = dependencies.coldMarked?.();
+
+      if (!gate() || userId === undefined || drawHolders === undefined) return olderUnanswered;
+      const sealed = yield* asked(client.liveRead(INBOX_SEARCH_READ, { userId, query }, {}));
+
+      if (!stillAsked(at, searches, query)) return SEARCH_REPLACED;
+
+      const placed =
+        "failure" in sealed
+          ? undefined
+          : yield* placedPastFeed(
+              userId,
+              drawHolders,
+              decodeSearchHits({
+                stamps: sealed.queries.stamps.rows,
+                items: sealed.queries.items.rows,
+                messages: sealed.queries.messages.rows,
+                files: sealed.queries.files.rows,
+                tasks: sealed.queries.tasks.rows,
+                agents: sealed.queries.agents.rows,
+              }),
+            );
+
+      if (dependencies.accountId() !== userId) return olderUnanswered;
+
+      if (!stillAsked(at, searches, query)) return SEARCH_REPLACED;
+      older.found(at, query, placed ?? []);
+
+      return placed === undefined ? olderUnanswered : {};
+    });
+
+  /**
+   * Asks the service each of `at`'s words waiting, in turn, one search out
+   * at a time, each asker answered as its search lands, until none waits.
+   * Note that the search out is never interrupted for newer words, since a
+   * statement the socket asked runs to its end on the service whatever the
+   * host does (`live-wire.ts` carries no cancel), so newer words wait for it
+   * rather than running beside it; and that its asker hears it unanswered
+   * where a sign-out interrupts it.
+   */
+  const askWaiting = (at: InboxSearchPlace, searches: PlaceSearches) =>
+    Effect.gen(function* () {
+      for (;;) {
+        const next = searches.waiting;
+
+        if (next === undefined) {
+          searches.out = false;
+
+          return;
+        }
+
+        searches.waiting = undefined;
+
+        const answer = yield* Effect.onInterrupt(searchFound(at, searches, next.query), () =>
+          Deferred.succeed(next.answered, olderUnanswered),
+        );
+
+        yield* Deferred.succeed(next.answered, answer);
+      }
+    });
+
+  /**
+   * A place's search, as a window asks it (`AGENTS_INBOX_SEARCH`): its words
+   * asked of the service (`searchFound`), at once where the place has no
+   * search out, else once the one out answers, only the place's latest
+   * words waiting, so a place holds at most one search on the service; or,
+   * with no words, the place's search and what it found let go. Answered as
+   * its search lands, or, replaced, as newer words take its place
+   * (`SEARCH_REPLACED`); an answer to words the place no longer asks is
+   * drawn nowhere.
+   */
+  const inboxSearch = (at: InboxSearchPlace, query: string | undefined) =>
+    Effect.gen(function* () {
+      const searches = placeSearches.get(at) ?? {
+        latest: undefined,
+        waiting: undefined,
+        out: false,
+      };
+
+      placeSearches.set(at, searches);
+      const replaced = searches.waiting;
+      searches.waiting = undefined;
+      searches.latest = query;
+
+      if (replaced !== undefined) yield* Deferred.succeed(replaced.answered, SEARCH_REPLACED);
+
+      if (query === undefined) {
+        older.letGo(at);
+
+        return {};
+      }
+
+      const answered = yield* Deferred.make<AgentInboxSearchAnswer>();
+      searches.waiting = { query, answered };
+
+      // Note that the search is marked out before its fiber runs, so words asked meanwhile wait for it.
+      if (!searches.out) {
+        searches.out = true;
+        yield* FiberSet.run(searchFibers, askWaiting(at, searches));
+      }
+
+      return yield* Deferred.await(answered);
+    });
+
+  /** Lets every place's search go, as a sign-out does: each search out interrupted, and each asker waiting answered unanswered. */
+  const searchesEnd = Effect.gen(function* () {
+    const ended = placeSearches;
+    placeSearches = new Map();
+
+    for (const searches of ended.values()) {
+      if (searches.waiting !== undefined) {
+        yield* Deferred.succeed(searches.waiting.answered, olderUnanswered);
+      }
+    }
+
+    yield* FiberSet.clear(searchFibers);
+  });
 
   /**
    * A write to an agent's row of the task list, as the agents' own writes
@@ -985,6 +1281,16 @@ function composed(
     asked(client.chatSend(agentId, request)),
   );
 
+  /** A member's reaction to a message of a Manager's chat, after every write of the agent's asked before it, so a reaction given and taken back lands in the order it was pressed. */
+  const chatReacted = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatReactParams) =>
+    asked(client.chatReact(agentId, messageId, request)),
+  );
+
+  /** A member's edit of their own message of a Manager's chat, after every write of the agent's asked before it, so the Manager is told of its messages and edits in the order they were written. */
+  const chatEdited = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatEditParams) =>
+    asked(client.chatEdit(agentId, messageId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1029,12 +1335,19 @@ function composed(
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
 
-  /** A look at a Manager's chat, drawn on the reader's mark of its row at once, never moved back, and kept once the list carries the service's instant. */
+  /**
+   * A look at a Manager's chat, drawn on the reader's mark of its row at
+   * once, never moved back, or Mark unread from one of its messages, drawn
+   * just before it; each kept once the list carries the service's instant.
+   */
   const markedRead = agentWrite<AgentMarkReadParams>(
-    ({ readMark }) =>
+    ({ readMark, unreadFrom }) =>
       (row) =>
-        markedAs(readMark, row, kernel.now()),
-    ({ agentId, readMark }, key) => asked(client.markRead(agentId, readMark, key)),
+        unreadFrom === undefined
+          ? markedAs(readMark, row, kernel.now())
+          : { readThrough: unreadThroughOf(unreadFrom.sentAt), markedUnread: true },
+    ({ agentId, readMark, unreadFrom }, key) =>
+      asked(client.markRead(agentId, readMark, key, unreadFrom?.messageId)),
   );
 
   /**
@@ -1106,7 +1419,7 @@ function composed(
       readonly input: Schema.Codec<Input, unknown>;
       readonly queued: (input: Input) => Answer;
     },
-  ): WriteDeclaration<InboxItem, InboxChange, Input, Answer> => ({
+  ): WriteDeclaration<PlacedInboxItem, InboxChange, Input, Answer> => ({
     kind: INBOX_ITEM,
     keys,
     change,
@@ -1121,7 +1434,12 @@ function composed(
 
   /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
   const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
-    const item = dependencies.pool.row(INBOX_ITEM, itemId);
+    // Note that a thread a plan's read alone holds stands apart from the kept feed where the platform keeps it, so it is answered as that read draws it.
+    const item =
+      dependencies.pool.row(INBOX_ITEM, itemId) ??
+      (dependencies.keepsInbox === true
+        ? dependencies.pool.row(INBOX_SCOPED_ITEM, itemId)
+        : undefined);
 
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
@@ -1331,6 +1649,10 @@ function composed(
     // Note that a message to a Manager's chat stands drawn on the chat on its way, until its row lands there.
     AGENTS_CHAT_SEND: managerChats.sending(declaredWrite(dependencies.pool, chatSent)),
     AGENTS_CHAT_UNSEND: managerChats.unsend,
+    // Note that a reaction the service takes is written into the chat held, so it stands before the chat's next read carries it.
+    AGENTS_CHAT_REACT: managerChats.reacting(declaredWrite(dependencies.pool, chatReacted)),
+    // Note that an edit the service takes is written into the chat held, so its words stand before the chat's next read carries them.
+    AGENTS_CHAT_EDIT: managerChats.editing(declaredWrite(dependencies.pool, chatEdited)),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
@@ -1409,6 +1731,8 @@ function composed(
     AGENTS_INBOX_READ_STATE: declaredWrite(dependencies.pool, marked),
     AGENTS_INBOX_REMIND: declaredWrite(dependencies.pool, reminded),
     AGENTS_INBOX_ITEM_HOME: ({ itemId }) => asked(client.inboxItemHome(itemId)),
+    AGENTS_INBOX_OLDER_PAGE: ({ before }) => olderPage(before),
+    AGENTS_INBOX_SEARCH: ({ place, query }) => inboxSearch(place, query),
     AGENTS_INBOX_READ_ALL: declaredWrite(dependencies.pool, markedAll),
     AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
@@ -1547,6 +1871,8 @@ function composed(
 
     for (const userId of yield* RcMap.keys(accounts)) yield* RcMap.invalidate(accounts, userId);
     yield* sessionReads.end;
+    yield* searchesEnd;
+    older.clear();
     yield* preferences.end;
     yield* tools.end;
     yield* models.end;

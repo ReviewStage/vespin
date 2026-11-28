@@ -146,6 +146,8 @@ export const CALL_KIND = {
   CHAT_READ: "chat-read",
   CHAT_THREAD_READ: "chat-thread-read",
   CHAT_SEARCH: "chat-search",
+  /** A Manager's reaction added to a message of its chat, or taken off it (`chat_react`), its row naming the reaction. */
+  CHAT_REACT: "chat-react",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -248,6 +250,7 @@ export const CALL_WORDS = {
   [CALL_KIND.CHAT_READ]: { verb: "Read the chat", code: false },
   [CALL_KIND.CHAT_THREAD_READ]: { verb: "Read a thread of the chat", code: false },
   [CALL_KIND.CHAT_SEARCH]: { verb: "Searched the chat:", code: false },
+  [CALL_KIND.CHAT_REACT]: { verb: "Reacted in the chat:", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Recalled", code: false },
@@ -576,7 +579,7 @@ export function calledFile(
 
 /** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
 export function moreFiles(files: readonly string[] | undefined): string | undefined {
-  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1} more`;
 }
 
 /** A web address, as a website chip reads one. */
@@ -620,7 +623,7 @@ type RowPart = (typeof ROW_PART)[keyof typeof ROW_PART];
 export interface RowReading<B> {
   readonly key: (block: B, index: number) => string;
   readonly part: (block: B) => RowPart;
-  /** Whether the block still moves, which a group of calls shimmers for. */
+  /** Whether the block still moves, which a group of calls is drawn quiet for. */
   readonly running: (block: B) => boolean;
 }
 

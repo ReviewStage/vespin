@@ -1,4 +1,4 @@
-# transcript-open.yaml -- a long finished transcript opens straight at its newest row, its bubbles, link, code block and table inside the screen, both when the app launches on it and when its row on the task's page is tapped.
+# transcript-open.yaml -- a long finished transcript opens straight at its newest row, its bubbles, link, code block and table inside the screen, both when the app launches on it and when its row on the task's page is tapped, and reading back up lands on each row above in turn, a row thousands of points tall included.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -6,7 +6,7 @@ appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
-# Launched on the host's Inbox fixture, whose rounding agent holds ten
+# Launched on the host's Inbox fixture, whose rounding agent holds a teammate's long brief and ten
 # finished turns (`@repo/host/fixture-agent-transcript`'s
 # `fixtureLongTranscript`), and opened on its page by `-agent <id>`; nothing
 # reaches a server. Note that the first frame the page shows must already
@@ -42,6 +42,26 @@ env:
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: transcript-open-link
+# Read back up past the first ask to the teammate's brief over it, a row
+# thousands of points tall that the list has not yet measured: the scroll
+# lands on the brief's last words, the row just above, never on its first
+# line far above them, as it did while the list held its place by the
+# brief itself as it grew to its height.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Where do totals round today\\?"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "End of the long brief\\."
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertNotVisible: "Long brief: check that every pull request.*"
+- waitForAnimationToEnd
+- takeScreenshot: transcript-open-tall-row
 
 # Opened as a reader opens it, from the agent's row on its task's page, so
 # the time from the tap to the page's first frame can be read from the run's

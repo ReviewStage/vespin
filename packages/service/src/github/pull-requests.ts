@@ -57,6 +57,7 @@ import {
   PULL_REQUEST_STATE,
   type PullRequestCheck,
   type PullRequestDeployment,
+  type PullRequestMerging,
   type PullRequestState,
   REVIEW_STATE,
   type ReviewState,
@@ -77,6 +78,7 @@ import {
   readOptional,
   repositoryParts,
 } from "./github-app.js";
+import { MERGING_FIELDS, MergingFieldsSchema, mergingOf } from "./pull-request-merging.js";
 import { type StackCandidate, type StackEntry, stackOf } from "./pull-request-stack.js";
 
 /** A pull request as much as the agent's pill and its summary row draw: where it stands, its head, and its size. */
@@ -302,6 +304,9 @@ const GITHUB_REVIEW_STATE = new Map<string, ReviewState>([
 
 /** The kind GitHub gives an App's own bot account. */
 const GITHUB_BOT_TYPE = "Bot";
+
+/** The kind GitHub gives a person's account. */
+const GITHUB_USER_TYPE = "User";
 
 /** The suffix GitHub gives an App's bot's login. */
 const BOT_LOGIN_SUFFIX = "[bot]";
@@ -1256,6 +1261,13 @@ export interface GitHubOverviewPullRequest {
   readonly stack: readonly StackEntry[];
 }
 
+/** The pull request itself as its overview reads it, and the merge box the stack's listing read beside it. */
+export interface GitHubOverviewRead {
+  readonly overview: GitHubOverviewPullRequest;
+  /** None where GitHub would not say; undefined where the listing never read it, one not asked as of a pull request no longer open or one whose first page GitHub refused, which leaves the merge box to its own read. */
+  readonly merging: Option.Option<PullRequestMerging> | undefined;
+}
+
 /** A pull request's conversation as its overview holds it, every account as GitHub names it. */
 export interface GitHubOverviewConversation {
   /** Where each reviewer stands by their reviews alone; who the pull request still asks is its own read's. */
@@ -1514,23 +1526,53 @@ function wordsOf(body: string | null | undefined, html: string | null | undefine
     : { html: rendered, body: "", markdown: words, said: true };
 }
 
+/** What the conversation reads of every comment and review: GitHub's ids for it, who wrote it, its words, when, and its page. */
+const ENTRY_FIELDS = `databaseId id author { __typename login avatarUrl ... on User { databaseId } ... on Bot { databaseId } } body createdAt url`;
+
 /**
- * What the REST listings do not say of a conversation, in one GraphQL read:
- * the review threads of a pull request, newest kept up to the bound, each
- * with its first comments up to the bound and how many GitHub holds, since
- * the REST listing names neither whether a thread was resolved nor whether
- * a push outdated it; and the reactions its description, its comments, its
- * reviews, and its thread comments wear, which no REST listing of a review
- * carries. The newest comments and reviews are read up to the bound on the
- * conversation's entries; GraphQL counts the empty ones the conversation
- * leaves out, so a comment kept past those is counted by the rollup its
- * REST listing carries instead, naming nobody, and a review kept past a
- * hundred newer ones, most of them a reply's wrapper, wears none.
- * Each reaction names the first who gave it up to the bound, but a thread
- * comment's only counts them: GitHub prices a read by the lists it may
- * answer, and naming them under every thread comment costs fifty times the
- * rest of the read. A bot's GraphQL login lacks the suffix its REST login
- * wears, so the suffix is put back.
+ * The pull request's older comments, a page before `$before`, with their
+ * words as GitHub renders them and how many of each reaction they wear,
+ * since an older one is still drawn where the newest hundred are mostly
+ * empty, which the conversation leaves out.
+ */
+const OLDER_COMMENTS_QUERY = `query ConversationComments($owner: String!, $name: String!, $number: Int!, $before: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      comments(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}, before: $before) {
+        pageInfo { hasPreviousPage startCursor }
+        nodes { ${ENTRY_FIELDS} bodyHTML reactionGroups { content reactors { totalCount } } }
+      }
+    }
+  }
+}`;
+
+/** The pull request's older reviews, a page before `$before`, which a reviewer's standing and the conversation's count read, with their words as GitHub renders them, since an older one is still drawn where the newest hundred are mostly reply wrappers. */
+const OLDER_REVIEWS_QUERY = `query ConversationReviews($owner: String!, $name: String!, $number: Int!, $before: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviews(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}, before: $before) {
+        pageInfo { hasPreviousPage startCursor }
+        nodes { ${ENTRY_FIELDS} state submittedAt bodyHTML }
+      }
+    }
+  }
+}`;
+
+/**
+ * A pull request's conversation in one GraphQL read: its newest comments
+ * and reviews up to the bound on the conversation's entries, each with its
+ * words as GitHub renders them, as alike as its REST listing renders them,
+ * and where an older page is left; the review threads, newest kept up to
+ * the bound, each with its first comments up to the bound and how many
+ * GitHub holds, since the REST listing names neither whether a thread was
+ * resolved nor whether a push outdated it; and the reactions its
+ * description, its comments, its reviews, and its thread comments wear,
+ * which no REST listing of a review carries. Each reaction names the first
+ * who gave it up to the bound, but a thread comment's only counts them:
+ * GitHub prices a read by the lists it may answer, and naming them under
+ * every thread comment costs fifty times the rest of the read. A bot's
+ * GraphQL login lacks the suffix its REST login wears, so the suffix is put
+ * back.
  */
 const CONVERSATION_QUERY = `query Conversation($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -1538,10 +1580,12 @@ const CONVERSATION_QUERY = `query Conversation($owner: String!, $name: String!, 
       id
       reactionGroups { ...Reaction }
       comments(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}) {
-        nodes { databaseId reactionGroups { ...Reaction } }
+        pageInfo { hasPreviousPage startCursor }
+        nodes { ${ENTRY_FIELDS} bodyHTML reactionGroups { ...Reaction } }
       }
       reviews(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}) {
-        nodes { databaseId reactionGroups { ...Reaction } }
+        pageInfo { hasPreviousPage startCursor }
+        nodes { ${ENTRY_FIELDS} state submittedAt bodyHTML reactionGroups { ...Reaction } }
       }
       reviewThreads(last: ${OVERVIEW_BOUNDS.MAX_THREADS}) {
         totalCount
@@ -1664,9 +1708,56 @@ const ReactedSchema = Schema.Struct({
   reactionGroups: ReactionGroupsSchema,
 });
 
-const ReactedListSchema = Schema.optionalKey(
-  Schema.Struct({ nodes: Schema.Array(Schema.NullOr(ReactedSchema)) }),
-);
+/** Where a page of a list read newest first stands: whether an older page is left, and where it ends. */
+const PageInfoSchema = Schema.Struct({
+  hasPreviousPage: Schema.Boolean,
+  startCursor: Schema.NullOr(Schema.String),
+});
+
+/** A comment as the conversation reads it over GraphQL; its rendering and reactions on the newest page alone. */
+const GraphCommentSchema = Schema.Struct({
+  databaseId: Schema.NullOr(Schema.Number),
+  id: Schema.optionalKey(Schema.String),
+  author: Schema.NullOr(GraphActorSchema),
+  body: Schema.String,
+  createdAt: Schema.String,
+  url: Schema.String,
+  bodyHTML: Schema.optionalKey(Schema.String),
+  reactionGroups: ReactionGroupsSchema,
+});
+
+/** A review as the conversation reads it over GraphQL; its rendering and reactions on the newest page alone. */
+const GraphReviewSchema = Schema.Struct({
+  ...GraphCommentSchema.fields,
+  state: Schema.String,
+  submittedAt: Schema.NullOr(Schema.String),
+});
+
+const GraphCommentsSchema = Schema.Struct({
+  pageInfo: PageInfoSchema,
+  nodes: Schema.Array(Schema.NullOr(GraphCommentSchema)),
+});
+
+const GraphReviewsSchema = Schema.Struct({
+  pageInfo: PageInfoSchema,
+  nodes: Schema.Array(Schema.NullOr(GraphReviewSchema)),
+});
+
+const OlderCommentsAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(Schema.Struct({ comments: GraphCommentsSchema })),
+    }),
+  ),
+});
+
+const OlderReviewsAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(Schema.Struct({ reviews: GraphReviewsSchema })),
+    }),
+  ),
+});
 
 const ThreadCommentSchema = Schema.Struct({
   author: Schema.NullOr(GraphActorSchema),
@@ -1709,8 +1800,8 @@ const ConversationAnswerSchema = Schema.Struct({
         Schema.Struct({
           id: Schema.optionalKey(Schema.String),
           reactionGroups: ReactionGroupsSchema,
-          comments: ReactedListSchema,
-          reviews: ReactedListSchema,
+          comments: GraphCommentsSchema,
+          reviews: GraphReviewsSchema,
           reviewThreads: Schema.Struct({
             totalCount: Schema.Number,
             nodes: Schema.Array(Schema.NullOr(ThreadSchema)),
@@ -1857,53 +1948,180 @@ function threadOf(node: typeof ThreadSchema.Type): GitHubReviewThread | undefine
   };
 }
 
+/** What the conversation reads of a pull request: its comments and its reviews, oldest first, as REST names them, and the rest of the GraphQL read. */
+interface ConversationRead {
+  readonly comments: typeof IssueCommentsSchema.Type;
+  readonly reviews: typeof ReviewsSchema.Type;
+  readonly graph: ReadGraph;
+}
+
+/** Nothing said: what a pull request the repository no longer holds reads as. */
+const NOTHING_SAID: ConversationRead = { comments: [], reviews: [], graph: NO_GRAPH };
+
+/** An account as GitHub's GraphQL names one, in REST's record of it, so the conversation reads both alike: a bot by its kind and its login's suffix, a deleted account as GitHub's ghost. */
+function restAccountOf(
+  author: typeof GraphActorSchema.Type | null,
+): typeof GitHubAccountSchema.Type {
+  const account = threadAccountOf(author);
+  const type = account.bot ? GITHUB_BOT_TYPE : GITHUB_USER_TYPE;
+
+  return author?.avatarUrl === undefined
+    ? { login: account.login, id: account.id, type }
+    : { login: account.login, id: account.id, type, avatar_url: author.avatarUrl };
+}
+
+/** The reactions a comment wears as REST rolls them up, from GraphQL's counts of them; none where the read asked none. */
+function rollupOf(
+  groups: (typeof GraphCommentSchema.Type)["reactionGroups"],
+): ReactionRollup | undefined {
+  if (groups == null) return undefined;
+
+  return Object.fromEntries(
+    groups.flatMap((group) => {
+      const reaction = GRAPHQL_REACTION.get(group.content);
+
+      return reaction === undefined ? [] : [[ROLLUP_KEY[reaction], group.reactors.totalCount]];
+    }),
+  );
+}
+
+/** A comment GraphQL read, in REST's record of it, with the reactions it wears rolled up as REST rolls them, which a comment past the newest page is counted by. */
+function restCommentOf(
+  node: typeof GraphCommentSchema.Type,
+): (typeof IssueCommentsSchema.Type)[number] {
+  const reactions = rollupOf(node.reactionGroups);
+
+  return {
+    ...(node.databaseId === null ? undefined : { id: node.databaseId }),
+    user: restAccountOf(node.author),
+    body: node.body,
+    ...(node.bodyHTML === undefined ? undefined : { body_html: node.bodyHTML }),
+    created_at: node.createdAt,
+    html_url: node.url,
+    ...(node.id === undefined ? undefined : { node_id: node.id }),
+    ...(reactions === undefined ? undefined : { reactions }),
+  };
+}
+
+/** A review GraphQL read, in REST's record of it. */
+function restReviewOf(node: typeof GraphReviewSchema.Type): (typeof ReviewsSchema.Type)[number] {
+  return {
+    ...(node.databaseId === null ? undefined : { id: node.databaseId }),
+    user: restAccountOf(node.author),
+    state: node.state,
+    body: node.body,
+    submitted_at: node.submittedAt,
+    html_url: node.url,
+    ...(node.bodyHTML === undefined ? undefined : { body_html: node.bodyHTML }),
+    ...(node.id === undefined ? undefined : { node_id: node.id }),
+  };
+}
+
+/** A page of a list read newest first: its nodes, and where the page before it ends. */
+interface BackPage<Node> {
+  readonly pageInfo: typeof PageInfoSchema.Type;
+  readonly nodes: readonly (Node | null)[];
+}
+
 /**
- * The pull request's review threads and reactions, read over GraphQL on the
- * token. Note that a read that fails, or that GitHub answers only with
- * errors, leaves the threads and the reactions out, said once in the log,
- * because the rest of the overview stands without them.
+ * Every node of a list read newest first, oldest first, from its newest
+ * page back, each older page asked by where the page after it starts, up
+ * to `maxPages` pages; none past a page GitHub names nothing on.
  */
-function conversationGraphOf(
+function pagedBack<Node>(
+  newest: BackPage<Node>,
+  older: (before: string) => Read<BackPage<Node> | undefined>,
+  maxPages: number,
+): Read<readonly Node[]> {
+  const back = (
+    page: BackPage<Node>,
+    held: readonly Node[],
+    pages: number,
+  ): Read<readonly Node[]> => {
+    const read = [...page.nodes.flatMap((node) => (node === null ? [] : [node])), ...held];
+    const { hasPreviousPage, startCursor } = page.pageInfo;
+
+    if (!hasPreviousPage || startCursor === null || pages >= maxPages) return Effect.succeed(read);
+
+    return Effect.flatMap(older(startCursor), (before) =>
+      before === undefined ? Effect.succeed(read) : back(before, read, pages + 1),
+    );
+  };
+
+  return back(newest, [], 1);
+}
+
+/**
+ * The conversation of a pull request in one GraphQL read on the token, and
+ * its older pages only where it holds more: its newest comments and reviews
+ * with their words as GitHub renders them, the review threads, newest kept
+ * up to the bound, each with its first comments up to the bound and how
+ * many GitHub holds, since the REST listings name neither whether a thread
+ * was resolved nor whether a push outdated it, and the reactions its
+ * description, comments, reviews, and thread comments wear; then every
+ * older page of its comments and its reviews, read back to the bounds the
+ * REST listings were read to, since a reviewer stands by their newest
+ * review and the conversation counts the entries it leaves on GitHub.
+ * Note that the comments and reviews are read here rather than through
+ * their REST listings, because each request waits its turn on the token's
+ * one queue, which every part of the overview shares, and GitHub renders
+ * a body alike through both. Nothing said where the repository holds no
+ * such pull request.
+ */
+function conversationReadOf(
   bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<ReadGraph> {
+): Read<ConversationRead> {
   const [owner = "", name = ""] = fullName.split("/");
+  const asked = { owner, name, number };
 
-  return bearer.client
-    .graphql(CONVERSATION_QUERY, { owner, name, number }, ConversationAnswerSchema)
-    .pipe(
-      Effect.flatMap((answer) => {
-        const pullRequest = answer.repository?.pullRequest;
-
-        if (pullRequest == null) {
-          return Effect.as(
-            Effect.logWarning(`GitHub answered no review threads of pull request ${number}`),
-            NO_GRAPH,
-          );
-        }
-
-        const listed = pullRequest.reviewThreads;
-        const nodes = listed.nodes.flatMap((node) => (node === null ? [] : [node]));
-
-        return Effect.succeed({
-          threads: nodes.flatMap((node) => threadOf(node) ?? []),
-          left: Math.max(0, listed.totalCount - listed.nodes.length),
-          descriptionReactions: reactionsOf(pullRequest.reactionGroups),
-          descriptionSubject: pullRequest.id,
-          commentReactions: reactionsById(pullRequest.comments),
-          reviewReactions: reactionsById(pullRequest.reviews),
-        });
-      }),
-      Effect.catch((failure) =>
-        Effect.as(
-          Effect.logWarning(
-            `the review threads of pull request ${number} were not read: ${failure._tag}`,
-          ),
-          NO_GRAPH,
-        ),
-      ),
+  const olderComments = (before: string) =>
+    Effect.map(
+      bearer.client.graphql(OLDER_COMMENTS_QUERY, { ...asked, before }, OlderCommentsAnswerSchema),
+      (answer) => answer.repository?.pullRequest?.comments,
     );
+
+  const olderReviews = (before: string) =>
+    Effect.map(
+      bearer.client.graphql(OLDER_REVIEWS_QUERY, { ...asked, before }, OlderReviewsAnswerSchema),
+      (answer) => answer.repository?.pullRequest?.reviews,
+    );
+
+  return Effect.flatMap(
+    bearer.client.graphql(CONVERSATION_QUERY, asked, ConversationAnswerSchema),
+    (answer) => {
+      const pullRequest = answer.repository?.pullRequest;
+
+      if (pullRequest == null) return Effect.succeed(NOTHING_SAID);
+      const listed = pullRequest.reviewThreads;
+      const nodes = listed.nodes.flatMap((node) => (node === null ? [] : [node]));
+
+      const graph: ReadGraph = {
+        threads: nodes.flatMap((node) => threadOf(node) ?? []),
+        left: Math.max(0, listed.totalCount - listed.nodes.length),
+        descriptionReactions: reactionsOf(pullRequest.reactionGroups),
+        descriptionSubject: pullRequest.id,
+        commentReactions: reactionsById(pullRequest.comments),
+        reviewReactions: reactionsById(pullRequest.reviews),
+      };
+
+      return Effect.map(
+        Effect.all(
+          [
+            pagedBack(pullRequest.comments, olderComments, COMMENTS_MAX_PAGES),
+            pagedBack(pullRequest.reviews, olderReviews, PEOPLE_MAX_PAGES.REVIEWS),
+          ],
+          { concurrency: "unbounded" },
+        ),
+        ([comments, reviews]): ConversationRead => ({
+          comments: comments.map(restCommentOf),
+          reviews: reviews.map(restReviewOf),
+          graph,
+        }),
+      );
+    },
+  );
 }
 
 /** When a thread was started: its first comment's time. */
@@ -1978,7 +2196,7 @@ function conversationOf(
         at: timeOf(comment.created_at) ?? 0,
         url: comment.html_url,
         threads: [],
-        // Note that a comment past the GraphQL read's newest hundred is counted by its REST rollup instead.
+        // Note that a comment past the GraphQL read's newest page is counted by its rollup instead, as is every comment read from its REST listing where GitHub refused that read.
         reactions:
           comment.id !== undefined && read.commentReactions.has(comment.id)
             ? reactionsAt(read.commentReactions, comment.id)
@@ -2027,49 +2245,57 @@ function conversationOf(
 /**
  * The repository's open pull requests a stack is worked out from, a page
  * at a time in GraphQL reads: each by its number, words, and branches, and
- * whether its head is a fork's, and where the next page starts.
+ * whether its head is a fork's, and where the next page starts. Its first
+ * page asks the merge box's fields of the pull request beside them
+ * (`$merging`), so the overview spends one GraphQL request, and one turn of
+ * the token's throttle, on both.
  */
-const OPEN_PULL_REQUESTS_QUERY = `query OpenPullRequests($owner: String!, $name: String!, $after: String) {
+const OPEN_PULL_REQUESTS_QUERY = `query OpenPullRequests($owner: String!, $name: String!, $number: Int!, $after: String, $merging: Boolean!) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: ${STACK_CANDIDATES}, after: $after) {
       nodes { number title url isDraft headRefName baseRefName isCrossRepository mergeQueueEntry { position } }
       pageInfo { hasNextPage endCursor }
     }
+    ... @include(if: $merging) {
+      ${MERGING_FIELDS}
+    }
   }
 }`;
 
-const OpenPullRequestsAnswerSchema = Schema.Struct({
-  repository: Schema.NullOr(
-    Schema.Struct({
-      pullRequests: Schema.Struct({
-        nodes: Schema.Array(
-          Schema.NullOr(
-            Schema.Struct({
-              number: Schema.Number,
-              title: Schema.String,
-              url: Schema.String,
-              isDraft: Schema.Boolean,
-              headRefName: Schema.String,
-              baseRefName: Schema.String,
-              isCrossRepository: Schema.Boolean,
-              mergeQueueEntry: Schema.optional(
-                Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-              ),
-            }),
-          ),
-        ),
-        pageInfo: Schema.Struct({
-          hasNextPage: Schema.Boolean,
-          endCursor: Schema.NullOr(Schema.String),
-        }),
+const OpenPullRequestsSchema = Schema.Struct({
+  nodes: Schema.Array(
+    Schema.NullOr(
+      Schema.Struct({
+        number: Schema.Number,
+        title: Schema.String,
+        url: Schema.String,
+        isDraft: Schema.Boolean,
+        headRefName: Schema.String,
+        baseRefName: Schema.String,
+        isCrossRepository: Schema.Boolean,
+        mergeQueueEntry: Schema.optional(Schema.NullOr(Schema.Struct({ position: Schema.Number }))),
       }),
-    }),
+    ),
+  ),
+  pageInfo: Schema.Struct({
+    hasNextPage: Schema.Boolean,
+    endCursor: Schema.NullOr(Schema.String),
+  }),
+});
+
+/** A later page of the listing, which asks no merge fields. */
+const OpenPullRequestsAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(Schema.Struct({ pullRequests: OpenPullRequestsSchema })),
+});
+
+/** The listing's first page, with the merge box's fields beside it. */
+const FirstOpenPageAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({ pullRequests: OpenPullRequestsSchema, ...MergingFieldsSchema.fields }),
   ),
 });
 
-type OpenPullRequestNodes = NonNullable<
-  typeof OpenPullRequestsAnswerSchema.Type.repository
->["pullRequests"]["nodes"];
+type OpenPullRequestNodes = (typeof OpenPullRequestsSchema.Type)["nodes"];
 
 /** The open pull requests a page lists, as a stack is worked out from them. */
 function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
@@ -2091,63 +2317,113 @@ function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
   );
 }
 
+/** What the stack's listing read: the repository's open pull requests, none where they could not all be read, and the merge box its first page asked beside them, none where GitHub would not say and undefined where it refused that page. */
+interface OpenListing {
+  readonly open: readonly StackCandidate[] | undefined;
+  readonly merging: Option.Option<PullRequestMerging> | undefined;
+}
+
 /**
  * The repository's every open pull request, page after page up to the
- * bound, as a stack is worked out from them; none where they could not all
- * be read. Note that a listing cut short is none rather than what it got
- * to, because a pull request it left out could be the second on a branch,
- * which unmakes an edge the rest would make; and that a read that fails, or
- * that GitHub answers only with errors, is none too, said once in the log,
- * because the header stands without its stack.
+ * bound, as a stack is worked out from them, with the merge box of pull
+ * request `number` its first page asked beside them. Note that a listing
+ * cut short is none rather than what it got to, because a pull request it
+ * left out could be the second on a branch, which unmakes an edge the rest
+ * would make, while the merge box its first page read still stands; and
+ * that a read that fails, or that GitHub answers only with errors, is none
+ * too, said once in the log, because the header stands without its stack,
+ * with no merge box read where its first page failed, which the caller
+ * then asks on its own.
  */
 function openPullRequestsOf(
   bearer: GitHubBearer,
   fullName: string,
-): Effect.Effect<readonly StackCandidate[] | undefined> {
+  number: number,
+): Effect.Effect<OpenListing> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const page = (
-    after: string | null,
+  const ask = (after: string | null, merging: boolean) => ({ owner, name, number, after, merging });
+
+  const listed = (
+    listing: typeof OpenPullRequestsSchema.Type | undefined,
     held: readonly StackCandidate[],
     pages: number,
-  ): Effect.Effect<readonly StackCandidate[] | undefined, PullRequestReadFailure> =>
-    bearer.client
-      .graphql(OPEN_PULL_REQUESTS_QUERY, { owner, name, after }, OpenPullRequestsAnswerSchema)
-      .pipe(
-        Effect.flatMap((answer) => {
-          const listed = answer.repository?.pullRequests;
-
-          if (listed === undefined) {
-            return Effect.as(
-              Effect.logWarning(`GitHub answered no open pull requests of the repository`),
-              undefined,
-            );
-          }
-
-          const read = [...held, ...candidatesOf(listed.nodes)];
-          const { hasNextPage, endCursor } = listed.pageInfo;
-
-          if (!hasNextPage || endCursor === null) return Effect.succeed(read);
-
-          if (pages + 1 >= STACK_PAGES) {
-            return Effect.as(
-              Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
-              undefined,
-            );
-          }
-
-          return page(endCursor, read, pages + 1);
-        }),
-      );
-
-  return page(null, [], 0).pipe(
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(`the repository's open pull requests were not read: ${failure._tag}`),
+  ): Effect.Effect<readonly StackCandidate[] | undefined, PullRequestReadFailure> => {
+    if (listing === undefined) {
+      return Effect.as(
+        Effect.logWarning(`GitHub answered no open pull requests of the repository`),
         undefined,
+      );
+    }
+
+    const read = [...held, ...candidatesOf(listing.nodes)];
+    const { hasNextPage, endCursor } = listing.pageInfo;
+
+    if (!hasNextPage || endCursor === null) return Effect.succeed(read);
+
+    if (pages + 1 >= STACK_PAGES) {
+      return Effect.as(
+        Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
+        undefined,
+      );
+    }
+
+    return bearer.client
+      .graphql(OPEN_PULL_REQUESTS_QUERY, ask(endCursor, false), OpenPullRequestsAnswerSchema)
+      .pipe(Effect.flatMap((answer) => listed(answer.repository?.pullRequests, read, pages + 1)));
+  };
+
+  const unread = (failure: PullRequestReadFailure, what: string) =>
+    Effect.as(Effect.logWarning(`${what} were not read: ${failure._tag}`), undefined);
+
+  return bearer.client
+    .graphql(OPEN_PULL_REQUESTS_QUERY, ask(null, true), FirstOpenPageAnswerSchema)
+    .pipe(
+      Effect.flatMap((answer) =>
+        Effect.map(
+          listed(answer.repository?.pullRequests, [], 0).pipe(
+            Effect.catch((failure) => unread(failure, "the repository's open pull requests")),
+          ),
+          (open): OpenListing => ({ open, merging: mergingOf(answer.repository) }),
+        ),
       ),
+      Effect.catch((failure) =>
+        Effect.as(unread(failure, "the repository's open pull requests"), {
+          open: undefined,
+          merging: undefined,
+        }),
+      ),
+    );
+}
+
+/** A pull request read whole, with GitHub's rendering of its description, as its overview reads it. */
+export type OverviewPull = typeof OverviewPullSchema.Type;
+
+/** One pull request of the repository by number, whole and rendered, as its overview reads it; none where the repository has no such one. */
+export function overviewPullOf(
+  bearer: GitHubBearer,
+  fullName: string,
+  number: number,
+): Read<Option.Option<OverviewPull>> {
+  return readOptional(
+    githubRead(
+      bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+        ...repositoryParts(fullName),
+        pull_number: number,
+        headers: WITH_RENDERING,
+      }),
+      OverviewPullSchema,
     ),
   );
+}
+
+/** What a pull request read whole says of it to the overview's parts: its number, where it stands, and its page. */
+export function overviewPullSubject(
+  pull: OverviewPull,
+): Pick<GitHubPullRequest, "number" | "state" | "url"> {
+  const { number, state, url } = pullRequestOf(pull);
+
+  return { number, state, url };
 }
 
 /**
@@ -2156,33 +2432,30 @@ function openPullRequestsOf(
  * its mergeability, who opened it, who it still asks for a review, and its
  * labels. Where `stacked` says it was open as last read, the repository's
  * open pull requests are read beside it for the stack it stands in, which
- * one no longer open stands in none of. None where the repository holds no
- * such pull request.
+ * one no longer open stands in none of, and its merge box in the same
+ * GraphQL request. The pull request is read whole where it was not already,
+ * as `reached`. None where the repository holds no such pull request.
  */
 export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOverview")(function* (
   bearer: GitHubBearer,
   fullName: string,
   number: number,
   stacked: boolean,
-): Effect.fn.Return<Option.Option<GitHubOverviewPullRequest>, PullRequestReadFailure> {
-  const [read, open] = yield* Effect.all(
+  reached?: OverviewPull,
+): Effect.fn.Return<Option.Option<GitHubOverviewRead>, PullRequestReadFailure> {
+  const [read, listing] = yield* Effect.all(
     [
-      readOptional(
-        githubRead(
-          bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-            ...repositoryParts(fullName),
-            pull_number: number,
-            headers: WITH_RENDERING,
-          }),
-          OverviewPullSchema,
-        ),
-      ),
-      stacked ? openPullRequestsOf(bearer, fullName) : Effect.succeed(undefined),
+      // Note that a pull request already read whole, as the read that reached it, is not asked again, since each request waits its turn on the token's one queue.
+      reached === undefined
+        ? overviewPullOf(bearer, fullName, number)
+        : Effect.succeed(Option.some(reached)),
+      stacked ? openPullRequestsOf(bearer, fullName, number) : Effect.succeed(undefined),
     ],
     { concurrency: "unbounded" },
   );
 
   if (Option.isNone(read)) return Option.none();
+  const open = listing?.open;
   const pull = read.value;
   const pullRequest = pullRequestOf(pull);
 
@@ -2205,7 +2478,7 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
 
   const forkOwner = current.crossRepository ? pull.head.repo?.owner?.login : undefined;
 
-  return Option.some({
+  const overview: GitHubOverviewPullRequest = {
     pullRequest,
     body: pull.body ?? "",
     html: pull.body_html?.trim() ?? "",
@@ -2222,38 +2495,29 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
       .slice(0, CHANGES_BOUNDS.MAX_PEOPLE),
     labels: (pull.labels ?? []).slice(0, OVERVIEW_BOUNDS.MAX_LABELS),
     stack: stands && open !== undefined ? stackOf(current, open) : [],
-  });
+  };
+
+  return Option.some({ overview, merging: listing?.merging });
 });
 
 /**
- * A pull request's conversation, read on the token: at once every page of
- * its comments, every page of its reviews, which both name where each
- * reviewer stands and join its comments as its conversation, and its review
- * threads, each under its review, with the reactions its description and
- * every entry wear, read in the threads' one ask rather than one per
- * comment. `pullRequest.url` is the pull request's own page, which an entry
- * GitHub names no page of opens. A pull request the repository does not hold
- * reads as nobody having said anything.
+ * The conversation's comments and reviews from their REST listings, every
+ * page, with none of what only GraphQL says, as the conversation is read
+ * where GitHub refuses its GraphQL read.
  */
-export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullRequestConversation")(
-  function* <R = never>(
-    bearer: GitHubBearer,
-    fullName: string,
-    pullRequest: { readonly number: number; readonly url: string },
-    viewer: Effect.Effect<ViewerReads | undefined, never, R> = Effect.succeed(undefined),
-  ): Effect.fn.Return<GitHubOverviewConversation, PullRequestReadFailure, R> {
-    const { number } = pullRequest;
+function conversationListedOf(
+  bearer: GitHubBearer,
+  fullName: string,
+  number: number,
+): Read<ConversationRead> {
+  const listing = {
+    ...repositoryParts(fullName),
+    per_page: PEOPLE_PER_PAGE,
+    headers: WITH_RENDERING,
+  };
 
-    const listing = {
-      ...repositoryParts(fullName),
-      per_page: PEOPLE_PER_PAGE,
-      headers: WITH_RENDERING,
-    };
-
-    // The member's own read runs beside the App's and is waited on only briefly once they land, so it never holds the conversation.
-    const viewing = yield* Effect.forkChild(viewer);
-
-    const [comments, reviews, graph] = yield* Effect.all(
+  return Effect.map(
+    Effect.all(
       [
         everyPage(
           bearer.client.paginate(
@@ -2271,9 +2535,45 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
           ),
           ReviewsSchema,
         ),
-        conversationGraphOf(bearer, fullName, number),
       ],
       { concurrency: "unbounded" },
+    ),
+    ([comments, reviews]): ConversationRead => ({ comments, reviews, graph: NO_GRAPH }),
+  );
+}
+
+/**
+ * A pull request's conversation, read on the token in one GraphQL read
+ * (`conversationReadOf`): its comments, its reviews, which both name where
+ * each reviewer stands and join its comments as its conversation, and its
+ * review threads, each under its review, with the reactions its
+ * description and every entry wear; read from the REST listings instead
+ * where GitHub refuses that read. `pullRequest.url` is the pull request's own page, which an entry
+ * GitHub names no page of opens. A pull request the repository does not hold
+ * reads as nobody having said anything.
+ */
+export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullRequestConversation")(
+  function* <R = never>(
+    bearer: GitHubBearer,
+    fullName: string,
+    pullRequest: { readonly number: number; readonly url: string },
+    viewer: Effect.Effect<ViewerReads | undefined, never, R> = Effect.succeed(undefined),
+  ): Effect.fn.Return<GitHubOverviewConversation, PullRequestReadFailure, R> {
+    const { number } = pullRequest;
+
+    // The member's own read runs beside the App's and is waited on only briefly once they land, so it never holds the conversation.
+    const viewing = yield* Effect.forkChild(viewer);
+
+    // Note that where GitHub refuses the GraphQL read, the conversation is read from the REST listings instead, without its threads or reactions, so it still stands; the cost of the second read falls on that failure alone.
+    const { comments, reviews, graph } = yield* conversationReadOf(bearer, fullName, number).pipe(
+      Effect.catch((failure) =>
+        Effect.andThen(
+          Effect.logWarning(
+            `the conversation of pull request ${number} was not read over GraphQL: ${failure._tag}`,
+          ),
+          conversationListedOf(bearer, fullName, number),
+        ),
+      ),
     );
 
     const viewed = yield* Fiber.join(viewing).pipe(

@@ -7,7 +7,6 @@ import {
   Image,
   RNHostView,
   RoundedRectangle,
-  Text,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -69,6 +68,7 @@ import {
   priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
+import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";

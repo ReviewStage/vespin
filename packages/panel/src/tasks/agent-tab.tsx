@@ -166,6 +166,14 @@ import {
   UsageLimitNotice,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationLead,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -200,14 +208,6 @@ import {
   automationActor,
   namedAutomationActor,
 } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationLead,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { Fold, FoldBody } from "../ai-elements/fold.js";
 import {
   Message,
@@ -226,6 +226,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { STEADY_DOORS, useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import {
   useTaskListCollections,
   useTaskListRow,
@@ -308,7 +309,15 @@ import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
-import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
+import {
+  sameComputerApps,
+  sameEntries,
+  sameFields,
+  sameIds,
+  sameSet,
+  useKept,
+  useSteady,
+} from "./kept-draws.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -380,6 +389,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
@@ -414,7 +424,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * the developer sent it after the description is the developer's bubble, each skill it
  * names the chip that opens the skill's file (`skill-chip.tsx`), as a
  * "Loaded skill" row opens it too, hanging the same card; and while
- * the agent may still write, a shimmering line stands at the end saying
+ * the agent may still write, a quiet line stands at the end saying
  * what its newest turn's record says it is doing (`tabTurnOf`): "Starting…"
  * until a runner opens the turn, whatever its start waits on, "Working…"
  * while it runs, and "Stopping…" once a Stop was asked of it,
@@ -788,7 +798,14 @@ export function ToolCallView({
           ) : undefined
         }
       />
-      {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
+      {inBody ? null : (
+        <CallPictures
+          tool={part.tool}
+          input={part.input}
+          output={part.output}
+          runnerKept={part.pictures}
+        />
+      )}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
       <MachineRefusalCard tool={part.tool} output={part.output} />
       {part.outOfMemory === undefined ? null : <OutOfMemoryOffer outOfMemory={part.outOfMemory} />}
@@ -845,6 +862,7 @@ function DelegationRow({
   doors: DelegationDoors | undefined;
 }): ReactNode {
   const view = delegationView(part, doors?.own);
+  const links = usePlainLinkNames();
   const live = useLiveDoors(doors);
   const onOpen = doors?.onOpen;
   // The worker's own session says where it stands, since the call may settle the moment it is under way.
@@ -877,7 +895,7 @@ function DelegationRow({
     <>
       <TranscriptSubagent
         callId={part.callId}
-        job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
+        job={view.title ?? (cardTitle(view.task, links) || CALL_WORDS[CALL_KIND.WORKER].verb)}
         pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
         state={standing === undefined ? part.state : workerToolState(standing.status)}
         startedAt={doors?.starts?.get(part.callId)}
@@ -1373,7 +1391,7 @@ function OriginBody({ body }: { body: string }): React.JSX.Element {
 function PlanCard({
   text,
   lead,
-  title = cardTitle(text),
+  title: given,
   sender,
   sentAt,
   body,
@@ -1398,6 +1416,8 @@ function PlanCard({
   /** The task the agent works on, whose description's pictures the card draws; none where it works on none. */
   taskId?: string | undefined;
 }): ReactNode {
+  const derived = cardTitle(text, usePlainLinkNames());
+  const title = given ?? derived;
   const named = sender != null;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
@@ -1416,7 +1436,7 @@ function PlanCard({
             <PlanIcon>
               {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
             </PlanIcon>
-            <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
+            <PlanTitle label={lead.label} previews={title === derived}>
               {title}
             </PlanTitle>
           </PlanHeader>
@@ -2452,6 +2472,36 @@ function railLinesOf(
   });
 }
 
+/**
+ * `readOf` kept by the message it read, so a transcript written a line
+ * longer reads only the messages that changed: the document shares every
+ * message it did not change (`shareAppState`), so the rest are the very
+ * messages read before.
+ */
+function cachedByMessage(
+  readOf: (message: AgentTranscriptMessage) => readonly RailSentLine[],
+): (message: AgentTranscriptMessage) => readonly RailSentLine[] {
+  const read = new WeakMap<AgentTranscriptMessage, readonly RailSentLine[]>();
+
+  return (message) => {
+    const kept = read.get(message);
+
+    if (kept !== undefined) return kept;
+    const lines = readOf(message);
+    read.set(message, lines);
+
+    return lines;
+  };
+}
+
+/** Whether two runs of rail lines mark the same lines on the same rows. */
+function sameRailLines(one: readonly RailLine[], other: readonly RailLine[]): boolean {
+  return (
+    one.length === other.length &&
+    one.every((each, at) => each.rowKey === other[at]?.rowKey && each.line === other[at]?.line)
+  );
+}
+
 /** Each piece's own words as a find counts them, kept by the piece. */
 const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
@@ -2787,7 +2837,7 @@ function AgentTranscriptView({
   approvals?: AgentApprovalsControl | undefined;
   /** The current turn, whose own native notice replaces its generic failure line. */
   turnId?: string | null | undefined;
-  /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
+  /** When the run under way began, which the working line counts from; none where unknown, when the line says its words alone. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
   ended?: EndLineParts | undefined;
@@ -2973,8 +3023,8 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
-  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
-  const railLines = useMemo(() => {
+  // How each message reads as lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  const readRailLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
 
     // Note that the description's card says what its origin hands it where it hands words, an automation's prompt, rather than the line's own.
@@ -3004,18 +3054,14 @@ function AgentTranscriptView({
       ];
     };
 
-    return railLinesOf(entries, readOf);
-  }, [
-    entries,
-    brief,
-    drawnOrigin,
-    briefSender,
-    firstLine,
-    replayOpened,
-    readerId,
-    members,
-    former,
-  ]);
+    return cachedByMessage(readOf);
+  }, [brief, drawnOrigin, briefSender, firstLine, replayOpened, readerId, members, former]);
+
+  // Note that the rail is handed the run it drew last while no line changed, so it neither draws again nor reads where its lines stand as the agent's own words grow, which is what moves while it works.
+  const railLines = useKept(
+    useMemo(() => railLinesOf(entries, readRailLines), [entries, readRailLines]),
+    sameRailLines,
+  );
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing, calls, delegated } = placing;
@@ -3416,8 +3462,18 @@ function AgentTabView({
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
-  const queueEditing = useQueueEditing(composer, queue, pictures);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
+  const queueEditing = useSteadyDoors(
+    useQueueEditing(composer, queue, pictures),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
+
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
@@ -3634,6 +3690,26 @@ function AgentTabView({
     [lines],
   );
 
+  // Note that what the dock is handed is the same from write to write while what it reads is, so the box under the transcript holds while the transcript moves.
+  const { usage, payer, payerSubscriptionId, context } = transcript;
+
+  const dockTranscript = useMemo(
+    () => ({ usage, payer, payerSubscriptionId, context }),
+    [usage, payer, payerSubscriptionId, context],
+  );
+
+  const dockQueue = useMemo(
+    () => ({ controls: controlsQueue, working: standing.working, editing: queueEditing }),
+    [controlsQueue, standing.working, queueEditing],
+  );
+
+  const dockPlace = useMemo(
+    () => ({ owner: macOwner, route: callRoute, pictures, computerApps }),
+    [macOwner, callRoute, pictures, computerApps],
+  );
+
+  const stop = useSteadyDoor(onStop);
+
   return (
     <AgentTabFrame ref={tab} label={name}>
       <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -3805,9 +3881,9 @@ function AgentTabView({
           agent={agent}
           box={box}
           composer={composer}
-          transcript={transcript}
+          transcript={dockTranscript}
           approvalsWaiting={approvals.waiting}
-          onStop={onStop}
+          onStop={stop}
           onUnarchive={onUnarchive}
           continuedNote={continuedNote}
           cards={cards}
@@ -3816,8 +3892,8 @@ function AgentTabView({
           replyDoor={replyDoor}
           closedRemedy={closedRemedy}
           onMoveToCloud={onMoveToCloud}
-          queue={{ controls: controlsQueue, working: standing.working, editing: queueEditing }}
-          place={{ owner: macOwner, route: callRoute, pictures, computerApps }}
+          queue={dockQueue}
+          place={dockPlace}
         />
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
@@ -4146,7 +4222,13 @@ export function AgentSubagentTab({
   const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
   const models = control.models;
   // The press is the same door from draw to draw, so a message kept as it was opens what the window opens now.
   const openTarget = useSteady(onOpenTarget);
@@ -4164,7 +4246,7 @@ export function AgentSubagentTab({
     onHeld(callId, { ...held, subagentTitles: new Map() });
   }, [onHeld, callId, messages, pageStatus, runStartedAt, pageTitle]);
   // A worker's reply streams into a log as quiet as its agent's, so it is said once whole, under the worker's name.
-  const name = cardTitle(task);
+  const name = cardTitle(task, usePlainLinkNames());
   const tab = useRef<HTMLElement>(null);
   useReplySaid({ messages, status: pageStatus, name, tab });
 

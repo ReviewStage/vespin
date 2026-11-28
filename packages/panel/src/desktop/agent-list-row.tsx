@@ -16,7 +16,9 @@ import {
 import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
+  BUTTON_SIZE,
   InlineEdit,
+  type InlineEditHandle,
   LIST_DENSITY,
   LIST_ROW_CURRENT,
   LIST_ROW_INK,
@@ -36,13 +38,14 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useMemo, useRef } from "react";
+import { type ReactNode, type RefObject, useCallback, useMemo, useRef, useState } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useMachineAsks } from "../machine-asks.js";
 import { failedUnderMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
+import { useChatMarkedUnread } from "../tasks/manager-chat-looks.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
@@ -52,7 +55,8 @@ import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
 import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
-import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
+import { agentMenuGroups, FACE_IN, rowDoors, useAgentActions } from "./agent-actions.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
 import { moveToSectionEntry, type SectionDialogs, useSectionDialogs } from "./sidebar-sections.js";
 import { SIDEBAR_ROW_TIME } from "./task-card.js";
@@ -94,7 +98,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
  * pin of the agent, which stands it under the sidebar's Pinned (an archived
  * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
- * until the edit ends, and for a Manager Change face › and Settings…, Archive, asking first while a teammate's agent
+ * until the edit ends, and for a Manager Change face, which opens the same
+ * field with the face's picker open beside it, and Settings…, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
@@ -105,7 +110,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * Unarchive in Archive's place. A Manager's row stands unread, its name in
  * the heavier weight, while its chat said something after the reader's
  * mark of it (`managerChatUnread`), but on the Manager's own page standing open,
- * whose chat the reader sees as it lands, and in a staged run.
+ * whose chat the reader sees as it lands, unless they marked it unread
+ * there (`useChatMarkedUnread`), and in a staged run.
  *
  * In the sidebar (`AGENT_ROW_LOOK.SIDEBAR`), as its Managers and Pinned
  * draw it, the row is a sidebar task's row instead (`ListRow`, dense, in
@@ -113,6 +119,13 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * in the body's type, and its trailing run and time at its end as a task's
  * marks and time stand, so it lines up with the task rows under it. Its
  * menu, rename, and unread and current marks are the same either way.
+ *
+ * A Manager's row being renamed draws its face as a well in the glyph's
+ * place (`ManagerFaceWell`), as a section's head being named draws its icon,
+ * its picker open where Change face opened the edit. The focus going into
+ * the well or its picker ends nothing; a pick is saved at once and hands the
+ * focus back to the name's field, so Return, Escape, or a press away ends
+ * the edit, and a press away from the picker ends it too.
  */
 
 /** How an agent's row is drawn: in a task list's columns (`TaskRow`), or as a sidebar task's row (`ListRow`), as the sidebar draws its Managers. */
@@ -237,9 +250,11 @@ export function AgentListRow({
     label: name,
     shown,
     terminals: { onOpenTerminal: undefined },
+    faceIn: FACE_IN.EDITOR,
   });
 
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const markedUnread = useChatMarkedUnread(agent.id);
   const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
   const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
   const onPin = useAgentPinWrite();
@@ -259,7 +274,30 @@ export function AgentListRow({
     press.current = held instanceof HTMLButtonElement ? held : null;
   }, []);
 
-  const glyph = <AgentGlyph agent={agent} />;
+  const { face } = actions;
+  const edit = useRef<InlineEditHandle | null>(null);
+  const well = useRef<HTMLButtonElement | null>(null);
+  const [within] = useState<readonly RefObject<HTMLElement | null>[]>(() => [well]);
+
+  const glyph =
+    editing && face !== undefined ? (
+      <RecentManagerFaceWell
+        ref={well}
+        face={agent.face}
+        open={face.picking}
+        onOpenChange={(open, away) => {
+          face.onPicking(open);
+
+          // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
+          if (away) edit.current?.leave();
+        }}
+        onChange={face.onPick}
+        size={BUTTON_SIZE.COMPACT}
+        finalFocus={() => edit.current?.field()}
+      />
+    ) : (
+      <AgentGlyph agent={agent} />
+    );
 
   const waiting = <WaitingCount count={waits + asked} />;
 
@@ -282,7 +320,6 @@ export function AgentListRow({
               pullRequest={pullRequest}
               place={{ taskId: agent.taskId }}
               lines={pullRequest}
-              files={pullRequest.changedFiles}
               opener={people?.author ?? openerOf(pullRequest)}
               agent={{ subject, models, onOpen: onPress }}
               reviewers={people?.reviewers}
@@ -307,9 +344,12 @@ export function AgentListRow({
       label="Agent name"
       maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
       editing
-      onEnd={(edit) => {
-        endedByKey(edit.byKey);
-        rename.end(edit.value);
+      holding={face?.picking === true}
+      within={within}
+      ref={edit}
+      onEnd={(end) => {
+        endedByKey(end.byKey);
+        rename.end(end.value);
       }}
     />
   ) : undefined;
@@ -333,7 +373,7 @@ export function AgentListRow({
           true,
         );
 
-  const unread = !staged && !current && managerChatUnread(agent);
+  const unread = !staged && (!current || markedUnread) && managerChatUnread(agent);
   const hint = card === undefined || editing ? undefined : { Hint: RowHint, label: name };
 
   const row =
@@ -344,6 +384,7 @@ export function AgentListRow({
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
           leading={glyph}
+          leadingControl={editing && face !== undefined}
           title={
             editor ?? (
               <OneLine words={name}>

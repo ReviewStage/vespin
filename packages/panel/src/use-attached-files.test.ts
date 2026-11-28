@@ -301,6 +301,37 @@ test("two files of one name, and one whose name holds brackets, each stand in th
   });
 });
 
+test("a file that is no picture, PDF, or text is held as a file of any other kind, whatever its name and type say", async () => {
+  let composer: ReturnType<typeof useAgentComposer> | undefined;
+
+  const container = await drawn(
+    createElement(HandedBox, {
+      hand: (each) => {
+        composer = each;
+      },
+    }),
+  );
+
+  const zip = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])], "bundle.zip", {
+    type: "application/zip",
+  });
+
+  // Note that bytes with a NUL in them are no text, though the file is named and typed as one.
+  const binary = new File([new Uint8Array([0x68, 0x00, 0x69])], "notes.txt", {
+    type: "text/plain",
+  });
+
+  await drop(container, [zip, binary]);
+  assert.equal(held(container).note, null);
+  assert.deepEqual(
+    composer?.held.attachments.map((file) => [file.name, file.mediaType]),
+    [
+      ["bundle.zip", AGENT_ATTACHMENT_TYPE.OTHER],
+      ["notes.txt", AGENT_ATTACHMENT_TYPE.OTHER],
+    ],
+  );
+});
+
 test("a picture and a PDF pasted into the agent's box are held as their chips in the words, the paste writing no words of its own", async () => {
   // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
@@ -753,6 +784,34 @@ test("pictures past the bytes a message carries together leave the last out of t
       box,
     );
   }
+});
+
+test("a file refused as too large is counted once, by its kind and its size on a rung, and nothing else", async () => {
+  const counted: unknown[] = [];
+
+  fakeAppPlatform({
+    ...QUIET_PANEL,
+    recordSurfaceEvent: (name, properties) => counted.push([name, properties]),
+  });
+
+  // Note that the size is stated rather than held, so no test file is that large.
+  const of = (name: string, type: string, size: number) =>
+    Object.defineProperty(new File(["x"], name, { type }), "size", { value: size });
+
+  const container = await mounted("agent");
+  await drop(container, [
+    of("secret-plan.pdf", AGENT_ATTACHMENT_TYPE.PDF, 30_000_000),
+    of("secret-log.txt", AGENT_ATTACHMENT_TYPE.TEXT, 300_000_000),
+    of("clip.mp4", "video/mp4", 5_000_000),
+    of("bundle.zip", "application/zip", 8_000_000),
+  ]);
+
+  assert.deepEqual(counted, [
+    ["attachment:too_large", { kind: "pdf", size_bucket: "25_to_100mb" }],
+    ["attachment:too_large", { kind: "text", size_bucket: "over_250mb" }],
+    ["attachment:too_large", { kind: "video", size_bucket: "3_to_7mb" }],
+    ["attachment:too_large", { kind: "other", size_bucket: "7_to_25mb" }],
+  ]);
 });
 
 test("a note of files left out goes once the box's message is queued, as it goes once one is sent", async () => {

@@ -307,36 +307,15 @@
   margin: var(--ui-item-gap) 0 0;
 }
 
-/* The rhythm of a transcript's log (../ai-elements/conversation.tsx) and of
-   a message's blocks (../ai-elements/message.tsx): its lines a step apart,
-   and a message's blocks a control's gap. They sit in the components layer,
-   under every utility and every surface's own rule, so a line's own margin
-   (a working line's, a finished turn's) still says the last word, and a
-   message's weighs nothing at all, so a block's own margin wins wherever it
-   is set. */
+/* The rhythm of a message's blocks (../ai-elements/message.tsx): a
+   control's gap. It sits in the components layer, under every utility and
+   every surface's own rule, and weighs nothing at all, so a block's own
+   margin wins wherever it is set. A log's own rhythm is its component's
+   (`@repo/ui/conversation`'s `conversation.css`). */
 @layer components {
-  .conversation-log {
-    --conversation-log-end: var(--ui-space-20);
-  }
-
-  .conversation-log > :not(:last-child) {
-    margin-block-end: var(--ui-block-gap);
-  }
-
   :where(:is(.message-content, .ui-chat-bubble) > :not(:last-child)) {
     margin-block: 0 var(--ui-control-gap);
   }
-}
-
-/* A log's room at its end (../ai-elements/conversation.tsx), which the log
-   hands its virtualizer as its own (`paddingEnd`) rather than wearing it, so
-   nothing the virtualizer does not measure stands after the rows, as
-   TanStack Virtual's chat guide has a log. It is registered as a length, so
-   the log reads it in pixels whatever it is written in. */
-@property --conversation-log-end {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
 }
 
 /* A message's actions, their glyphs the control icon whichever way each is
@@ -363,15 +342,11 @@
 }
 
 /* A pane beside a tab, a File or Changes tab's tree or a Terminal tab's
-   shells, stands there while the panel holds it open or it slides out; it
+   shells, stands there while the panel holds it open; it
    may be drawn for its place over the tab alone, which a wide panel does
    not show (`usePaneRoom`). Note that each rule here and under the query
    names one selector, so each weighs only its own. */
 .file-view[data-pane-beside="false"] :is(.file-tree-pane, .terminal-shells) {
-  display: none;
-}
-
-.file-tree-pane[data-leaving] > .ui-resize-edge {
   display: none;
 }
 
@@ -467,8 +442,7 @@
 
 /* A page's comments (page-pane.tsx) stand in a pane beside the page, as
    wide as it was last dragged and never over half the row, past a
-   hairline; sliding out, it stands over the page's right edge, its resize
-   edge gone. In a panel too narrow for both, the pane stands over the page
+   hairline. In a panel too narrow for both, the pane stands over the page
    instead, undragged, and steps aside while the page is picked in. */
 .page-comments-column {
   position: relative;
@@ -480,16 +454,6 @@
   flex: none;
   border-left: 1px solid var(--ui-color-border);
   background: var(--ui-color-ground);
-}
-
-.page-comments-column[data-leaving] {
-  position: absolute;
-  inset-block: 0;
-  right: 0;
-}
-
-.page-comments-column[data-leaving] > .ui-resize-edge {
-  display: none;
 }
 
 @container side-panel (width < 640px) {
@@ -771,10 +735,7 @@
 /* The Chapters view (agent-chapters-tab.tsx): the chapters' rail docked at
    its left, as Files changed's tree docks at its right, and the chapter
    chosen beside it, its head over its own Files changed list. The rail is
-   as wide as the tree stands by default, slides in past the view's left
-   edge and out over the chapter (`usePaneSlide`), so the body clips what
-   stands past it, with `clip` rather than `hidden`, and leaves a strip of
-   one mark a chapter while hidden. */
+   as wide as the tree stands by default, and leaves a strip of one mark a chapter while hidden. */
 .chapters-view {
   --chapter-rail-width: calc(var(--ui-space-64) * 4);
   /* The least the chapter reads at: its bar, three lines of its brief, and
@@ -822,18 +783,10 @@
   padding: var(--ui-tight-gap) calc(var(--ui-list-inset) + var(--ui-row-inset)) var(--ui-list-inset);
 }
 
-.chapter-rail[data-leaving] {
-  position: absolute;
-  z-index: 1;
-  inset-block: 0;
-  left: 0;
-  background: var(--side-panel-ground);
-}
-
 /* Note that the rail hidden beside the chapter is hidden only where it can
    stand beside it, so a panel narrowed since still floats it when asked. */
 @container side-panel (width >= 640px) {
-  .chapters-view[data-rail-beside="false"] .chapter-rail:not([data-leaving]) {
+  .chapters-view[data-rail-beside="false"] .chapter-rail {
     display: none;
   }
 }
@@ -1123,14 +1076,13 @@
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
-/* Note that the tabs' own fill is translucent, so it is laid over the
-   panel's ground, or what scrolls under them would show through. */
+/* Note that the bar stands on the panel's ground here, as the header does,
+   or what scrolls under it would show through. */
 .pull-request-tab[data-header-fold] > .ui-pane-bar {
   position: relative;
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
-  background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--side-panel-ground);
+  background: var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
@@ -1187,14 +1139,12 @@
 /* A section's heading that folds it, stuck to the scroller's top while its
    section is in view, on the panel's own ground so nothing shows through;
    the next section's heading pushes it off, since a sticky box stands only
-   inside its own section. It is held at the scroller's band
-   (`SCROLL_FADE_INSET.BAND`), because the fade begins beneath that band:
-   taller, it would slice what passes under its foot, and shorter, it would
-   fade its own. The whole row presses as a `DisclosureSummary` does, the
-   chevron leading at its inset, but draws no fill of its own under the
-   pointer: its words light instead, so the heading stands on the page's
-   ground like the words under it. What stands at its end stands beside it
-   (`DisclosureFrame`), on the same band. */
+   inside its own section. It is held at the scroller's band, which the
+   scroller's own scroll padding clears (below). The whole row presses as a
+   `DisclosureSummary` does, the chevron leading at its inset, but draws no
+   fill of its own under the pointer: its words light instead, so the
+   heading stands on the page's ground like the words under it. What stands
+   at its end stands beside it (`DisclosureFrame`), on the same band. */
 .pull-request-section-fold > .ui-disclosure-summary {
   position: sticky;
   top: 0;
@@ -1202,6 +1152,13 @@
   box-sizing: border-box;
   height: var(--ui-scroll-band);
   background: var(--side-panel-ground);
+}
+
+/* What the keys move to, and a card brought into view (`centerCard`), stand
+   clear of the band a section's heading sticks at in the Conversation's
+   scroller. */
+.pull-request-view > .ui-scroll-area {
+  scroll-padding-block-start: var(--ui-scroll-band);
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1662,33 +1619,10 @@ summary button[data-tool-agent-ref]:focus-visible {
 
 /* On a phone a table too wide for the column would otherwise squeeze each
    column to its longest word, a word to a line; each cell keeps room for a
-   few words instead, and the table scrolls inside its own box, its edges
-   fading where it hides columns (`@repo/ui`'s prose.css). */
+   few words instead, and the table scrolls inside its own box
+   (`@repo/ui`'s prose.css). */
 :where(:root)[data-ui-room="narrow"] .desktop-shell .ui-markdown-flow :is(th, td) {
   min-width: 7.5em;
-}
-
-/* On a phone, whose scroll bars stay hidden until a swipe, a code block's
-   lines cut at its edge fade as a table's columns do, on the window's one
-   scroll fade (`@repo/ui`'s `ScrollArea`), so a line cut short reads as one
-   to scroll, its scrollbar's strip kept whole over the fade. */
-:where(:root)[data-ui-room="narrow"] .desktop-shell :is(.ui-markdown pre, .ui-code-card-body) {
-  mask:
-    linear-gradient(
-      to right,
-      transparent,
-      #000 var(--ui-scroll-area-fade-start),
-      #000 calc(100% - var(--ui-scroll-area-fade-end)),
-      transparent
-    ),
-    var(--ui-scrollbar-keep-horizontal);
-  animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
-  animation-timing-function: linear;
-  animation-fill-mode: both;
-  animation-timeline: scroll(self inline), scroll(self inline);
-  animation-range:
-    0 var(--ui-scroll-fade),
-    calc(100% - var(--ui-scroll-fade)) 100%;
 }
 
 /* An agent's tab: a frame the log fills, its rows drawn by the one set of
@@ -1712,6 +1646,31 @@ summary button[data-tool-agent-ref]:focus-visible {
   flex-direction: column;
   gap: var(--ui-space-20);
   padding: var(--ui-section-gap) var(--ui-space-16) var(--ui-space-20);
+}
+
+/* A Manager's chat while its messages are read (`ManagerChatSkeleton`)
+   stands its messages as the chat's rows do: a message going on its
+   sender's run right under the one before, since each pads itself, and one
+   opening a run a step under the run before, as the chat's next row
+   stands (`.agent-log-row-next`). A thread's stands from its top, as the
+   message it answers leads it. */
+.manager-chat-skeleton {
+  gap: 0;
+}
+
+.manager-chat-skeleton > :not(:first-child, [data-continues]) {
+  margin-block-start: var(--ui-block-gap);
+}
+
+.manager-thread-skeleton-wait {
+  justify-content: flex-start;
+}
+
+/* The turn under way's work, which the working line's Show work opens at
+   the chat's end (`manager-working-dock.tsx`), stands in its messages'
+   words' column, as an ended turn's stands under its message. */
+.manager-live-work {
+  padding-inline-start: calc(var(--spacing-channel-avatar) + var(--ui-space-8));
 }
 
 /* Coding agents --------------------------------------------------------- */
@@ -1862,82 +1821,17 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   }
 }
 
-/* An agent's log runs right up to the card's top edge and its words
-   dissolve over `--ui-scroll-fade` just above it (its `ScrollArea`'s end
-   fade), rather than being sliced short of the card. Its foot pads past the
-   fade, so the newest line, scrolled to or followed, stands whole above it;
-   the area's own scroll padding brings a control focused from below in
-   past the fade as well. */
+/* An agent's log runs right up to the card's top edge; its foot keeps a
+   step of room, so the newest line, scrolled to or followed, stands whole
+   just above the card. */
 .agent-log-over-composer {
-  --conversation-log-end: calc(var(--ui-scroll-fade) + var(--ui-space-4));
+  --conversation-log-end: var(--ui-space-4);
 }
 
 /* A to-do list's glyphs (transcript-blocks.tsx's `TodoItems`) stand at 14px
    in their 16px seat, as a call's line's do. */
 .todo-items {
   --state-glyph-size: 14px;
-}
-
-/* The list opens upward, since the composer under it holds the card's foot
-   down. Opening, the card's top edge rises from where it stood to where the
-   open card puts it, and its line and the list under it rise with that edge
-   as one sheet, the list fading in as it comes up out of the card's foot;
-   closing, the sheet sinks back the same way, on the same beat. The distance
-   is the list's height, measured as the press lands (`--disclosure-rise`,
-   `use-disclosure.ts`). Note that the list travels with the line rather than
-   standing still under it, because the card's ground is translucent and a
-   line passing over a list would show it through. */
-[data-todos-dock][data-disclosure="opening"] {
-  animation: todos-dock-unroll var(--ui-duration-pane) var(--ui-motion-pane) backwards;
-}
-
-[data-todos-dock][data-disclosure="opening"] > summary {
-  animation: todos-dock-rise var(--ui-duration-pane) var(--ui-motion-pane) backwards;
-}
-
-[data-todos-dock][data-disclosure="closing"] {
-  animation: todos-dock-roll-up var(--ui-duration-pane) var(--ui-motion-pane) forwards;
-}
-
-[data-todos-dock][data-disclosure="closing"] > summary {
-  animation: todos-dock-sink var(--ui-duration-pane) var(--ui-motion-pane) forwards;
-}
-
-/* Note that the list's fade is what the fold waits on before it lets the list go, so it runs as long as the sheet sinks, or the sink would be cut off. */
-[data-todos-dock][data-disclosure="closing"] > .ui-disclosure-body {
-  animation: ui-disclosure-leave var(--ui-duration-pane) var(--ui-motion-pane) forwards;
-}
-
-/* Note that each clip names both ends, because a clip cannot be interpolated
-   to or from none: it would flip halfway through instead. */
-@keyframes todos-dock-unroll {
-  from {
-    clip-path: inset(var(--disclosure-rise) 0 0 round var(--radius-lg));
-  }
-  to {
-    clip-path: inset(0 round var(--radius-lg));
-  }
-}
-
-@keyframes todos-dock-roll-up {
-  from {
-    clip-path: inset(0 round var(--radius-lg));
-  }
-  to {
-    clip-path: inset(var(--disclosure-rise) 0 0 round var(--radius-lg));
-  }
-}
-
-@keyframes todos-dock-rise {
-  from {
-    transform: translateY(var(--disclosure-rise));
-  }
-}
-
-@keyframes todos-dock-sink {
-  to {
-    transform: translateY(var(--disclosure-rise));
-  }
 }
 
 /* The box's field (`composer-field.tsx`): its editor in the body type, one
@@ -1986,6 +1880,24 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   line-height: var(--ui-type-reading-leading);
   outline: none; /* no ring: the caret marks the field */
   user-select: text;
+}
+
+/* A box that writes words again where they stand (`AgentComposer`'s
+   `inPlace`, a Manager chat message's edit) takes no dock's room. Its field
+   sits a step in from the card's edge, not a box's full inset, and the card
+   overhangs the words by that edge and that step on the start, the top, and
+   the end, so the words open at the very place, line, and width they stood
+   at, as a row's editor overhangs its glyph by a step (#11095). The step
+   is small enough that the card stays clear of the row above it in a
+   sender's run. */
+.agent-composer-in-place {
+  margin-block-start: calc(-1 * (var(--ui-space-4) + 1px));
+  margin-inline: calc(-1 * (var(--ui-space-6) + 1px));
+}
+
+.agent-composer-in-place .agent-composer-input {
+  padding-block-start: var(--ui-space-4);
+  padding-inline: var(--ui-space-6);
 }
 
 .agent-composer-input[aria-disabled="true"] {
@@ -2054,7 +1966,8 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   container: composer / inline-size;
 }
 
-.agent-composer > .message-box {
+.agent-composer > .message-box,
+.agent-composer-in-place > .message-box {
   container-name: composer ui-room;
 }
 
@@ -2803,13 +2716,6 @@ svg.lucide {
 
 .agent-log-row-continued {
   padding-block-start: var(--ui-control-gap);
-}
-
-/* A message of a Manager's chat that goes on its sender's run
-   (`managerChatView`) stands close under the one before it, as a chat app
-   stands one sender's bubbles, so the run reads as one. */
-.agent-log-row-run {
-  padding-block-start: var(--ui-tight-gap);
 }
 
 /* A comment's quote line wears every quote's face (`@repo/ui/quote-face`),

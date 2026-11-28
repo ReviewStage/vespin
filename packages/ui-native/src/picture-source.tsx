@@ -34,6 +34,9 @@ export interface PictureEvents {
 /** The page's ears for its pictures; none where nothing listens. */
 const PictureEventsDoor = createContext<PictureEvents | undefined>(undefined);
 
+/** How an address holding its bytes begins. */
+const DATA_ADDRESS = "data:";
+
 /** The address a picture is drawn from, whichever way it is held. */
 export function pictureUri(source: PictureSource): string {
   return Predicate.isString(source) ? source : source.uri;
@@ -80,8 +83,10 @@ const styles = StyleSheet.create({
  * A picture drawn by expo-image from its source, inside a box of `style`
  * whose place in the window a press measures (`drawn`), as the viewer grows
  * a picture out of its thumbnail. The loader reads it with the headers its
- * source carries, keeps it in memory and on disk under its address, and
- * decodes it at the size it stands at; it tells the page's ears
+ * source carries, keeps it in memory and on disk under its address, but for
+ * a `data:` address, which it keeps in memory alone, since its bytes are
+ * already in hand, such as a picture a message on its way carries, which
+ * must never be written to disk; and it decodes it at the size it stands at; it tells the page's ears
  * (`usePictureEvents`) as it draws, from where its bytes came, and where it
  * could not be read, and hands its own size in pixels to `onSize`.
  */
@@ -105,7 +110,7 @@ export function LoaderImage({
     <View ref={drawn} collapsable={false} style={[styles.box, style]}>
       <Image
         source={loaderSource(source)}
-        cachePolicy="memory-disk"
+        cachePolicy={uri.startsWith(DATA_ADDRESS) ? "memory" : "memory-disk"}
         recyclingKey={uri}
         contentFit={fit}
         style={StyleSheet.absoluteFill}

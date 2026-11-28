@@ -6,32 +6,15 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
  * docs/DESIGN.md has content leaving go first and an element that unmounts
  * held mounted through its own exit, taken out when the exit finishes rather
  * than on the frame the state changed. This is that hold, for anything whose
- * open state is someone else's: a fold, a menu, a card. While `open` it is
+ * open state is someone else's: a menu, a card, a mark. While `open` it is
  * `mounted`; once `open` turns false it stays `mounted` and is `leaving`,
  * which the caller draws as its exit (a fade over `--ui-duration-exit`, say)
  * and makes `inert`, since it already reads as closed, and it is taken out once the motions the element handed `ref` runs have
  * finished. Opening again while it leaves keeps it, and the exit cut short
  * takes nothing away. Reduced motion and a capture run zero the tokens an
  * exit is timed on, and an element that runs no motion is taken out at once.
- * A caller whose element stands in the layout hears it go (`onGone`) in the
- * same breath as it is taken out, so a motion around it can read that commit.
- *
- * The motion itself is the stylesheet's. The Disclosure's stylesheet
- * (`disclosure.css`) also draws an optional layer for a disclosure that
- * opens downward over content, which a caller asks for by marking the root
- * `data-disclosure` (`disclosureMotion`) and its body
- * `.ui-disclosure-body`, the root's own child: `opening` unrolls
- * the body from its top edge as it fades in, and `closing` fades it out
- * where it stands.
+ * A caller hears it go (`onGone`) in the same breath as it is taken out.
  */
-
-/** The marks disclosure.css's motion layer reads from a root's `data-disclosure`. */
-const DISCLOSURE_MOTION = {
-  OPENING: "opening",
-  CLOSING: "closing",
-} as const;
-
-export type DisclosureMotion = (typeof DISCLOSURE_MOTION)[keyof typeof DISCLOSURE_MOTION];
 
 export interface Disclosure {
   /** Whether to draw it: open, or closed and still leaving. */
@@ -40,16 +23,6 @@ export interface Disclosure {
   readonly leaving: boolean;
   /** The ref for the element whose motions the hold waits on. */
   readonly ref: (element: HTMLElement | null) => void;
-}
-
-/**
- * The mark for the disclosure layer: opening while it stands open from an
- * open that is to unroll, and closing while it leaves.
- */
-export function disclosureMotion(opened: boolean, leaving: boolean): DisclosureMotion | undefined {
-  if (leaving) return DISCLOSURE_MOTION.CLOSING;
-
-  return opened ? DISCLOSURE_MOTION.OPENING : undefined;
 }
 
 /** The motions an element runs. Note that a DOM with no animation engine, a test's, runs none. */

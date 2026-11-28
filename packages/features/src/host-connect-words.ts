@@ -22,13 +22,6 @@ export const HOST_CONNECT_WORDS = {
   TITLE: "Connect a machine",
   READING: readingWords("the code"),
   MATCH: "Connect it only if you ran the command on it, and this code matches the one it shows.",
-  FOR: "Who it's for",
-  JUST_ME: "Just me",
-  JUST_ME_DETAIL: "Only your agents run on it.",
-  WORKSPACE_DETAIL: "Every member's agents run on it, each in a VM of its own.",
-  PRIVATE_NETWORK: "Let agents reach this machine's private network",
-  PRIVATE_NETWORK_DETAIL:
-    "Agents can reach the machine's LAN and VPN, such as a staging database. Leave it off to keep them to the internet.",
   CONNECT: "Connect",
   CONNECTING: "Connecting",
   DENY: "Deny",
@@ -41,11 +34,6 @@ export const HOST_CONNECT_WORDS = {
   HELD_TITLE: "Too many codes tried",
   HELD: "Your account tried too many codes that match no machine.",
   HELD_SOON: "Try again in a few minutes.",
-  OWNED_ELSEWHERE_TITLE: "This machine is connected elsewhere",
-  OWNED_ELSEWHERE:
-    "It already runs agents as someone's own machine or as a workspace's, and it can't be both. Remove it there, then run the command on it again.",
-  NOT_PERMITTED_TITLE: "Only owners and admins can do this",
-  NOT_PERMITTED: "Only a workspace's owners and admins can connect a machine to it.",
   UNREAD: readFailedWords("the code"),
   UNANSWERED: "Could not connect. Check your internet connection and try again.",
 } as const;
@@ -87,34 +75,20 @@ export function hostCodeExpiryText(at: number): string {
 
 /** What a code that cannot be approved says: why, and what to do next. */
 export function hostConnectRefusalWords(refusal: HostPairingFailed) {
-  switch (refusal.failure) {
-    case HOST_PAIRING_CALL_FAILURE.HELD: {
-      const when =
-        refusal.heldUntil === undefined
-          ? HOST_CONNECT_WORDS.HELD_SOON
-          : `Try again after ${momentText(refusal.heldUntil)}.`;
-
-      return {
-        title: HOST_CONNECT_WORDS.HELD_TITLE,
-        body: `${HOST_CONNECT_WORDS.HELD} ${when} ${HOST_CONNECT_WORDS.AGAIN}`,
-      };
-    }
-
-    case HOST_PAIRING_CALL_FAILURE.MACHINE_OWNED_ELSEWHERE:
-      return {
-        title: HOST_CONNECT_WORDS.OWNED_ELSEWHERE_TITLE,
-        body: HOST_CONNECT_WORDS.OWNED_ELSEWHERE,
-      };
-    case HOST_PAIRING_CALL_FAILURE.NOT_PERMITTED:
-      return {
-        title: HOST_CONNECT_WORDS.NOT_PERMITTED_TITLE,
-        body: HOST_CONNECT_WORDS.NOT_PERMITTED,
-      };
-    case HOST_PAIRING_CALL_FAILURE.NOT_FOUND:
-    case HOST_PAIRING_CALL_FAILURE.UNANSWERED:
-      return {
-        title: HOST_CONNECT_WORDS.NOT_FOUND_TITLE,
-        body: `${HOST_CONNECT_WORDS.NOT_FOUND} ${HOST_CONNECT_WORDS.AGAIN}`,
-      };
+  if (refusal.failure !== HOST_PAIRING_CALL_FAILURE.HELD) {
+    return {
+      title: HOST_CONNECT_WORDS.NOT_FOUND_TITLE,
+      body: `${HOST_CONNECT_WORDS.NOT_FOUND} ${HOST_CONNECT_WORDS.AGAIN}`,
+    };
   }
+
+  const when =
+    refusal.heldUntil === undefined
+      ? HOST_CONNECT_WORDS.HELD_SOON
+      : `Try again after ${momentText(refusal.heldUntil)}.`;
+
+  return {
+    title: HOST_CONNECT_WORDS.HELD_TITLE,
+    body: `${HOST_CONNECT_WORDS.HELD} ${when} ${HOST_CONNECT_WORDS.AGAIN}`,
+  };
 }

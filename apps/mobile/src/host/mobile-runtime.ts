@@ -31,6 +31,8 @@ export interface MobileHostStartOptions {
   readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run refuses the writes a flow presses; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
+  /** Where a fixture run's agent recording is served over HTTP on the rig; never in a live run. */
+  readonly fixtureMediaOrigin?: string | undefined;
   /** How often a fixture run's release Manager moves its turn while its page follows it; never in a live run. */
   readonly fixtureStreamTurn?: number | undefined;
   /** This build's version, as the app's config names it. */
@@ -85,6 +87,7 @@ export async function startMobileHost(
         fixtureSetupOwed: options.fixtureSetupOwed,
         fixtureInboxOff: options.fixtureInboxOff,
         fixtureRefusesWrites: options.fixtureRefusesWrites,
+        fixtureMediaOrigin: options.fixtureMediaOrigin,
         fixtureStreamTurn: options.fixtureStreamTurn,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
@@ -106,7 +109,13 @@ export async function startMobileHost(
       };
     };
 
-    return { bridge: host.bridge, acts: host.acts, follow, close: () => runtime.dispose() };
+    return {
+      bridge: host.bridge,
+      acts: host.acts,
+      inboxRows: host.inboxRows,
+      follow,
+      close: () => runtime.dispose(),
+    };
   } catch (error) {
     await runtime.dispose();
     throw error;

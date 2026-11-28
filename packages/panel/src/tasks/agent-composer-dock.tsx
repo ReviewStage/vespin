@@ -8,7 +8,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { AGENT_ENTER } from "@repo/settings";
 import type { Actor } from "@repo/ui/actor-model";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode, RefObject } from "react";
+import { memo, type ReactNode, type RefObject } from "react";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import type { AgentBox } from "./agent-box.js";
 import { AgentComposer, type ComposerWords } from "./agent-composer.js";
@@ -50,7 +50,7 @@ export function boxTakesWords(stands: {
  * message box, whose `@` reads whose Mac the agent uses, and whose words
  * queue while the agent works where the reader controls its queue.
  */
-export function AgentComposerDock({
+function DrawnComposerDock({
   agent,
   box,
   composer,
@@ -88,8 +88,8 @@ export function AgentComposerDock({
   keywords: readonly string[] | undefined;
   /** Where the skills a `/` in the box offers are read from; nothing where it offers none. */
   skills: SkillSource | undefined;
-  /** The door the box hands Reply, which lays a quote in at its caret (`useBoxReplyDoor`). */
-  replyDoor: RefObject<((words: string) => void) | undefined>;
+  /** The door the box hands Reply, which lays a quote in at its caret (`useBoxReplyDoor`); none where nothing quotes into the box, as a Manager's chat. */
+  replyDoor?: RefObject<((words: string) => void) | undefined> | undefined;
   /** What mends the box once it closed for good. */
   closedRemedy: ReactNode;
   /** Moves the agent to the cloud, carrying the message its Mac did not take; none where Move to would not. */
@@ -184,3 +184,9 @@ export function AgentComposerDock({
     </>
   );
 }
+
+/**
+ * The dock, drawn again only as what it is handed changes: the tab draws
+ * again on every write to the transcript, which moves nothing the box draws.
+ */
+export const AgentComposerDock = memo(DrawnComposerDock);

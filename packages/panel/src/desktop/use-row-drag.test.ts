@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { type RowMove, useRowDrag, useRunRowDrag } from "./use-row-drag.js";
@@ -57,6 +57,12 @@ function drawn(count: number, onMove: RowMove, places?: readonly number[]): HTML
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(List)));
+
+  return laidOut(container);
+}
+
+/** The list drawn in `container`, its rows laid out a row's height apart in the order they stand. */
+function laidOut(container: HTMLElement): HTMLElement {
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.matches("ul")) return DOMRect.fromRect({ y: -scrolled, width: 200 });
     const list = this.parentElement;
@@ -109,7 +115,7 @@ test("in a list that reorders, the placeholder slides to where the row would lan
   assert.deepEqual(shifts, ["translateY(60px)", "translateY(-30px)", "translateY(-30px)", ""]);
 });
 
-test("a row let go off to the side lands its copy on the row's place on both axes, the row faded beneath it until it does", () => {
+test("a row let go off to the side lands its copy, on both axes, where its list draws it once its store hands the list the move a microtask on, the row faded beneath it until it does", async () => {
   const plays: Keyframe[][] = [];
   let finish: (() => void) | undefined;
   // jsdom plays no animation; the copy's landing is taken as the window would start it.
@@ -123,12 +129,42 @@ test("a row let go off to the side lands its copy on the row's place on both axe
       return played;
     },
   });
-  const moves: [number, number][] = [];
-  const list = drawn(4, (from, to) => moves.push([from, to]));
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((frame) => frames.push(frame));
+
+  // Note that the move reaches the list a microtask after the drop, as a store's write reaches React.
+  function List() {
+    const [names, setNames] = useState(["Row 0", "Row 1", "Row 2", "Row 3"]);
+
+    const move = (from: number, to: number) => {
+      queueMicrotask(() =>
+        setNames((now) => {
+          const moved = now.filter((_, at) => at !== from);
+          moved.splice(to, 0, now[from] ?? "");
+
+          return moved;
+        }),
+      );
+    };
+
+    return createElement(
+      "ul",
+      { onPointerDown: useRowDrag(move) },
+      names.map((name) =>
+        createElement("li", { key: name }, createElement("button", { type: "button" }, name)),
+      ),
+    );
+  }
+
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(createElement(List)));
+  const list = laidOut(container);
   list.style.setProperty("--ui-duration-fast", "180ms");
   list.style.setProperty("--ui-spring-fast", "ease-out");
-  let faded: string | null = null;
-  act(() => {
+  const pressed = list.querySelector("li");
+  await act(async () => {
     grip(list, 0).dispatchEvent(at("pointerdown", 10));
     window.dispatchEvent(
       new PointerEvent("pointermove", {
@@ -148,19 +184,19 @@ test("a row let go off to the side lands its copy on the row's place on both axe
         pointerId: 1,
       }),
     );
-    faded = list.querySelector("li")?.getAttribute("data-dragging") ?? null;
+  });
+  act(() => {
+    for (const frame of frames.splice(0)) frame(0);
   });
   Reflect.deleteProperty(HTMLElement.prototype, "animate");
-  assert.deepEqual(moves, [[0, 2]]);
-  // The list here keeps its rows where they stood, so the row's place is still the first.
   assert.deepEqual(plays, [
-    [{ transform: "translate(100px, 62px)" }, { transform: "translate(0px, 0px)" }],
+    [{ transform: "translate(100px, 62px)" }, { transform: "translate(0px, 60px)" }],
   ]);
-  assert.equal(faded, "true");
+  assert.equal(pressed?.getAttribute("data-dragging"), "true");
   assert.notEqual(document.querySelector("[data-carried]"), null, "the copy stands until it lands");
   act(() => finish?.());
   assert.equal(document.querySelector("[data-carried]"), null);
-  assert.equal(list.querySelector("li")?.getAttribute("data-dragging"), null);
+  assert.equal(pressed?.getAttribute("data-dragging"), null);
 });
 
 test("a row of a run that also draws the row holding the keyboard far above it lands at the place among every row of the row it passed", () => {

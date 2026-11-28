@@ -26,16 +26,9 @@ import { keepRunsOnPick, readRunsOnPick } from "@repo/database/models/runs-on-pi
 import { createTask } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
-import { device } from "@repo/database/schemas/device";
 import { messages } from "@repo/database/schemas/storage";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import {
-  connectWorkspaceMachine,
-  DEVICE_LAYOUT,
-  getTestDB,
-  joinWorkspace,
-  openWorkspace,
-} from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import {
   AGENT_MACHINE,
   AGENT_PAYER,
@@ -45,7 +38,7 @@ import {
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { DEVICE_CAPABILITY, DEVICE_SETUP } from "@repo/features/device-agent-wire";
-import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelProvider, NO_EFFORT } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -57,7 +50,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import type { AgentMovedMark } from "@repo/wire/ui-messages";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Layer, Match, Option, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
@@ -69,7 +62,8 @@ import {
   type HostedRefusal,
   localAgentRefused,
 } from "../../http/http-effect.js";
-import { type ModelChoiceRefused, modelCatalogOf } from "../../providers/model-catalog.js";
+import { CursorModelCatalog, cursorModelsOf } from "../../providers/cursor-models.js";
+import { ModelChoiceRefused, modelCatalogOf } from "../../providers/model-catalog.js";
 import { QUEUE_ACKNOWLEDGED } from "../../queues/queue-consumer.js";
 import {
   connectWorkspaceGitHub,
@@ -109,7 +103,7 @@ import {
   TURN_HANDOVER,
   type TurnHandover,
 } from "./runtime-sessions.js";
-import { accountModelChoices, startAgent } from "./start.js";
+import { acceptedAgentChoice, accountModelChoices, startAgent } from "./start.js";
 import { STEER_OUTCOME, steerAgent } from "./steer.js";
 import { stoppedTurn } from "./stop.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
@@ -864,59 +858,6 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           );
           const told = yield* readNativeTurnHanded(target);
           assert.deepEqual(told.moved?.to, { onMac: true, name: "Studio" });
-        }),
-    );
-
-    it.effect(
-      "a teammate moves an agent in the cloud onto a machine its workspace owns that runs agents in VMs, and a machine of another workspace is refused as away",
-      () =>
-        Effect.gen(function* () {
-          const { owner, teammate, workspaceId, taskId } = yield* openTeam;
-          const agent = yield* agentOn(owner, taskId, "claude_code");
-          const outsider = yield* openGithubUser();
-          const box = yield* connectWorkspaceMachine(workspaceId, owner);
-
-          const elsewhere = yield* connectWorkspaceMachine(
-            yield* openWorkspace(outsider),
-            outsider,
-          );
-
-          yield* (yield* Database)
-            .update(device)
-            .set({ capabilities: [DEVICE_CAPABILITY.VM_AGENTS] })
-            .where(inArray(device.id, [box, elsewhere]));
-
-          const { native } = runtimes();
-          const writer = storeWriter({ tools: CODER_TOOL_SET });
-
-          const moveTo = (deviceId: string) =>
-            movedAgent(writer, teammate, agent, {
-              machine: AGENT_MACHINE.WORKSPACE,
-              deviceId,
-            }).pipe(Effect.provide(native), Effect.result);
-
-          const refused = yield* moveTo(elsewhere);
-          const moved = yield* moveTo(box);
-
-          assert.equal(
-            Result.isFailure(refused) ? refused.failure.localAgentRefusal : undefined,
-            LOCAL_AGENT_REFUSAL.MAC_AWAY,
-          );
-          assert.ok(Result.isSuccess(moved));
-          const read = yield* readAgent(owner, agent.id);
-          assert.ok(Option.isSome(read));
-
-          assert.deepEqual(
-            [read.value.machine, read.value.deviceId],
-            [AGENT_MACHINE.WORKSPACE, box],
-          );
-
-          const told = yield* readNativeTurnHanded({
-            userId: owner,
-            conversationId: agent.conversationId,
-          });
-
-          assert.deepEqual(told.moved?.to, { onMac: true, workspace: true, name: "build-box" });
         }),
     );
 
@@ -2617,6 +2558,50 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             assert.deepEqual(heard(agentSessions), []);
             assert.ok(heard(codex).length > 0, "Codex runs it");
           }
+        }),
+    );
+
+    it.effect(
+      "an account with Cursor agents on has Cursor's list read for a choice on a Cursor model alone, and is offered it in the choices a refusal lists",
+      () =>
+        Effect.gen(function* () {
+          const { owner } = yield* openStarter(false);
+          yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.CURSOR]: true } });
+          let reads = 0;
+
+          const cursor = {
+            forAccount: () => {
+              reads += 1;
+
+              return Effect.succeed(cursorModelsOf([{ id: "default", displayName: "Auto" }]));
+            },
+          };
+
+          const accepted = (model: string) =>
+            Effect.result(acceptedAgentChoice(owner, { model, effort: "high" })).pipe(
+              Effect.provide(PLAN_CATALOG),
+              Effect.provideService(CursorModelCatalog, cursor),
+            );
+
+          assert.ok(Result.isSuccess(yield* accepted("anthropic/claude-opus-5.5")));
+          assert.equal(reads, 0);
+
+          const refused = yield* accepted("openai/no-such-model");
+          assert.ok(Result.isFailure(refused));
+          assert.ok(refused.failure instanceof ModelChoiceRefused);
+          assert.ok(refused.failure.offered.some((model) => model.id === "cursor/auto"));
+
+          reads = 0;
+
+          const onCursor = yield* Effect.result(
+            acceptedAgentChoice(owner, { model: "cursor/auto", effort: NO_EFFORT }).pipe(
+              Effect.provide(PLAN_CATALOG),
+              Effect.provideService(CursorModelCatalog, cursor),
+            ),
+          );
+
+          assert.ok(Result.isSuccess(onCursor));
+          assert.equal(reads, 1);
         }),
     );
   },

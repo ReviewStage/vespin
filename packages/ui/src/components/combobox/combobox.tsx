@@ -4,7 +4,6 @@ import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
 import { CheckIcon, ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { offsetWithin } from "../../offset-within.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
   COMBOBOX_EMPTY,
@@ -27,7 +26,6 @@ import { ANNOUNCE, useAnnounce } from "../announcer/announcer.js";
 import { BUTTON_LIGHT, BUTTON_SIZE } from "../button/button.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { OneLine } from "../one-line/one-line.js";
-import { SCROLL_FADE, type ScrollFade, scrollFadeMarks } from "../scroll-area/scroll-area.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
 import {
@@ -230,9 +228,7 @@ export function ComboboxOptionItem({
       {...place}
       {...engine}
       // Note that an option that cannot be chosen now takes no press, whatever the engine handed it.
-      onClick={
-        option.disabled === true ? undefined : pulseOnPress(engine.onClick, PRESS_PULSE.QUIET)
-      }
+      onClick={option.disabled === true ? undefined : engine.onClick}
       {...(option.replayMasked === true ? REPLAY_MASKED : undefined)}
       data-row-menu={more === undefined ? undefined : ""}
       data-menu-open={more?.expanded === true ? "true" : undefined}
@@ -396,15 +392,12 @@ export function ComboboxListBox({
   height?: ComboboxListHeight | undefined;
   children?: ReactNode;
 } & ComboboxOptionEngineProps): React.JSX.Element {
-  const fade = scrollFadeMarks(SCROLL_FADE.BOTH);
-
   return (
     <div
       role="listbox"
       tabIndex={-1}
       {...engine}
-      {...fade}
-      className={cn("ui-combobox-list", fade.className, COMBOBOX_LIST)}
+      className={cn("ui-combobox-list", COMBOBOX_LIST)}
       style={undefined}
       data-slot="combobox-list"
       data-height={height}
@@ -431,7 +424,6 @@ export function ComboboxList({
   empty,
   note,
   steer,
-  fade = SCROLL_FADE.BOTH,
   ref,
 }: {
   /** The listbox's id, which a field names in `aria-controls`; one is minted where none is given. */
@@ -452,8 +444,6 @@ export function ComboboxList({
   note?: ReactNode;
   /** The keys and names of a list with no field, which then holds the focus and names the active option itself. */
   steer?: ComboboxField | undefined;
-  /** Which of its edges fade where its rows run past them, as a scroller's do; both where none is named, none in a field's well, whose edge would fade with them. */
-  fade?: ScrollFade | undefined;
   /** The list itself, for a caller that hands it the focus. */
   ref?: Ref<HTMLDivElement> | undefined;
 }): React.JSX.Element {
@@ -525,22 +515,13 @@ export function ComboboxList({
     const headTop =
       group instanceof HTMLElement && box.contains(group) ? offsetWithin(group, box) : rowTop;
 
-    // Note that the row is brought clear of a faded edge too, which the list's scroll padding is as deep as.
-    const clear = getComputedStyle(box);
-    const top = headTop - (Number.parseFloat(clear.scrollPaddingTop) || 0);
+    if (headTop < box.scrollTop) box.scrollTop = headTop;
 
-    if (top < box.scrollTop) box.scrollTop = top;
-
-    const bottom =
-      rowTop +
-      row.offsetHeight +
-      (Number.parseFloat(clear.scrollPaddingBottom) || 0) -
-      box.clientHeight;
+    const bottom = rowTop + row.offsetHeight - box.clientHeight;
 
     if (bottom > box.scrollTop) box.scrollTop = bottom;
   });
 
-  const marks = scrollFadeMarks(fade);
   let offset = 0;
 
   const placed = groups.map((group) => {
@@ -564,8 +545,7 @@ export function ComboboxList({
     <div
       ref={list}
       id={listId}
-      {...marks}
-      className={cn("ui-combobox-list", marks.className, COMBOBOX_LIST)}
+      className={cn("ui-combobox-list", COMBOBOX_LIST)}
       data-slot="combobox-list"
       role="listbox"
       aria-label={label}
@@ -736,7 +716,6 @@ export function Combobox({
           active={at}
           onActiveChange={onActiveChange}
           onChoose={onChoose}
-          fade={SCROLL_FADE.NONE}
         />
       ) : null}
     </div>

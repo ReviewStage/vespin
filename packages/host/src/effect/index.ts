@@ -36,6 +36,13 @@ export {
 } from "../issued-token-account-source.js";
 
 export {
+  type LocalQueues,
+  LocalStoreBackend,
+  type LocalStoreBackendSeam,
+  type LocalStoreOpened,
+} from "../local-copy.js";
+
+export {
   OAUTH_ACCOUNT_CLIENT,
   type OAuthAccountClient,
   oauthAccountSourceLayer,

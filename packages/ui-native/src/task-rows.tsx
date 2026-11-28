@@ -7,7 +7,6 @@ import {
   RNHostView,
   Spacer,
   Button as SwiftUIButton,
-  Text,
   VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
@@ -64,6 +63,7 @@ import {
   type LongPressGroup,
   LongPressMenu,
   ROW_ACTION_TONE,
+  ROW_TEST_ID,
   type RowAction,
   type RowFold,
   RowFrame,
@@ -81,6 +81,7 @@ import { type PageFollowing, PageHeader, type StandingMenus } from "./page-heade
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
 import type { RowPreview } from "./row-preview-model.js";
+import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -667,6 +668,49 @@ export function LinkRow({
     <HStack modifiers={rowPlacement(colors, inset)}>
       <LongPressMenu groups={menu}>{button}</LongPressMenu>
     </HStack>
+  );
+}
+
+type PlaceRowProps = {
+  /** The id its list picks it by, as a row's own id is, so the list stands it selected while its place is in front. */
+  readonly id: string;
+  readonly symbol: Glyph;
+  readonly label: string;
+  /** How many wait there, drawn at the line's end in the attention ink, as the panel's Inbox row counts what waits on you; none at nothing. */
+  readonly count?: number | undefined;
+};
+
+/**
+ * A place an iPad's sidebar goes to, as the panel's sidebar heads its tasks
+ * with Search, Inbox, Tasks, Automations and Merge queue: its glyph, its
+ * name, and what waits there. It is picked through its list, as a task's
+ * row is, so the place in front stands on the list's selected fill, as
+ * Mail's mailboxes stand in its sidebar.
+ */
+export function PlaceRow({ id, symbol, label, count }: PlaceRowProps) {
+  const colors = useColors();
+  const counted = count !== undefined && count > 0;
+
+  return (
+    <RowFrame
+      id={id}
+      dot={false}
+      testId={ROW_TEST_ID.PLACE}
+      heard={{ label, value: [counted ? String(count) : undefined] }}
+      row={
+        <RowHead
+          dot={false}
+          unread={false}
+          faded={false}
+          lead={
+            <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.ROW_TITLE} />
+          }
+          title={label}
+          ink={colors.TEXT_BODY}
+          end={counted ? <EndWords words={String(count)} ink={colors.ATTENTION} /> : null}
+        />
+      }
+    />
   );
 }
 

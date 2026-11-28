@@ -1,6 +1,5 @@
 import type { SwitchRootProps } from "@base-ui/react/switch";
 import type { MouseEvent } from "react";
-import { pulsePress } from "../../press-pulse.js";
 import { ShadcnSwitch, SWITCH_THUMB, SWITCH_TRACK } from "../../shadcn/switch.js";
 import { Tooltip } from "../tooltip/hint.js";
 
@@ -87,13 +86,7 @@ export function Switch({
       // Note that the press answers through the click itself rather than
       // Base UI's change callback, because a caller inside a pressable row
       // stops the press from reaching the row (`agent-servers.tsx`).
-      onClick={(event) => {
-        // Note that the thumb is what a press moves, so it is what gives as the press lands.
-        const thumb = event.currentTarget.firstElementChild;
-
-        if (thumb instanceof HTMLElement) pulsePress(thumb);
-        onChange(!checked, event);
-      }}
+      onClick={(event) => onChange(!checked, event)}
     />
   );
 }
@@ -124,6 +117,19 @@ export function SwitchMark({ checked }: { checked: boolean }): React.JSX.Element
   return (
     <span data-slot="switch" className={SWITCH_TRACK} {...state} aria-hidden="true">
       <span className={SWITCH_THUMB} {...state} />
+    </span>
+  );
+}
+
+/**
+ * The room a switch takes, kept empty: a row that no longer offers its
+ * switch, such as a finished one-time automation's, keeps its columns where
+ * the rows around it, and the heads over them (`ListHeads`), stand theirs.
+ */
+export function SwitchRoom(): React.JSX.Element {
+  return (
+    <span className="ui-switch-room invisible inline-flex" aria-hidden="true">
+      <SwitchMark checked={false} />
     </span>
   );
 }

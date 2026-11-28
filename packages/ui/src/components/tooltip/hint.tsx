@@ -44,7 +44,9 @@
  * as a popover: a tap on what is no control of its own, a line of words or
  * a mark, opens it at once and another tap closes it; on a control, whose
  * tap is still its own press and a link's still goes where it leads, a long
- * press opens it instead, and its release presses nothing. A control whose
+ * press opens it instead, and its release presses nothing. A control held
+ * from its press (`aria-disabled`), whose tap works nothing, opens it on a
+ * tap as words do. A control whose
  * long press opens its context menu keeps that press for the menu. A tap
  * anywhere but on the hint or its control, Escape, and a scroll that moves
  * its control close it.
@@ -231,6 +233,13 @@ interface Standing {
  * card hangs their own.
  */
 const standing: Standing[] = [];
+
+/** Whether a tap on `element` works a control of its own: one it stands in, unless that control is held from its press (`aria-disabled`), whose tap then opens its hint as words' does. */
+function tapWorksControl(element: Element): boolean {
+  const control = element.closest(OWN_CONTROL);
+
+  return control !== null && control.getAttribute("aria-disabled") !== "true";
+}
 
 /** Takes down every tooltip standing over the `depth` beneath it, the topmost first, other than the one asking (`own`). */
 function takeDownOver(depth: number, own: string): void {
@@ -497,6 +506,32 @@ function heardByProps(control: ReactElement<AnchorProps>, label: string | undefi
   return name.replace(SPACING, "").includes(label.replace(SPACING, ""))
     ? HEARD.NAMED
     : HEARD.DESCRIBED;
+}
+
+/**
+ * The tooltips of the commit under way that look for the control they
+ * describe, by the id of their words, each handed what it finds, or null.
+ */
+const seeking = new Map<string, (element: HTMLElement | null) => void>();
+
+/**
+ * Hands every tooltip seeking its control the one its words describe, in
+ * one walk of the page however many a commit drew, and null to any it finds
+ * none for. Note that a control the tooltip hands no ref is found only by
+ * the description it was drawn with, and that the whole page is walked
+ * once a commit rather than once a tooltip, because a page of rows drawn at
+ * once draws a tooltip in many of them.
+ */
+function findSought(): void {
+  for (const element of document.querySelectorAll<HTMLElement>("[aria-describedby]")) {
+    for (const id of element.getAttribute("aria-describedby")?.split(SPACING) ?? []) {
+      seeking.get(id)?.(element);
+      seeking.delete(id);
+    }
+  }
+
+  for (const found of seeking.values()) found(null);
+  seeking.clear();
 }
 
 /** The one element at the window body's end that every hint's words stand in, made with the first. */
@@ -898,20 +933,30 @@ export function Tooltip({
   // again as it draws anew, ahead of any focus landing on it.
   const wordsId = useId();
   const [heard, setHeard] = useState<Heard>(() => heardByProps(children, label));
+  // A control the tooltip hands no ref is sought once as it is first drawn,
+  // and again only once the element it was found as has left the page,
+  // never on every draw, since one found as none stays none until the
+  // pointer or focus lands on it. It is sought only while described, because
+  // one its props name carries no description to be found by. Note that it
+  // asks as the commit writes the page, so the first layout effect of the
+  // commit finds every tooltip the commit drew at once.
+  const sought = useRef(false);
+  useInsertionEffect(() => {
+    const known = control.current;
+
+    if (label === undefined || heard !== HEARD.DESCRIBED || known?.isConnected === true) return;
+
+    if (known === null && sought.current) return;
+    sought.current = true;
+    seeking.set(wordsId, learn);
+  });
   useLayoutEffect(() => {
     if (label === undefined) return;
-    // Note that a control the tooltip hands no ref is found by the
-    // description it was drawn with, so the window is searched only while it
-    // is described, because one its props name carries no such description
-    // and a search for it would walk the whole page on every draw to find nothing.
-    let element = control.current?.isConnected === true ? control.current : null;
 
-    if (element === null && heard === HEARD.DESCRIBED) {
-      element = document.querySelector<HTMLElement>(`[aria-describedby~="${wordsId}"]`);
-    }
+    if (seeking.has(wordsId)) findSought();
+    const element = control.current;
 
-    if (element === null) return;
-    learn(element);
+    if (element?.isConnected !== true) return;
     setHeard(heardOver(element, label));
   });
 
@@ -1066,9 +1111,7 @@ export function Tooltip({
       // Note that an inner control holds for the hint because its tap does not open it.
       const pressed = event.target instanceof Element ? event.target : control;
 
-      if (pressed.closest(OWN_CONTROL) === null || pressed.closest(LONG_PRESS_MENU) !== null) {
-        return;
-      }
+      if (!tapWorksControl(pressed) || pressed.closest(LONG_PRESS_MENU) !== null) return;
 
       hold.start(event, () => show(control, true));
     },
@@ -1085,9 +1128,9 @@ export function Tooltip({
       if (!tapped || label === undefined || event.defaultPrevented) return;
       // Note that a control inside the words, a choice bar the hint names, takes its own tap too.
       const { target } = event;
-      const onControl = target instanceof Element && target.closest(OWN_CONTROL) !== null;
+      const onControl = target instanceof Element && tapWorksControl(target);
 
-      if (onControl || event.currentTarget.closest(OWN_CONTROL) !== null) return;
+      if (onControl || tapWorksControl(event.currentTarget)) return;
       // Note that the tap is spent here, so a message holding the words shows no actions for it.
       event.preventDefault();
       show(event.currentTarget, true);

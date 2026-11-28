@@ -1,6 +1,6 @@
 // workspace-tile.tsx -- a workspace's tile, as the panel's is: its photo, its owner's picture on a personal one, or its letter on its hue.
 
-import { Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
+import { Image, RoundedRectangle, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -17,6 +17,7 @@ import { PixelRatio, useColorScheme } from "react-native";
 import { TILE_ROUNDING } from "./mark-look.js";
 import { AvatarPhoto } from "./marks.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";
+import { Text } from "./text.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { tileHue } from "./workspace-tile-model.js";

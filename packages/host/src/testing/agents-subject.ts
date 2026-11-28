@@ -16,6 +16,8 @@ import {
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
+  type ManagerChatEditAnswerView,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
   type SoundStateView,
@@ -32,11 +34,17 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
+import { FAILURE_FACT, type FailureFacts, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
+import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_READ,
+  INBOX_SEARCH_READ,
+  TASK_INBOX_READ,
+} from "@repo/features/inbox-live";
 import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -46,6 +54,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import {
+  LIVE_POLL_URL,
   LIVE_READ,
   type LIVE_SIGNED_OUT,
   type LiveRead,
@@ -62,6 +71,7 @@ import {
   type ProviderKeySummary,
 } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
+import type { TaskListLiveRows } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   GATEWAY_CLIENT_ROLE,
@@ -247,6 +257,8 @@ type CommittedIn = { readonly txid?: string };
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
+  /** The sync id each read of the account's items asked past, in order: empty for a read asked whole, none for one asked around a stall. */
+  const itemsAsked: (string | undefined)[] = [];
   /** Each change of a queue the service was asked, as it was asked. */
   const queueChanges: AgentQueueChange[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
@@ -275,11 +287,13 @@ function fakeService() {
     ),
     scope: polledLive(SCOPE_PARTS),
     account: polledLive(ACCOUNT_PARTS),
-    items: polledLive(ITEMS_PARTS),
+    items: polledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>(ITEMS_PARTS),
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
-    managerChat: polledLive(["messages"]),
+    managerChat: polledLive<"messages", { readonly failure: string; readonly cause: FailureFacts }>(
+      ["messages"],
+    ),
     managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
@@ -289,6 +303,15 @@ function fakeService() {
       soundChoices: [],
     })),
   };
+
+  /** Each page of the account's older items the service answers, by the cursor it reads past, the first under none; a page it holds none of goes unanswered. */
+  const olderPages = new Map<string, OlderPage>();
+
+  /** The items each query's search finds, by the query, each answered once its gate opens. */
+  const searchHits = new Map<
+    string,
+    { readonly page: OlderPage; readonly gate: Effect.Effect<void> }
+  >();
 
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
@@ -309,6 +332,8 @@ function fakeService() {
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
   let startsUnanswered = false;
+  /** Whether each close goes unanswered, as one sent offline does. */
+  let closesUnanswered = false;
   // The transaction the service says each inbox write committed in; none says it changed nothing.
   let committedIn: CommittedIn = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
@@ -327,6 +352,10 @@ function fakeService() {
   // What a message sent to a Manager's chat answers; none answers it taken, under one id.
   let chatAnswer: AgentChatSendAnswerView | undefined;
   let chatSendGate: Effect.Effect<void> = Effect.void;
+  // What a reaction to a message of a Manager's chat answers; taken, changing what stood, from the start.
+  let reactAnswer: ManagerChatReactAnswerView = { changed: true };
+  // What an edit of a message of a Manager's chat answers; taken, its words changed.
+  const editAnswer: ManagerChatEditAnswerView = { changed: true };
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -401,6 +430,8 @@ function fakeService() {
   /** The account's items as their live read answers them, by the sync id the follow asks past. */
   const accountItemsLive = (userId: string | undefined, sync: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
+      itemsAsked.push(sync);
+
       if (sync === "") asked.push(`account-items-live:${userId}`);
 
       if (sync === undefined) asked.push(`account-items-whole:${userId}`);
@@ -457,12 +488,14 @@ function fakeService() {
         readonly userId?: string;
         readonly sync?: string;
         readonly before?: string;
+        readonly query?: string;
       },
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
-        const answered = <Part extends string>(script: PolledLive<Part>) =>
-          poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+        const answered = (
+          script: Pick<PolledLive<string, { readonly failure: string }>, "first" | "poll">,
+        ) => (poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after));
 
         switch (read.name) {
           case HOSTS_READ.name:
@@ -504,6 +537,24 @@ function fakeService() {
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
           case INBOX_ITEMS_READ.name:
             return accountItemsLive(params.userId, params.sync);
+          case INBOX_OLDER_READ.name: {
+            asked.push(`inbox-older:${params.before ?? ""}`);
+            const page = olderPages.get(params.before ?? "");
+
+            return Effect.succeed(
+              page === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : olderAnswer(page),
+            );
+          }
+
+          case INBOX_SEARCH_READ.name: {
+            asked.push(`inbox-search:${params.query}`);
+            const hits = searchHits.get(params.query ?? "");
+
+            return hits === undefined
+              ? Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED })
+              : Effect.as(hits.gate, olderAnswer(hits.page));
+          }
+
           default:
             return assert.fail(`no script answers the live read ${read.name}`);
         }
@@ -611,6 +662,18 @@ function fakeService() {
         );
 
         return { messages: SAID.messages, before: "3" };
+      }),
+    chatReact: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatReact:${agentId}:${messageId}:${request.kind}:${request.reacted}`);
+
+        return reactAnswer;
+      }),
+    chatEdit: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatEdit:${agentId}:${messageId}:${request.text}`);
+
+        return editAnswer;
       }),
     chatSend: (agentId, request) =>
       Effect.andThen(
@@ -869,6 +932,7 @@ function fakeService() {
       ),
     removeSound: () => Effect.succeed({ sound: null }),
     chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
+    writeViewChoice: () => Effect.succeed({}),
     markActive: () => Effect.sync(() => void asked.push("active")),
     registerPushDevice: () => Effect.succeed({ done: true as const }),
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),
@@ -1010,6 +1074,13 @@ function fakeService() {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
         Effect.map(() => {
+          if (closesUnanswered) {
+            return {
+              failure: AGENT_CALL_FAILURE.UNANSWERED,
+              cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
+            };
+          }
+
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
 
           return {
@@ -1040,6 +1111,7 @@ function fakeService() {
   return {
     client,
     asked,
+    itemsAsked,
     queueChanges,
     live,
     /** Whether the service answers a transcript's live read, or that the account reaches no such agent; none answers unanswered. */
@@ -1087,6 +1159,10 @@ function fakeService() {
       chatAnswer = answer;
       chatSendGate = gate;
     },
+    /** What a reaction to a message of a Manager's chat answers from now on. */
+    answerReact: (answer: ManagerChatReactAnswerView) => {
+      reactAnswer = answer;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1108,13 +1184,22 @@ function fakeService() {
     sealAccount: (next: typeof LIVE_ANSWERED | typeof LIVE_SIGNED_OUT | undefined) => {
       accountLive = next;
     },
+    /** The page of the account's older items the service answers past `before`, the first where it names none, from now on. */
+    answerOlder: (before: string | undefined, page: OlderPage) => {
+      olderPages.set(before ?? "", page);
+    },
+    /** The items the service's search finds by `query` from now on, answered once `gate` opens. */
+    answerSearch: (query: string, page: OlderPage, gate: Effect.Effect<void> = Effect.void) => {
+      searchHits.set(query, { page, gate });
+    },
     /** Whether the service answers the account's items' live read; none answers unanswered. */
     sealItems: (next: typeof LIVE_ANSWERED | undefined) => {
       itemsLive = next;
     },
     /** Holds the account items' sync id where it stands, as a long transaction does, so each read past it is answered nothing moved. */
     stallItems: () => {
-      itemsStalledAt = live.items.first().queries.stamps.digest;
+      const first = live.items.first();
+      itemsStalledAt = "failure" in first ? undefined : first.queries.stamps.digest;
     },
     /** The transaction a Start answers it committed in; none answers none. */
     startCommits: (txid: string | undefined) => {
@@ -1123,6 +1208,10 @@ function fakeService() {
     /** Whether each Start from now on goes unanswered, as one sent offline does. */
     leaveStartsUnanswered: (unanswered: boolean) => {
       startsUnanswered = unanswered;
+    },
+    /** Whether each close from now on goes unanswered, as one sent offline does. */
+    leaveClosesUnanswered: (unanswered: boolean) => {
+      closesUnanswered = unanswered;
     },
     /** What each host's removal answers from now on, and what it waits on before it does. */
     answerRemoves: (answer: HostDoneAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1170,6 +1259,9 @@ export const NOW = 1_800_000_100_000;
 /** A transcript's live read as the test scripts it. */
 export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number], typeof LIVE_SIGNED_OUT>;
 
+/** The account's items' live read as a test drives it, which may refuse the session as signed out. */
+export type ItemsLive = PolledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>;
+
 /** That the service answers a live read, its rows polled from the test's script (`polledLive`). */
 export const LIVE_ANSWERED = "answered";
 
@@ -1208,10 +1300,7 @@ const MEMORIES_PARTS = ["memories"] as const;
 const INSTALL_SCRIPT = "https://app.test/install.sh";
 
 /** The account's items' read as the service answers it, before it is read by sync id. */
-type ItemsAnswer = Exclude<
-  ReturnType<PolledLive<(typeof ITEMS_PARTS)[number]>["first"]>,
-  { failure: string }
->;
+type ItemsAnswer = Exclude<ReturnType<ItemsLive["first"]>, { failure: string }>;
 
 /** A row's text field `name`; none where it carries none. */
 function textOf<Row>(row: Row, name: string): string | undefined {
@@ -1315,6 +1404,40 @@ function bySyncId(
 
 const UNANSWERED_CALL = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
+/** One page of the account's older items as a test sets it: each part's rows, and the page after it where one stands. */
+export interface OlderPage {
+  readonly stamps: readonly unknown[];
+  readonly items: readonly unknown[];
+  readonly tasks?: readonly unknown[];
+  readonly agents?: readonly unknown[];
+  readonly next?: string;
+}
+
+/** `page` as the service answers its older items' read, each part sealed with its rows inline. */
+function olderAnswer(page: OlderPage) {
+  const sealed = (rows: readonly unknown[]): SealedLiveQueryWire => ({
+    capability: LIVE_POLL_URL,
+    queryFingerprint: LIVE_POLL_URL,
+    expiresAt: 0,
+    digest: "0",
+    rows,
+  });
+
+  return {
+    url: LIVE_POLL_URL,
+    queries: {
+      stamps: sealed(page.stamps),
+      items: sealed(page.items),
+      messages: sealed([]),
+      files: sealed([]),
+      tasks: sealed(page.tasks ?? []),
+      agents: sealed(page.agents ?? []),
+    },
+    ...(page.next === undefined ? undefined : { next: page.next }),
+    settledSince: 0,
+  };
+}
+
 /** The service's side of a pull request named by its repository, which no test here asks, so it answers none. */
 const NO_PULL_REQUESTS: PullRequestClient = {
   pullRequest: () => Effect.succeed(UNANSWERED_CALL),
@@ -1368,6 +1491,9 @@ export function subject(
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
+    keepsInbox?: boolean;
+    /** Whether the task list may be read outside of, which a page of older items draws its tasks into; true from the start. */
+    readableOutside?: () => boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1388,9 +1514,13 @@ export function subject(
     const accountId = options.accountId ?? (() => "user-dana");
     const focus = yield* windowFocus;
     const pool = options.pool ?? (yield* entityPool());
+    /** The rows each page of older items drew into the task list as cold tasks, in order. */
+    const coldDrawn: TaskListLiveRows[] = [];
+    const readableOutside = options.readableOutside ?? (() => true);
 
     const composer = yield* composeAgents({
       kernel,
+      ...(options.keepsInbox === undefined ? undefined : { keepsInbox: options.keepsInbox }),
       recordProductEvent: () => undefined,
       account,
       accountId,
@@ -1409,6 +1539,13 @@ export function subject(
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
       ...(options.tasksListed === undefined ? undefined : { tasksListed: options.tasksListed }),
       ...(options.fileDownload === undefined ? undefined : { fileDownload: options.fileDownload }),
+      coldMarked: () =>
+        readableOutside()
+          ? (rows) =>
+              Effect.sync(() => {
+                coldDrawn.push(rows);
+              })
+          : undefined,
       pool,
     }).pipe(Effect.provide(noNetwork));
 
@@ -1476,9 +1613,11 @@ export function subject(
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>
         transcripts(transcript).map((each) => each.rows),
       asked: service.asked,
+      itemsAsked: service.itemsAsked,
       queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
+      leaveClosesUnanswered: service.leaveClosesUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
       answerRenames: service.answerRenames,
@@ -1499,9 +1638,14 @@ export function subject(
       answerQueue: service.answerQueue,
       answerMessage: service.answerMessage,
       answerChat: service.answerChat,
+      answerReact: service.answerReact,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,
+      answerOlder: service.answerOlder,
+      answerSearch: service.answerSearch,
+      /** The rows each page of older items drew into the task list as cold tasks, in order. */
+      coldDrawn,
       stallItems: service.stallItems,
       commitIn: service.commitIn,
       changeFirst: service.changeFirst,
@@ -1510,6 +1654,16 @@ export function subject(
       accountInboxes: () =>
         events.flatMap((event) =>
           event.kind === GATEWAY_EVENT.ACCOUNT_INBOX_CHANGED ? [event.payload] : [],
+        ),
+      /** Every telling of the account's older items, whole, in order. */
+      olderItems: () =>
+        events.flatMap((event) =>
+          event.kind === GATEWAY_EVENT.INBOX_OLDER_CHANGED ? [event.payload] : [],
+        ),
+      /** Every telling of the items each place's search found, whole, in order. */
+      foundItems: () =>
+        events.flatMap((event) =>
+          event.kind === GATEWAY_EVENT.INBOX_FOUND_CHANGED ? [event.payload] : [],
         ),
       /** Every telling of the account's items, whole, in order. */
       accountItems: () =>

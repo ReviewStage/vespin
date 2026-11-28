@@ -5,6 +5,7 @@ import {
   withPictureLine,
 } from "@repo/features/agent-pictures-model";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { PRODUCT_ATTACHMENT_KIND } from "@repo/features/analytics";
 import { ATTACHMENT_VIEW, attachmentView, type FileChip } from "@repo/features/attachment-model";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { startsLikePdf } from "@repo/features/media-signature";
@@ -20,17 +21,18 @@ import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { isAudioDataUrl, isVideoDataUrl, STATUS_TONE } from "@repo/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { ImagePlusIcon } from "lucide-react";
 import { useMemo } from "react";
 import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { countAttachmentTooLarge } from "../attachment-too-large.js";
 import { encodeImage } from "../feedback-images.js";
 import { keepPictureRead } from "../picture-query.js";
 import { useWorkingToast } from "../toast.js";
 import { pressWrite, type UndoWrite } from "../undo-stack.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { ViewerAction } from "./attachment-viewer.js";
 import { useTaskMentions } from "./task-mentions.js";
@@ -103,18 +105,28 @@ async function keptUrlOf(chip: FileChip): Promise<{ url: string } | { refused: s
   if (attachmentView(chip) === ATTACHMENT_VIEW.PDF) {
     const file = fileOf(chip);
 
-    if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) return { refused: ADD_WORDS.PDF_TOO_LARGE };
+    if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) {
+      countAttachmentTooLarge(PRODUCT_ATTACHMENT_KIND.PDF, file.size);
+
+      return { refused: ADD_WORDS.PDF_TOO_LARGE };
+    }
+
     const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
 
     return startsLikePdf(head) ? { url: chip.url } : { refused: ADD_WORDS.NOT_A_PDF };
   }
 
   if (isVideoDataUrl(chip.url) || isAudioDataUrl(chip.url)) {
-    if (fileOf(chip).size <= PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES) return { url: chip.url };
+    const { size } = fileOf(chip);
 
-    return {
-      refused: isVideoDataUrl(chip.url) ? ADD_WORDS.VIDEO_TOO_LARGE : ADD_WORDS.CLIP_TOO_LARGE,
-    };
+    if (size <= PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES) return { url: chip.url };
+    const video = isVideoDataUrl(chip.url);
+    countAttachmentTooLarge(
+      video ? PRODUCT_ATTACHMENT_KIND.VIDEO : PRODUCT_ATTACHMENT_KIND.AUDIO,
+      size,
+    );
+
+    return { refused: video ? ADD_WORDS.VIDEO_TOO_LARGE : ADD_WORDS.CLIP_TOO_LARGE };
   }
 
   const read = await encodeImage(fileOf(chip), PICTURE_BOUNDS.MAX_BYTES);
@@ -268,7 +280,7 @@ const NO_WORKSPACES: readonly Workspace[] = [];
 export function useAddToDescription(): ViewerAction | undefined {
   const page = useTaskMentions();
   // The task's workspace, which its page names by its slug.
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const workspaces = useAppStateSlice(selectWorkspaces) ?? NO_WORKSPACES;
 
   const descriptionsOn = useWorkspaceExperiment(
     page?.workspaceId ??

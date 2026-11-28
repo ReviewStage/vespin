@@ -78,17 +78,13 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import {
-  DEVICE_ARCH,
-  DEVICE_PLATFORM,
-  DEVICE_SETUP,
-  MACHINE_NETWORK,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
 import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -125,15 +121,23 @@ import {
   INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
 } from "@repo/features/integration-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import {
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  type ManagerChatEditPress,
+  type ManagerChatReactionPress,
+  withEditPress,
+  withReactionPress,
+} from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -157,6 +161,7 @@ import {
 } from "@repo/features/picture-source-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -182,7 +187,6 @@ import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import {
   WORKSPACE_ROLE,
   type Workspace,
@@ -192,6 +196,8 @@ import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
+  type AppInboxFound,
+  type AppInboxItems,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppManagerChat,
@@ -214,11 +220,18 @@ import {
 import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_PLAN_PDF,
+  FIXTURE_SCREENSHOT_PNG,
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
-import { FIXTURE_PULL_REQUEST, fixtureChanges } from "./fixture-pull-requests.js";
+import {
+  FIXTURE_PULL_REQUEST,
+  fixtureChanges,
+  fixtureGeneratedChapters,
+} from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+
+export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
 export {
   FIXTURE_PULL_REQUEST,
@@ -399,10 +412,11 @@ const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 /** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
 const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
 
-/** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
+/** The recorded thread's files: a still and a screenshot its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
   ITEM: fixtureId(10),
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
+  SCREENSHOT: "c5169e82-a1d3-4efb-96b3-4d5e6f708193",
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
   PLAN: "b4058d71-90c2-4dea-85a2-3c4d5e6f7182",
 } as const;
@@ -486,6 +500,13 @@ const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
   FIXTURE_WORKSPACE_SLUG,
 );
 
+/** Where the recorded thread's words draw its screenshot from, as they draw its still. */
+const RECORDED_SCREENSHOT_ADDRESS = inboxAttachmentAddress(
+  { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK.INVITES, itemId: RECORDED.ITEM },
+  RECORDED.SCREENSHOT,
+  FIXTURE_WORKSPACE_SLUG,
+);
+
 /** The reference journey's task's items: a decision, an approval, a form, a notice with code, a long thread, and a notice with a picture and a recording. */
 const INVITES_ITEMS: readonly InboxItem[] = [
   item(
@@ -505,7 +526,11 @@ const INVITES_ITEMS: readonly InboxItem[] = [
               label: "The member who sent it",
               detail: "Admins can't touch someone else's invite.",
             },
-            { label: "Any admin", detail: "Senders wait on an admin to take one back." },
+            // Note that a detail names a task by its bare address, as an agent writes one, so each client's option draws it as its chip.
+            {
+              label: "Any admin",
+              detail: `Senders wait on an admin to take one back, as ${linkOf({ kind: LINK_DESTINATION.TASK, taskId: "42" }, FIXTURE_WORKSPACE_SLUG)} has it.`,
+            },
             { label: "Both", detail: "The sender, or any admin of the workspace." },
           ],
           recommended: "Both",
@@ -662,9 +687,14 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           114,
           25 * MINUTE,
           [
-            "I walked the invite flow in the preview, from [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) to the accepted page:",
+            // Note that the task's chip leads the message's first line, so `keep.yaml` holds it a little in from the line's start, and a hold on the message's other lines lands on no chip; the line is as long as it stood, so the thread opens as it did. It is still a view laid inline in the line's words inside a held message, so its menu is held as a chip mid-line is.
+            // A chip mid-line has no element of its own until React Native's paragraph lists its inline views as accessibility elements, the follow-up to #10919, which moves it back mid-line and holds it by its element.
+            "[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60): I walked the invite flow in the preview, through to the accepted page:",
             "",
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
+            "",
+            // Note that a second picture, a screenshot with words, stands right under the first, so the viewer swipes between the two and Live Text has words to read, and nothing below it moves for the flows that tap the first.
+            `![The invite settings](${RECORDED_SCREENSHOT_ADDRESS})`,
             "",
             "The recording is under this. The expired page is still the placeholder.",
             "",
@@ -685,6 +715,11 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           {
             attachmentId: RECORDED.PICTURE,
             name: "invite-page.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+          {
+            attachmentId: RECORDED.SCREENSHOT,
+            name: "invite-settings.png",
             mediaType: AGENT_ATTACHMENT_TYPE.PNG,
           },
         ],
@@ -724,7 +759,8 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
       {
         type: INBOX_ASK.DO,
         steps: [
-          "Open the mail provider's **Domains** page and add `relay.example.com`.",
+          // Note that the first step names a task by its bare address and its number, as an agent writes one, so each client's step draws it as its chip.
+          `Open the task ${linkOf({ kind: LINK_DESTINATION.TASK, taskId: "42" }, FIXTURE_WORKSPACE_SLUG)} for the provider's login, then add \`relay.example.com\` on its **Domains** page.`,
           "Add the three DNS records it shows at your registrar.",
           "Press **Verify** once they've spread, which can take an hour.",
         ],
@@ -765,7 +801,7 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
-/** The rounding task's items: one closed by its agent once the question no longer stood, and one whose ask the agent withdrew before posting on, so the line saying so stands between its messages. */
+/** The rounding task's items: one closed by its agent once the question no longer stood, one whose ask the agent withdrew before posting on, so the line saying so stands between its messages, and one whose ask a newer message replaced. */
 const ROUNDING_ITEMS: readonly InboxItem[] = [
   item(
     21,
@@ -810,6 +846,24 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
       322,
       3 * DAY - 3 * MINUTE,
       "Added a test with three lines whose per-line tax comes to a cent more than the total's.",
+    ),
+  ]),
+  // Note that the agent asked again before anyone answered, so its first ask stands replaced, its options stepped back, under the line saying a newer message took its place.
+  item(23, AGENT.ROUNDING, "refund-rounding", "How a refund's cents round", [
+    agentSaid(
+      330,
+      2 * DAY,
+      "Refunds round down to the cent today. Should they round as charges do?",
+      {
+        type: INBOX_ASK.DECIDE,
+        options: [{ label: "Down" }, { label: "Nearest cent" }],
+        status: INBOX_ASK_STATUS.REPLACED,
+      },
+    ),
+    agentSaid(
+      331,
+      2 * DAY - 5 * MINUTE,
+      "Charges round to the nearest cent, so refunds do too now; a refund never comes to a cent more than its charge.",
     ),
   ]),
 ];
@@ -875,6 +929,99 @@ function largeThread(n: number): InboxItem {
     ],
     n % 3 === 0 ? { status: INBOX_STATUS.ANSWERED } : {},
   );
+}
+
+/** How many items each page of the older Inbox items stands, fewer than the service's, so a run reads every page in a short list; the last page short, as a service's last is. */
+const OLDER_PAGE_ITEMS = [6, 3] as const;
+
+/** How many pages of older items the staged account holds past its feed. */
+const OLDER_PAGES = OLDER_PAGE_ITEMS.length;
+
+/** The cursor the `page`th page of older items reads past, as the service's own word stands for it. */
+function olderCursor(page: number): string {
+  return `older-${page}`;
+}
+
+/** The `n`th older item: a closed thread of a staged task more than a month back, the latest first, so All lists it past the feed. */
+function olderThread(n: number): InboxItem {
+  const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+  const ago = 35 * DAY + n * 9 * HOUR;
+  const at = 20_000 + n * 2;
+
+  return item(
+    2000 + n,
+    holder.agentId,
+    `older-${n}`,
+    `Older thread ${n + 1}: how a partial cent rounds`,
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "Round half up, as the invoice does."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** The item only a search finds: a closed thread of the rounding task three months back, past every page of older items. */
+function foundOnlyThread(): InboxItem {
+  const ago = 92 * DAY;
+  const at = 21_000;
+
+  return item(
+    2100,
+    AGENT.ROUNDING,
+    "found-0",
+    "Quarter close: why the ledger rounds to even",
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "To even, as the ledger does; the invoice follows it."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** Every staged item past the feed a search may find, by the task each stands on: the older threads, read or not, and the one only a search finds. */
+function searchableItems(): readonly { readonly taskId: string; readonly item: InboxItem }[] {
+  const total = OLDER_PAGE_ITEMS.reduce((sum, each) => sum + each, 0);
+
+  const older = Array.from({ length: total }, (_, n) => ({
+    taskId: (LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0]).taskId,
+    item: olderThread(n),
+  }));
+
+  return [...older, { taskId: TASK.ROUNDING, item: foundOnlyThread() }];
+}
+
+/** The staged items past the feed whose title holds every word of `query`, by the task each stands on, as the service's search answers them into the host. */
+function stagedFound(query: string): AppInboxItems {
+  const tokens = searchTokens(query);
+  const onTasks = new Map<string, InboxItem[]>();
+
+  for (const { taskId, item: found } of searchableItems()) {
+    if (!matchesTokens([found.title], tokens)) continue;
+    onTasks.set(taskId, [...(onTasks.get(taskId) ?? []), found]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
+}
+
+/** What each place's search found in the run, by the place, as the host holds it (`LIVE_READ.INBOX_FOUND`). */
+const foundAt = new Map<InboxSearchPlace, AppInboxFound>();
+
+/** How many pages of older items the run has read, which All lists past the feed. */
+let olderPagesRead = 0;
+
+/** The older items the run has read, by the task each stands on, as the host holds them (`LIVE_READ.INBOX_OLDER`). */
+function olderItemsRead(): AppInboxItems {
+  const onTasks = new Map<string, InboxItem[]>();
+
+  const read = OLDER_PAGE_ITEMS.slice(0, olderPagesRead).reduce((sum, each) => sum + each, 0);
+
+  for (let n = 0; n < read; n += 1) {
+    const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+    onTasks.set(holder.taskId, [...(onTasks.get(holder.taskId) ?? []), olderThread(n)]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
 }
 
 /** The staged items with the large Inbox's threads laid beside them, by the task each stands on. */
@@ -1028,6 +1175,9 @@ const MANAGER_STARTED = LANDED - 2 * HOUR;
  * started the invitations and digest agents, which its overview lists with
  * the invitations agent's pull request.
  */
+/** The repositories the Manager works in, its checkout first, so its Settings name more than one. */
+const MANAGER_REPOSITORIES = ["ada/relay", "ada/ledger"] as const;
+
 const MANAGER: AgentSummary = {
   ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
   taskId: null,
@@ -1400,14 +1550,13 @@ const MANAGER_MEMORIES: readonly MemorySummary[] = [
 /** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
 const PENDING_PAIRING_CODE = "BCDFGHJK";
 
-/** The machine waiting on that code, as it named itself, when its code lapses, ten minutes after the fixture landed, and the workspace the account owns that it may connect it to. */
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
 const PENDING_PAIRING: HostPairingAnswer = {
   name: "Ada's Mac mini",
   platform: DEVICE_PLATFORM.DARWIN,
   arch: DEVICE_ARCH.ARM64,
   ip: "203.0.113.7",
   expiresAt: LANDED + 10 * 60_000,
-  workspaces: [{ id: FIXTURE_WORKSPACE.id, name: FIXTURE_WORKSPACE.name }],
 };
 
 /** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
@@ -1430,37 +1579,6 @@ const HOSTS: readonly HostLine[] = [
     platform: DEVICE_PLATFORM.LINUX,
     calledIn: true,
     away: true,
-  },
-];
-
-/**
- * The machines Ada's workspace owns, which every member's agents may run on,
- * as Settings › Machines lists them under her own and Runs on offers them:
- * a Linux box online whose agents may reach its private network, and a Mac
- * set aside for it still pulling its agent image, which takes no agent yet.
- * Relay, the team a flow switches to, owns none.
- */
-const WORKSPACE_MACHINES: readonly WorkspaceMachineLine[] = [
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e71",
-    name: "build-01",
-    platform: DEVICE_PLATFORM.LINUX,
-    arch: DEVICE_ARCH.X64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PRIVATE_ALLOWED,
-    calledIn: true,
-    away: false,
-  },
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e72",
-    name: "Team Mac Studio",
-    platform: DEVICE_PLATFORM.DARWIN,
-    arch: DEVICE_ARCH.ARM64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PUBLIC_ONLY,
-    setup: DEVICE_SETUP.PREPARING,
-    calledIn: true,
-    away: false,
   },
 ];
 
@@ -1806,7 +1924,7 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
   const manager = {
     ...MANAGER,
     workspaceId: FIXTURE_IDS.WORKSPACE,
-    repository: null,
+    repository: MANAGER_REPOSITORIES[0],
     settledAt: MANAGER.createdAt,
   };
 
@@ -2118,25 +2236,41 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
-/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
-const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+/**
+ * The threads a fixture run wrote on the invites task's description, by id,
+ * each as the run last left it: one it started, or a staged one it replied
+ * to, resolved, or reopened. Note that the run's answers are given before
+ * the act reaches the host, so no declared write draws them; the comments
+ * slice lays them over the staged threads instead (`stagedComments`).
+ */
+const RUN_THREADS = new Map<string, DescriptionCommentThread>();
+
+/** How many times the run has written a thread, so a comments slice laid before the latest write is laid again rather than read from the cache. */
+let runThreadWrites = 0;
 
 /** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
-/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
-function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
-  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+/** Keeps a thread the run wrote as it now stands, and answers it. */
+function keepRunThread(thread: DescriptionCommentThread): DescriptionCommentThread {
+  RUN_THREADS.set(thread.id, thread);
+  runThreadWrites += 1;
 
-  STARTED_THREADS.set(kept.id, kept);
-
-  return kept;
+  return thread;
 }
 
-/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+/** Keeps a thread the run changed, moved on a revision, and answers it. */
+function keepChanged(thread: DescriptionCommentThread): DescriptionCommentThread {
+  return keepRunThread({ ...thread, revision: thread.revision + 1, updatedAt: Date.now() });
+}
+
+/** Each held comments slice with the reference journey's description threads laid over it, and how many thread writes of the run it holds, so a write since lays it again. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+  {
+    readonly writes: number;
+    readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS];
+  }
 >();
 
 function stagedComments(
@@ -2145,23 +2279,31 @@ function stagedComments(
   const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
   const staged = STAGED_COMMENTS.get(held);
 
-  if (staged !== undefined) return staged;
+  if (staged?.writes === runThreadWrites) return staged.laid;
 
-  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
-  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+  // Note that each staged thread stands as the run last left it, then each thread the run started, in the order it started them, then any other the host drew.
+  const standing = INVITES_THREADS.map((thread) => RUN_THREADS.get(thread.id) ?? thread);
+
+  const started = [...RUN_THREADS.values()].filter(
     (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
+  const drawn = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) =>
+      !RUN_THREADS.has(thread.id) && !INVITES_THREADS.some((each) => each.id === thread.id),
   );
 
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
+      [TASK.INVITES]: { rows: [...standing, ...started, ...drawn] },
     },
   };
 
-  STAGED_COMMENTS.set(held, laid);
-  STAGED_COMMENTS.set(laid, laid);
+  const entry = { writes: runThreadWrites, laid };
+  STAGED_COMMENTS.set(held, entry);
+  STAGED_COMMENTS.set(laid, entry);
 
   return laid;
 }
@@ -2222,7 +2364,10 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * the thread of the first of them, the account's question and the
  * Manager's answer, which the chat sums as "2 replies" under it. First
  * of all stands a picture the account sent with no words with its ask,
- * whose own long press opens its thread.
+ * whose own long press opens its thread. The Manager gave the account's
+ * ask its 👍, the account and Grace gave its first answer theirs, and the
+ * account gave its 👍 to the answer in the thread. The account edited its
+ * ask a minute after sending it, which it says after its words.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2241,6 +2386,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 5 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: true }],
     },
     {
       id: "5d9e2a70",
@@ -2289,6 +2435,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 2 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true }],
     },
     {
       id: "e0f5a612",
@@ -2304,7 +2451,8 @@ const MANAGER_CHAT: AppManagerChat = {
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
-      editedAt: null,
+      editedAt: MANAGER_STARTED + MINUTE,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
       id: "9a41c6d2",
@@ -2330,6 +2478,19 @@ const MANAGER_CHAT: AppManagerChat = {
     },
   ],
 };
+
+/** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
+let managerChatPresses: readonly ManagerChatReactionPress[] = [];
+
+/** The account's edits of its own messages of the release Manager's chat in this run, oldest saved first, which the chat stands with, as the service would. */
+let managerChatEdits: readonly ManagerChatEditPress[] = [];
+
+/** The release Manager's chat with the account's edits and reactions in this run drawn on it. */
+function reactedManagerChat(): AppManagerChat {
+  const edited = managerChatEdits.reduce(withEditPress, MANAGER_CHAT.messages);
+
+  return { messages: managerChatPresses.reduce(withReactionPress, edited) };
+}
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
@@ -2898,6 +3059,10 @@ export function inboxAppState(
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
+    ...(olderPagesRead === 0 ? undefined : { [LIVE_READ.INBOX_OLDER]: { rows: olderItemsRead() } }),
+    [LIVE_READ.INBOX_FOUND]: Object.fromEntries(
+      [...foundAt].map(([place, found]) => [place, { rows: found }]),
+    ),
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
@@ -2906,7 +3071,7 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MANAGER_CHAT]: {
       ...state[LIVE_READ.MANAGER_CHAT],
-      [AGENT.MANAGER]: { rows: MANAGER_CHAT },
+      [AGENT.MANAGER]: { rows: reactedManagerChat() },
     },
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
@@ -2938,10 +3103,6 @@ export function inboxAppState(
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
     },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
-    [LIVE_READ.WORKSPACE_MACHINES]: {
-      [FIXTURE_IDS.WORKSPACE]: { rows: WORKSPACE_MACHINES },
-      [TEAM_WORKSPACE.id]: { rows: [] },
-    },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),
@@ -3306,18 +3467,13 @@ const CHANGED_FIELDS = [
   "status",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
@@ -3399,12 +3555,17 @@ function stagedAgent(agentId: string): AgentSummary | undefined {
 
 /* ----- The automations ----- */
 
-/** The fixture workspace's automations, by id: a digest on a schedule, a fix on each failed check, and a deploy check its webhook calls, turned off. */
+/** The fixture workspace's automations, by id: a digest on a schedule, a fix on each failed check, a deploy check its webhook calls, turned off, and a one-time rounding fix that ran. */
 const AUTOMATION = {
   DIGEST: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c01",
   CHECKS: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c02",
   DEPLOY: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c03",
+  ROUNDING: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c04",
 } as const;
+
+/** When the one-time rounding fix ran, on the hour four days before the fixture landed, as its schedule spells it in UTC and as its run was due. */
+const ROUNDING_DUE = Math.floor((LANDED - 4 * DAY) / HOUR) * HOUR;
+const ROUNDING_AT = new Date(ROUNDING_DUE).toISOString().slice(0, 16);
 
 /** The digest's schedule: Mondays at 9:00 AM UTC. */
 const DIGEST_SCHEDULE = { cron: "0 9 * * 1", timezone: "UTC" } as const;
@@ -3492,6 +3653,17 @@ const AUTOMATION_RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = ne
     ],
   ],
   [
+    AUTOMATION.ROUNDING,
+    [
+      automationRun(
+        6,
+        LANDED - ROUNDING_DUE,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: ROUNDING_DUE },
+        { id: AGENT.ROUNDING, title: "Fix ledger rounding", status: AGENT_STATUS.COMPLETED },
+      ),
+    ],
+  ],
+  [
     AUTOMATION.DEPLOY,
     [
       automationRun(5, 3 * HOUR, { kind: AUTOMATION_FIRING.WEBHOOK, bytes: 1824 }, null, {
@@ -3518,7 +3690,7 @@ const AUTOMATION_COMMON = {
   mine: true,
 } as const;
 
-/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, and one of Ada's own, turned off. */
+/** The fixture workspace's automations, as its list reads them: two the workspace shares, the digest handing its runs to the Release manager, one of Ada's own, turned off, and a one-time fix that ran, under Finished. */
 const AUTOMATIONS: readonly AutomationSummary[] = [
   {
     ...AUTOMATION_COMMON,
@@ -3567,9 +3739,28 @@ const AUTOMATIONS: readonly AutomationSummary[] = [
     },
     nextRunAt: DIGEST_DUE.NEXT,
     lastRun: newestRun(AUTOMATION.DIGEST),
+    // Note that the digest hands every run to the Release manager, so its row names the Manager its runs land on.
+    target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: AGENT.MANAGER },
     createdAt: LANDED - 30 * DAY,
     scope: AUTOMATION_SCOPE.WORKSPACE,
     repositories: ["ada/relay"],
+  },
+  {
+    ...AUTOMATION_COMMON,
+    id: AUTOMATION.ROUNDING,
+    name: "Fix ledger rounding before the close",
+    // Note that it ran once, as its one-time schedule asked, and stands paused for it, so it stands under Finished.
+    enabled: false,
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: ROUNDING_AT, timezone: "UTC" },
+    action: {
+      kind: AUTOMATION_ACTION.AGENT,
+      prompt: "Fix the ledger's rounding of split invoices before the month closes.",
+    },
+    nextRunAt: null,
+    lastRun: newestRun(AUTOMATION.ROUNDING),
+    createdAt: LANDED - 6 * DAY,
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    repositories: ["ada/ledger"],
   },
 ];
 
@@ -3811,6 +4002,10 @@ const ANSWERS: StagedAnswers = {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
 
+    if (attachmentId === RECORDED.SCREENSHOT) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_SCREENSHOT_PNG };
+    }
+
     if (attachmentId === RECORDED.PLAN) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF };
     }
@@ -3904,6 +4099,8 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // The files the invitations agent's ready pull request changes, so Files changed lists them and opens their diffs.
   [ACT_KIND.PULL_REQUESTS_CHANGES]: ({ number }) => fixtureChanges(number),
+  // A Generate of a pull request's chapters is answered with them told, as the service answers once a model told them.
+  [ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: ({ number }) => fixtureGeneratedChapters(number),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,
@@ -3940,6 +4137,48 @@ const ANSWERS: StagedAnswers = {
 
     return { agent: held, messageId: clientKey };
   },
+  // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
+  // A page of older items is read into the run's, the page after it answered where one stands.
+  [ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: ({ before }) => {
+    const page = before === undefined ? 1 : Number(before.replace("older-", "")) + 1;
+    olderPagesRead = Math.max(olderPagesRead, Math.min(page, OLDER_PAGES));
+
+    return page < OLDER_PAGES ? { next: olderCursor(page) } : {};
+  },
+  // A place's search finds the staged items past the feed whose title holds its words, and its words cleared let them go.
+  [ACT_KIND.AGENTS_INBOX_SEARCH]: ({ place, query }) => {
+    if (query === undefined) foundAt.delete(place);
+    else foundAt.set(place, { query, items: stagedFound(query) });
+
+    return {};
+  },
+  [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+    const mine = message?.reactions?.find((each) => each.kind === kind)?.reacted ?? false;
+
+    const others = managerChatPresses.filter(
+      (each) => each.messageId !== messageId || each.kind !== kind,
+    );
+
+    managerChatPresses = [...others, { messageId, kind, reacted }];
+
+    return { changed: message !== undefined && mine !== reacted };
+  },
+  // Note that an edit of one of the account's own messages of the release Manager's chat is kept for the run, as a reaction is, so the chat stands with its words as edited.
+  [ACT_KIND.AGENTS_CHAT_EDIT]: ({ agentId, messageId, text }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+
+    if (message === undefined || message.authorUserId !== ADA.userId) {
+      return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    if (message.text === text) return { changed: false };
+    managerChatEdits = [...managerChatEdits, { messageId, text, editedAt: MANAGER_STARTED + HOUR }];
+
+    return { changed: true };
+  },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
@@ -3952,12 +4191,20 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const task = [...OWN_TASKS, ...LISTED_TASKS].find((each) => each.id === held.taskId);
 
+    const repositories: readonly string[] =
+      held.id === AGENT.MANAGER
+        ? MANAGER_REPOSITORIES
+        : task?.repository == null
+          ? []
+          : [task.repository];
+
     return {
       agent: {
         ...held,
         automationId: null,
         workspaceId: FIXTURE_IDS.WORKSPACE,
-        repository: task?.repository ?? null,
+        repository: repositories[0] ?? null,
+        repositories,
       },
     };
   },
@@ -4045,14 +4292,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 
@@ -4105,7 +4371,7 @@ const ANSWERS: StagedAnswers = {
   // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
   [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose and kept on the comments slice, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
     if (taskId !== TASK.INVITES || !("scope" in start)) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
@@ -4134,22 +4400,18 @@ const ANSWERS: StagedAnswers = {
       revision: 1,
     };
 
-    STARTED_THREADS.set(thread.id, thread);
-
-    return { thread };
+    return { thread: keepRunThread(thread) };
   },
-  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
+  // Note that a reply, a resolve, or a reopen is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands and kept on the comments slice, so the thread's page and its task's Comments draw it moved.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread =
-      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
+      RUN_THREADS.get(threadId) ?? INVITES_THREADS.find((each) => each.id === threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
-    const started = STARTED_THREADS.has(thread.id);
-
-    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
+    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood.
     if (
       action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
       action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
@@ -4170,14 +4432,14 @@ const ANSWERS: StagedAnswers = {
         entries: [...thread.entries, line],
       };
 
-      return { thread: started ? keepStarted(settled) : settled };
+      return { thread: keepChanged(settled) };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
-    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
+    // Note that each kept reply takes an id of its own, since the thread's rows are keyed by their entries' ids.
     const reply = {
-      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
+      id: fixtureId(nextReplyId++),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
@@ -4186,7 +4448,7 @@ const ANSWERS: StagedAnswers = {
 
     const replied = { ...thread, entries: [...thread.entries, reply] };
 
-    return { thread: started ? keepStarted(replied) : replied };
+    return { thread: keepChanged(replied) };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,

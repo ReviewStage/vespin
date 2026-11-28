@@ -37,6 +37,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -132,7 +133,6 @@ import {
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
-import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { viewerPlace } from "../testing/viewer-place.js";
@@ -550,6 +550,35 @@ test("a page a Manager's thread names opens in the panel beside the Inbox, read 
     "the page stands in the panel beside the thread",
   );
   assert.deepEqual([windowPath(), asked.openedAgents], [at, []], "the Inbox still stands");
+});
+
+test("an @ in the box on a Manager's thread offers what its own page's box offers, its repository's files among them, as a task's thread offers its task's", async () => {
+  const manager = { ...AGENT, id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b", taskId: null };
+  world.listedAgents = [AGENT, manager];
+  world.tasklessInboxes.set(manager.id, [
+    {
+      ...saying(EXPIRY, "Which store holds the rollout?"),
+      id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+      agentId: manager.id,
+      title: "Who takes the rollout?",
+    },
+  ]);
+  const { page } = mount({ room: SHELL_ROOM.WIDE });
+  await settle();
+  act(() => rowNamed(page, "Who takes the rollout?").click());
+  await settle();
+  typeInComposer(itemPane(page), "See @roll");
+  await settle();
+
+  // Note that the repository's paths land through a query, so the list is read once it holds them.
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      [...page.querySelectorAll(".mention-menu .ui-combobox-option-label")].map(
+        (name) => name.textContent,
+      ),
+      ["rollout-store.ts"],
+    ),
+  );
 });
 
 test("a picture of an item opens a viewer the arrow keys walk across every picture of the item, its Markdown's pair and a picture it carried alike, in the order they are drawn", async () => {
@@ -1835,6 +1864,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
   layScrollerOut(board, 400, 1_400);
   act(() => {
+    board.dispatchEvent(new WheelEvent("wheel", { deltaY: -120 }));
     board.scrollTop = 200;
   });
 

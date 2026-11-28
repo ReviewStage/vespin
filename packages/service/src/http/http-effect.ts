@@ -1,6 +1,10 @@
 import type { StoreFailure } from "@repo/database/core/query";
 import type { ApprovalStatus } from "@repo/features/agent-approval-wire";
-import type { LocalAgentRefusal, RefusedDevice } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  type LocalAgentRefusal,
+  type RefusedDevice,
+} from "@repo/features/agent-wire";
 import type { BillingRefusal } from "@repo/features/billing-refusal-wire";
 import type { InstalledSkillRefusal } from "@repo/features/installed-skill-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -11,6 +15,7 @@ import { type Cause, Effect, type Layer, Option, Result, type Scope, Stream } fr
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { type UnparsedWireValue, unparsedWire, wireUuidSchema } from "../core.js";
 import { ANY_METHOD, ANY_PATH } from "../route.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "./http.js";
 import { logStoreFailure } from "./store-failure.js";
 
@@ -79,7 +84,6 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.TASK_PARENT_CYCLE]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.TASK_PARENT_HELD]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.HOST_PAIRING_HELD]: HOSTED_HTTP_STATUS.TOO_MANY_REQUESTS,
-  [HOSTED_API_ERROR.MACHINE_OWNED_ELSEWHERE]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.ALREADY_WRITTEN]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.MEMORY_OFF]: HOSTED_HTTP_STATUS.FORBIDDEN,
   [HOSTED_API_ERROR.MEMORY_CREDENTIAL]: HOSTED_HTTP_STATUS.BAD_REQUEST,
@@ -212,8 +216,6 @@ export const HOSTED_REFUSAL = {
   TASK_PARENT_HELD: { error: HOSTED_API_ERROR.TASK_PARENT_HELD },
   /** The account named too many pairing codes no pending pairing has (`hostPairingHeld`, which names until when); nothing was read or written. */
   HOST_PAIRING_HELD: { error: HOSTED_API_ERROR.HOST_PAIRING_HELD },
-  /** A box's approve named an owner other than the one its machine already stands as a host of; nothing was written. */
-  MACHINE_OWNED_ELSEWHERE: { error: HOSTED_API_ERROR.MACHINE_OWNED_ELSEWHERE },
   /** A write sent again under an idempotency key it was taken under before; nothing ran again. */
   ALREADY_WRITTEN: { error: HOSTED_API_ERROR.ALREADY_WRITTEN },
   /** The member has Memory off; nothing was read or written. */
@@ -343,6 +345,22 @@ export const HOSTED_BYTES_HEADERS = {
   "cross-origin-resource-policy": "same-origin",
 } as const;
 
+/** How a file of a kind no reader runs is served: to be saved rather than opened, whatever a tab opened on its path would make of it. */
+const SAVED_BYTES_HEADERS = {
+  ...HOSTED_BYTES_HEADERS,
+  "content-disposition": "attachment",
+} as const;
+
+/**
+ * The headers a member's or an agent's file is served under, by the type it
+ * is served as: a file of any other kind (`AGENT_ATTACHMENT_TYPE.OTHER`)
+ * also marked to be saved, never shown inline from this origin, and every
+ * other under `HOSTED_BYTES_HEADERS` alone.
+ */
+export function servedBytesHeaders(contentType: string): Readonly<Record<string, string>> {
+  return contentType === AGENT_ATTACHMENT_TYPE.OTHER ? SAVED_BYTES_HEADERS : HOSTED_BYTES_HEADERS;
+}
+
 /**
  * The video a byte route's caller plays, as its `Accept` names it: an MP4
  * where it names `video/mp4`, as the iOS app does, whose player plays no
@@ -361,14 +379,14 @@ export function playableVideoOf(request: Request): PlayableVideoType {
 }
 
 /**
- * A store read or write the handler cannot answer without: its failure is
- * logged and the request is refused as unavailable, since a database the
- * service cannot reach is an outage the caller may retry and not a defect of
- * the route. `mapError` touches the typed channel alone, so an interruption
+ * A store read or write the handler cannot answer without, the database's
+ * or the Blob store's: its failure is logged and the request is refused as
+ * unavailable, since a store the service cannot reach is an outage the
+ * caller may retry and not a defect of the route. `mapError` touches the typed channel alone, so an interruption
  * of the request's fiber passes through untouched.
  */
 export function hostedStoreOrUnavailable<A, R>(
-  effect: Effect.Effect<A, StoreFailure, R>,
+  effect: Effect.Effect<A, StoreFailure | BlobStoreFailure, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
   return effect.pipe(
     Effect.tapError(logStoreFailure),

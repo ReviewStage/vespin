@@ -46,12 +46,10 @@ import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { readAutomation } from "@repo/database/models/automation-store";
 import {
-  actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   type DescriptionCommentWriterRef,
   readDescriptionCommentThread,
-  startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
 import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { githubConnection } from "@repo/database/models/github-connection-store";
@@ -414,6 +412,10 @@ import {
   runCommentTool,
   UPDATE_COMMENT_TOOL,
 } from "../tasks/comment-tools.js";
+import {
+  actOnDescriptionCommentThread,
+  startDescriptionCommentThread,
+} from "../tasks/description-comment-writes.js";
 import {
   type MentioningComment,
   memberCommentAnswer,
@@ -2252,7 +2254,8 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     "chip, and composer would: rename it (empty clears the title), move it to another model " +
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
     "lists them, pin or unpin it in the member's sidebar, or replace the list of MCP servers " +
-    "switched off for it. Name at least one change, a model only with its effort and a " +
+    "switched off for it, or change a Manager's face. Name at least one change, a model only " +
+    "with its effort and a " +
     "contextWindow only with them, required where the model's " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} contextWindows are not empty; the changes land together ` +
     `or not at all. Archive it with ${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with ` +

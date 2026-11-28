@@ -121,7 +121,6 @@ function documentWords(doc: PmNode): string {
   return JSON.stringify(withoutThreads(doc.toJSON()));
 }
 
-/** Whether a branch has the shape `HistoryBranch` reads. */
 function isBranch(branch: unknown): branch is HistoryBranch {
   return (
     Predicate.hasProperty(branch, "eventCount") &&

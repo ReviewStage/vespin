@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { cn } from "../../cn.js";
 import { ICON_STROKE_WIDTH } from "../../icons/icon-size.js";
 import { Check } from "../../icons/icons.js";
-import { pulsePress } from "../../press-pulse.js";
 import { ignoredByReplay, REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
 import {
@@ -69,6 +68,11 @@ import {
  * checked and the rest not, at full strength rather than faded as an
  * unavailable list is, so it reads as an answer given and not one waiting.
  * No press, key, or Tab reaches its rows.
+ *
+ * A list handed `words` draws each label and detail through it, as the
+ * place's Markdown with its links as chips, say. A press on a link or a chip
+ * in a row's words opens what it names and picks nothing, as a step's link
+ * ticks nothing.
  *
  * The list owns its rows' spacing, type, and states. The caller holds the
  * value and answers every change with the values it asks for.
@@ -243,6 +247,21 @@ interface ChoiceListBase<Value extends string> {
   options: readonly ChoiceOption<Value>[];
   /** The values picked, at most one where the list picks one. */
   value: readonly Value[];
+  /** Draws an option's label and detail as more than words, as the place's Markdown with its links as chips; each stands as written where none is given. */
+  words?: WordsDrawer | undefined;
+}
+
+/** What draws a label's or a detail's words, as written, into what stands in their place. */
+export type WordsDrawer = (written: string) => ReactNode;
+
+/** The controls a row's words may hold, a link or a chip, whose press is their own. */
+const NESTED_CONTROL = "a[href], button, [role='button'], [role='link']";
+
+/** Whether an event reached the row through a control its words hold, rather than the row itself. */
+function throughNested(event: React.SyntheticEvent<HTMLElement>): boolean {
+  const { target, currentTarget } = event;
+
+  return target instanceof Element && target.closest(NESTED_CONTROL) !== currentTarget;
 }
 
 /** A list a reader picks from. */
@@ -320,6 +339,11 @@ function labelFlex(option: ChoiceOption<string>, look: ChoiceLook | undefined): 
   return look === CHOICE_LOOK.CARD ? "flex-[1_1_6em]" : "flex-[1_1_10em]";
 }
 
+/** Words drawn as they were written. */
+function asWritten(written: string): ReactNode {
+  return written;
+}
+
 /**
  * A row's words: its label with the badge at its top right, its number after that, and anything the caller hangs after the label, then its detail.
  *
@@ -336,11 +360,13 @@ function ChoiceWords({
   look,
   after,
   number,
+  words = asWritten,
 }: {
   option: ChoiceOption<string>;
   look?: ChoiceLook | undefined;
   after?: ReactNode;
   number?: number | undefined;
+  words?: WordsDrawer | undefined;
 }): React.JSX.Element {
   const hung = after ?? option.after;
 
@@ -353,7 +379,7 @@ function ChoiceWords({
             labelFlex(option, look),
           )}
         >
-          <ReplayWords masked={option.replayMasked}>{option.label}</ReplayWords>
+          <ReplayWords masked={option.replayMasked}>{words(option.label)}</ReplayWords>
           {hung}
         </span>
         {option.badge === undefined && number === undefined ? null : (
@@ -380,7 +406,7 @@ function ChoiceWords({
       )}
       {option.detail === undefined ? null : (
         <span className="ui-choice-detail text-caption">
-          <ReplayWords masked={option.replayMasked}>{option.detail}</ReplayWords>
+          <ReplayWords masked={option.replayMasked}>{words(option.detail)}</ReplayWords>
         </span>
       )}
     </span>
@@ -430,12 +456,14 @@ function RowInside({
   checked,
   look,
   number,
+  words,
 }: {
   radio: boolean;
   option: ChoiceOption<string>;
   checked: boolean;
   look: ChoiceLook;
   number: number | undefined;
+  words: WordsDrawer | undefined;
 }): React.JSX.Element {
   return (
     <>
@@ -453,7 +481,7 @@ function RowInside({
           {option.mark}
         </span>
       )}
-      <ChoiceWords option={option} look={look} number={number} />
+      <ChoiceWords option={option} look={look} number={number} words={words} />
     </>
   );
 }
@@ -476,6 +504,7 @@ function ChoiceRow({
   across,
   number,
   focusRef,
+  words,
   onPress,
 }: {
   radio: boolean;
@@ -499,6 +528,7 @@ function ChoiceRow({
   /** The row's key, counted from one, where the list is numbered and the row among its first nine. */
   number: number | undefined;
   focusRef: React.RefObject<HTMLButtonElement | null> | undefined;
+  words: WordsDrawer | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   const card = held(look);
@@ -531,10 +561,8 @@ function ChoiceRow({
       // Note that the list answers the press itself, because Base UI's own takes no choice back.
       event.preventBaseUIHandler();
 
-      if (readOnly) return;
-      // Note that a row's radio or box is what gives, as a checkbox's box does; a pill gives whole.
-      const control = event.currentTarget.querySelector<HTMLElement>(":scope > .ui-choice-control");
-      pulsePress(control ?? event.currentTarget);
+      // Note that a link or a chip in the row's words opens what it names and picks nothing, as a step's link ticks nothing.
+      if (readOnly || throughNested(event)) return;
       onPress();
     },
     // Note that Enter presses a row as a button's Enter does, which Base UI's radio and checkbox refuse.
@@ -548,7 +576,14 @@ function ChoiceRow({
   } as const;
 
   const inside = (
-    <RowInside radio={radio} option={option} checked={checked} look={look} number={number} />
+    <RowInside
+      radio={radio}
+      option={option}
+      checked={checked}
+      look={look}
+      number={number}
+      words={words}
+    />
   );
 
   const row = radio ? (
@@ -605,6 +640,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     required,
     busy,
     focusRef,
+    words,
     select = CHOICE_SELECT.ONE,
     look = CHOICE_LOOK.PLAIN,
     numbered = false,
@@ -663,6 +699,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
       across={flow === CHOICE_FLOW.ACROSS}
       number={numbered && index < CHOICE_NUMBERED_ROWS ? index + 1 : undefined}
       focusRef={option === landing ? focusRef : undefined}
+      words={words}
       onPress={() => press(option.value)}
     />
   ));
@@ -717,6 +754,7 @@ function SettledChoices<Value extends string>({
   options,
   value,
   pickedNote,
+  words,
 }: ChoiceListSettled<Value>): React.JSX.Element {
   return (
     <ul aria-label={legend} className={listClass(CHOICE_LOOK.PLAIN, CHOICE_FLOW.DOWN)}>
@@ -735,6 +773,7 @@ function SettledChoices<Value extends string>({
             )}
             <ChoiceWords
               option={option}
+              words={words}
               after={
                 picked ? (
                   // Note that the note runs inline in the label's line, so its smaller words share the label's baseline rather than a box's center.

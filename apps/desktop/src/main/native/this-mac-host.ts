@@ -37,7 +37,17 @@ import { app } from "electron";
  * again. Each installed app has its own data, so a Test build never reads
  * the release's.
  *
- * The one `launchctl` call left is for the job the app ran before it
+ * `unregister()` alone does not always let the job go: launchd kept holding
+ * the agent's job, its daemon running from the replaced bundle, and the
+ * job's lightweight code requirement names the team that signed the build
+ * which registered it, so once that daemon ended, launchd refused to spawn
+ * a program signed by another team (`spawn failed`, `EX_CONFIG`), which the
+ * signing switch to Stage Incorporated showed on Nov 27, 2026. So after
+ * `unregister()` the job is booted out where launchd still holds it, which
+ * ends the daemon, and the `register()` that follows submits the job afresh
+ * under this build's signature.
+ *
+ * `launchctl` is also called for the job the app ran before it
  * carried the host, `dev.vespin.host.standalone`, which `SMAppService` never
  * registered: before the agent is registered, that job is disabled where
  * its plist stands and booted out where launchd holds it, its files left
@@ -161,10 +171,17 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
 
   const status = Effect.sync(() => app.getLoginItemSettings(SERVICE).status);
 
-  const job = Effect.map(
-    output("launchctl", ["print", `${domain}/${AGENT_LABEL}`]),
-    Option.flatMap(launchdJobOf),
-  );
+  const agentJob = `${domain}/${AGENT_LABEL}`;
+
+  const job = Effect.map(output("launchctl", ["print", agentJob]), Option.flatMap(launchdJobOf));
+
+  /** The agent's job booted out where launchd still holds it after `unregister()`, so its daemon ends and the next `register()` submits the job afresh; a job launchd no longer holds is left as it is. */
+  const agentJobGone = Effect.gen(function* () {
+    const held = yield* ran("launchctl", ["print", agentJob]);
+
+    if (Option.isSome(held) && held.value.code === 0)
+      yield* ran("launchctl", ["bootout", agentJob]);
+  });
 
   const standalonePlist = path.join(os.homedir(), ...STANDALONE_PLIST);
 
@@ -268,6 +285,9 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
       ) {
         return Result.fail(`macOS did not unregister it: ${now}`);
       }
+
+      // Note that launchd may still hold the job, its daemon running, under the code requirement of the build that registered it.
+      yield* agentJobGone;
 
       return yield* daemonExited;
     }),

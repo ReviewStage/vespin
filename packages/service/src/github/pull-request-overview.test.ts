@@ -19,8 +19,9 @@ import {
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
 import { REACTION } from "@repo/features/pull-request-write-wire";
-import { Duration, Effect, Fiber, Option, Redacted } from "effect";
+import { Duration, Effect, Fiber, Option, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
+import { overviewPullRequestRead } from "../agents/agent-pull-request-procedures.js";
 import {
   fixtureBearer,
   GITHUB_FIXTURE_BOT,
@@ -157,17 +158,201 @@ function deployment(environment: string, status: string | null, url: string | nu
   };
 }
 
+/** An account as a REST listing names one. */
+interface ListedAccount {
+  readonly id: number;
+  readonly login: string;
+  readonly type: string;
+  readonly avatar_url: string;
+}
+
+/** A comment or a review as its REST listing names it, with the reactions it rolls up. */
+interface ListedEntry {
+  readonly id?: number;
+  readonly node_id?: string;
+  readonly user: ListedAccount | null;
+  readonly state?: string;
+  readonly body?: string | null;
+  readonly body_html?: string | null;
+  readonly created_at?: string;
+  readonly submitted_at?: string | null;
+  readonly html_url?: string;
+  readonly reactions?: ListedReactions;
+}
+
+/** Each key a REST rollup counts a reaction under, and GitHub's GraphQL word for that reaction. */
+const ROLLUP_CONTENT = [
+  ["+1", "THUMBS_UP"],
+  ["-1", "THUMBS_DOWN"],
+  ["laugh", "LAUGH"],
+  ["hooray", "HOORAY"],
+  ["confused", "CONFUSED"],
+  ["heart", "HEART"],
+  ["rocket", "ROCKET"],
+  ["eyes", "EYES"],
+] as const;
+
+/** The reactions a REST listing rolls up on an entry, beside the rollup's own address. */
+type ListedReactions = { readonly [Key in (typeof ROLLUP_CONTENT)[number][0]]?: number } & {
+  readonly url?: string;
+};
+
+/** How many of a list GitHub's GraphQL answers a page. */
+const GRAPH_PAGE = 100;
+
+/** The reactions a fixture's GraphQL answer names on a list's entries, by GitHub's id. */
+const ReactedFixtureSchema = Schema.Struct({
+  nodes: Schema.Array(
+    Schema.Struct({ databaseId: Schema.Number, reactionGroups: Schema.Array(Schema.Unknown) }),
+  ),
+});
+
+/** What a fixture's GraphQL answer says of the pull request, where it says anything: all of it as given, and the reactions it names on the comments and the reviews. */
+const FixtureGraphSchema = Schema.Struct({
+  data: Schema.Struct({
+    repository: Schema.Struct({
+      pullRequest: Schema.Record(Schema.String, Schema.Unknown),
+    }),
+  }),
+});
+
+const FixtureReactedSchema = Schema.Struct({
+  data: Schema.Struct({
+    repository: Schema.Struct({
+      pullRequest: Schema.Struct({
+        comments: Schema.optionalKey(ReactedFixtureSchema),
+        reviews: Schema.optionalKey(ReactedFixtureSchema),
+      }),
+    }),
+  }),
+});
+
+/** The reactions a list names, by GitHub's id. */
+function reactedById(
+  list: typeof ReactedFixtureSchema.Type | undefined,
+): ReadonlyMap<number, readonly unknown[]> {
+  return new Map(
+    (list?.nodes ?? []).map((node) => [node.databaseId, node.reactionGroups] as const),
+  );
+}
+
+/** A comment or a review as GitHub's GraphQL names the one its REST listing names: a bot's login without its suffix, and where `asked` asks them, its words as rendered and the reactions `reacted` gives it, else those its rollup counts. */
+function graphEntryOf(
+  entry: ListedEntry,
+  reacted: ReadonlyMap<number, readonly unknown[]>,
+  asked: { readonly rendered: boolean; readonly reactions: boolean },
+) {
+  const { user, reactions } = entry;
+
+  const rolled = ROLLUP_CONTENT.flatMap(([key, content]) => {
+    const count = reactions?.[key] ?? 0;
+
+    return count === 0 ? [] : [{ content, reactors: { totalCount: count } }];
+  });
+
+  return {
+    databaseId: entry.id ?? null,
+    ...(entry.node_id === undefined ? undefined : { id: entry.node_id }),
+    author:
+      user === null
+        ? null
+        : {
+            __typename: user.type,
+            login: user.login.replace("[bot]", ""),
+            avatarUrl: user.avatar_url,
+            databaseId: user.id,
+          },
+    body: entry.body ?? "",
+    ...(asked.rendered ? { bodyHTML: entry.body_html ?? "" } : undefined),
+    createdAt: entry.created_at ?? "",
+    // Note that GraphQL names every entry's page, so one a listing names none of stands at the pull request's.
+    url: entry.html_url ?? PAGE,
+    ...(entry.state === undefined
+      ? undefined
+      : { state: entry.state, submittedAt: entry.submitted_at ?? null }),
+    ...(asked.reactions
+      ? { reactionGroups: (entry.id === undefined ? undefined : reacted.get(entry.id)) ?? rolled }
+      : undefined),
+  };
+}
+
+/** A page of a list as GitHub's GraphQL answers `last: 100` before a cursor, the cursor here the place the page ends. */
+function backPageOf<A>(nodes: readonly A[], before: string | undefined) {
+  const end = before === undefined ? nodes.length : Number(before);
+  const start = Math.max(0, end - GRAPH_PAGE);
+
+  return {
+    pageInfo: { hasPreviousPage: start > 0, startCursor: start > 0 ? String(start) : null },
+    nodes: nodes.slice(start, end),
+  };
+}
+
+/**
+ * GitHub's GraphQL answer to the conversation's reads, its comments and its
+ * reviews answered from the REST listings given, as GitHub answers both
+ * alike, beside what `graphql` says of its threads and reactions; `graphql`
+ * as it is where it is a refusal or an answer only of errors.
+ */
+function conversationAnswer(
+  answers: {
+    readonly comments?: readonly ListedEntry[];
+    readonly reviews?: readonly ListedEntry[];
+    readonly graphql?: object | Response;
+  },
+  query: string,
+  before: string | undefined,
+): object | Response {
+  const { graphql } = answers;
+
+  if (graphql instanceof Response) return graphql;
+  const fixture = Schema.decodeUnknownOption(FixtureGraphSchema)(graphql);
+
+  if (graphql !== undefined && Option.isNone(fixture)) return graphql;
+  const said = Option.isSome(fixture) ? fixture.value.data.repository.pullRequest : {};
+  const reacted = Option.getOrUndefined(Schema.decodeUnknownOption(FixtureReactedSchema)(graphql));
+  const named = reacted?.data.repository.pullRequest;
+
+  // Note that GitHub answers only the fields a query names, so a page asked without rendering or reactions carries none.
+  const asked = {
+    rendered: query.includes("bodyHTML"),
+    reactions: query.includes("reactionGroups"),
+  };
+
+  const comments = (answers.comments ?? []).map((each) =>
+    graphEntryOf(each, reactedById(named?.comments), asked),
+  );
+
+  const reviews = (answers.reviews ?? []).map((each) =>
+    graphEntryOf(each, reactedById(named?.reviews), asked),
+  );
+
+  const pullRequest = query.startsWith("query ConversationComments")
+    ? { comments: backPageOf(comments, before) }
+    : query.startsWith("query ConversationReviews")
+      ? { reviews: backPageOf(reviews, before) }
+      : {
+          reviewThreads: { totalCount: 0, nodes: [] },
+          ...said,
+          comments: backPageOf(comments, undefined),
+          reviews: backPageOf(reviews, undefined),
+        };
+
+  return { data: { repository: { pullRequest } } };
+}
+
 /** A repository answering the overview's reads as given, and not found for the rest. */
 function repository(answers: {
   readonly pull?: object;
   readonly checkRuns?: readonly object[] | Response;
   readonly statuses?: readonly object[];
-  readonly comments?: readonly object[];
-  readonly reviews?: readonly object[];
+  readonly comments?: readonly ListedEntry[];
+  readonly reviews?: readonly ListedEntry[];
   readonly graphql?: object | Response;
   readonly deployments?: readonly object[] | Response;
   /** The repository's open pull requests, as the stack's GraphQL read lists them. */
   readonly open?: readonly object[] | Response;
+  /** The merge box's fields, as the listing's first page answers them beside it; `MERGE_FIELDS` where not given. */
+  readonly merging?: object;
 }): RepositoryScript {
   return (sent) => {
     const { pathname } = new URL(sent.url);
@@ -177,8 +362,9 @@ function repository(answers: {
       sent.method === "POST" &&
       sent.body.includes("OpenPullRequests")
     ) {
-      const asked: { variables: { owner: string; name: string; after: string | null } } =
-        JSON.parse(sent.body);
+      const asked: {
+        variables: { owner: string; name: string; after: string | null; merging: boolean };
+      } = JSON.parse(sent.body);
 
       // Note that the stack is read of the agent's repository alone.
       assert.deepEqual([asked.variables.owner, asked.variables.name], ["acme", "relay"]);
@@ -197,19 +383,24 @@ function repository(answers: {
               nodes,
               pageInfo: { hasNextPage: more, endCursor: more ? String(from + 100) : null },
             },
+            // Note that GitHub answers the merge box's fields only where the page asks them, its first.
+            ...(asked.variables.merging ? (answers.merging ?? MERGE_FIELDS) : undefined),
           },
         },
       });
     }
 
     if (pathname === "/graphql" && sent.method === "POST") {
-      const asked: { query: string; variables?: object } = JSON.parse(sent.body);
-      // Note that the threads and the deployments are each asked of this one pull request by name and number.
-      assert.deepEqual(asked.variables, { owner: "acme", name: "relay", number: NUMBER });
+      const asked: { query: string; variables?: { before?: string } } = JSON.parse(sent.body);
+      const { before, ...named } = asked.variables ?? {};
+      // Note that the conversation and the deployments are each asked of this one pull request by name and number.
+      assert.deepEqual(named, { owner: "acme", name: "relay", number: NUMBER });
 
       const answer = asked.query.startsWith("query Deployments")
         ? deploymentsAnswer(answers.deployments, asked.query)
-        : answers.graphql;
+        : asked.query.startsWith("query Conversation")
+          ? conversationAnswer(answers, asked.query, before)
+          : answers.graphql;
 
       if (answer !== undefined) {
         return answer instanceof Response ? answer : Response.json(answer);
@@ -249,6 +440,22 @@ function repository(answers: {
     return undefined;
   };
 }
+
+/** How the repository merges the pull request, as GitHub's GraphQL answers the merge box's fields: squash or rebase, auto-merge allowed and on, no queue, its review still required and its checks running. */
+const MERGE_FIELDS = {
+  mergeCommitAllowed: false,
+  squashMergeAllowed: true,
+  rebaseMergeAllowed: true,
+  autoMergeAllowed: true,
+  pullRequest: {
+    headRefOid: "a1b2c3d",
+    isMergeQueueEnabled: false,
+    mergeQueueEntry: null,
+    autoMergeRequest: { mergeMethod: "SQUASH" },
+    reviewDecision: "REVIEW_REQUIRED",
+    commits: { nodes: [{ commit: { statusCheckRollup: { state: "PENDING" } } }] },
+  },
+};
 
 /** One open pull request as the stack's GraphQL read lists it. */
 function openPull(number: number, head: string, base: string) {
@@ -319,7 +526,7 @@ const linkedAccount = (githubId: number) =>
     return userId;
   });
 
-/** The pull request itself read off the repository given and named for an agent of the workspace given, its stack read where `stacked` says so; none where GitHub holds no such pull request. */
+/** The pull request itself read off the repository given and named for an agent of the workspace given, its stack and merge box read where `stacked` says so, the merge box as `mergeBox`; none where GitHub holds no such pull request. */
 const pullRequestPartOf = (organizationId: string, stacked = true) =>
   Effect.flatMap(
     Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
@@ -328,10 +535,24 @@ const pullRequestPartOf = (organizationId: string, stacked = true) =>
     (read) =>
       Option.isNone(read)
         ? Effect.succeed(undefined)
-        : namedOverviewPullRequest(
-            { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
-            read.value,
+        : Effect.map(
+            namedOverviewPullRequest(
+              { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
+              read.value.overview,
+            ),
+            (named) => ({ ...named, mergeBox: read.value.merging }),
           ),
+  );
+
+/** The pull request's header as its procedure answers it, open as last read, to the member given, its merge box among it; none where GitHub holds no such pull request. */
+const headerOf = (organizationId: string, userId: string) =>
+  Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+    overviewPullRequestRead(
+      bearer,
+      { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
+      { number: NUMBER, state: PULL_REQUEST_STATE.OPEN, url: PAGE },
+      userId,
+    ),
   );
 
 /** The conversation read off the repository given and named for an agent of the workspace given. */
@@ -776,6 +997,80 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
+    "an entry read on an older page that the newest hundred leave standing keeps its rendering and its reactions",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+        const before = Date.parse("2026-10-15T10:00:00Z");
+
+        // A reply's wrapper review says nothing and starts no thread, so the conversation leaves each out.
+        const wrappers = Array.from({ length: OVERVIEW_BOUNDS.MAX_ENTRIES }, (_, at) => ({
+          id: 100 + at,
+          user: PRIYA,
+          state: "COMMENTED",
+          body: "",
+          submitted_at: new Date(before + (at + 2) * 60_000).toISOString(),
+          html_url: `${PAGE}#pullrequestreview-${100 + at}`,
+        }));
+
+        const overview = yield* overviewOf(
+          workspace,
+          repository({
+            pull: pull(),
+            comments: [
+              {
+                id: 11,
+                user: CHARLES,
+                body: "See #3.",
+                body_html:
+                  '<p dir="auto">See <a href="https://github.com/acme/relay/issues/3">#3</a>.</p>',
+                created_at: new Date(before).toISOString(),
+                html_url: `${PAGE}#issuecomment-11`,
+                reactions: { heart: 2 },
+              },
+              ...Array.from({ length: OVERVIEW_BOUNDS.MAX_ENTRIES }, (_, at) => ({
+                id: 200 + at,
+                user: CHARLES,
+                body: "",
+                created_at: new Date(before + (at + 2) * 60_000).toISOString(),
+                html_url: `${PAGE}#issuecomment-${200 + at}`,
+              })),
+            ],
+            reviews: [
+              {
+                id: 5,
+                user: PRIYA,
+                state: "APPROVED",
+                body: "Looks **good**.",
+                body_html: '<p dir="auto">Looks <strong>good</strong>.</p>',
+                submitted_at: new Date(before + 60_000).toISOString(),
+                html_url: `${PAGE}#pullrequestreview-5`,
+              },
+              ...wrappers,
+            ],
+          }),
+        );
+
+        assert.ok(overview !== undefined);
+        assert.deepEqual(
+          overview.conversation.map(({ url, html, reactions }) => ({ url, html, reactions })),
+          [
+            {
+              url: `${PAGE}#issuecomment-11`,
+              html: '<p dir="auto">See <a href="https://github.com/acme/relay/issues/3">#3</a>.</p>',
+              reactions: [{ content: REACTION.HEART, count: 2 }],
+            },
+            {
+              url: `${PAGE}#pullrequestreview-5`,
+              html: '<p dir="auto">Looks <strong>good</strong>.</p>',
+              reactions: undefined,
+            },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "a head with more checks than the bound keeps the one that failed, a commit status after a full page of passing runs",
     () =>
       Effect.gen(function* () {
@@ -1072,7 +1367,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
-    "the reactions the description, a comment, a review, and a thread comment wear come with the conversation, in GitHub's order, those given only, each naming who gave it as the conversation names people; a thread comment's, and a comment's the GraphQL read did not reach, counted only",
+    "the reactions the description, a comment, a review, and a thread comment wear come with the conversation, in GitHub's order, those given only, each naming who gave it as the conversation names people; a thread comment's, and a comment's GitHub names no one for, counted only",
     () =>
       Effect.gen(function* () {
         const charles = yield* linkedAccount(CHARLES.id);
@@ -1214,7 +1509,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             { content: REACTION.THUMBS_UP, count: 2 },
             { content: REACTION.HEART, count: 1 },
           ],
-          "a comment the GraphQL read did not reach is counted by its REST rollup",
+          "a comment whose reactions GitHub names no one for is counted only",
         );
       }),
   );
@@ -1261,88 +1556,95 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
               html_url: `${PAGE}#pullrequestreview-5`,
             },
           ],
+          graphql: {
+            data: {
+              repository: {
+                pullRequest: {
+                  id: "PR_7",
+                  reactionGroups: [group("HEART", 2), group("ROCKET", 1)],
+                  comments: {
+                    nodes: [{ databaseId: 11, reactionGroups: [group("EYES", 1)] }],
+                  },
+                  reviews: { nodes: [] },
+                  reviewThreads: {
+                    totalCount: 1,
+                    nodes: [
+                      {
+                        id: "PRRT_viewed",
+                        path: "src/invite.ts",
+                        line: 12,
+                        startLine: null,
+                        originalLine: 12,
+                        originalStartLine: null,
+                        diffSide: "RIGHT",
+                        startDiffSide: null,
+                        isResolved: false,
+                        isOutdated: false,
+                        comments: {
+                          totalCount: 1,
+                          nodes: [
+                            {
+                              author: null,
+                              body: "Why?",
+                              bodyHTML: '<p dir="auto">Why?</p>',
+                              createdAt: "2026-10-15T10:59:00Z",
+                              url: `${PAGE}#discussion_r1`,
+                              pullRequestReview: { databaseId: 5, state: "APPROVED" },
+                              id: "PRRC_1",
+                              reactionGroups: [
+                                { content: "THUMBS_UP", reactors: { totalCount: 1 } },
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
         });
 
         const answered: RepositoryScript = (sent) => {
           if (new URL(sent.url).pathname !== "/graphql") return script(sent);
           bearers.push(sent.headers.get("authorization") ?? "");
-          const viewer = JSON.parse(sent.body).query.includes("viewerHasReacted");
+
+          // Note that the App's own read is the repository's, and only the member's is answered here.
+          if (!JSON.parse(sent.body).query.includes("viewerHasReacted")) return script(sent);
 
           return Response.json({
             data: {
               repository: {
-                pullRequest: viewer
-                  ? {
-                      id: "PR_7",
-                      reactionGroups: [viewed("HEART", true), viewed("ROCKET", false)],
-                      comments: {
-                        nodes: [
-                          {
-                            id: "IC_11",
-                            viewerCanUpdate: false,
-                            reactionGroups: [viewed("EYES", false)],
-                          },
-                        ],
+                pullRequest: {
+                  id: "PR_7",
+                  reactionGroups: [viewed("HEART", true), viewed("ROCKET", false)],
+                  comments: {
+                    nodes: [
+                      {
+                        id: "IC_11",
+                        viewerCanUpdate: false,
+                        reactionGroups: [viewed("EYES", false)],
                       },
-                      reviews: { nodes: [] },
-                      reviewThreads: {
-                        nodes: [
-                          {
-                            comments: {
-                              nodes: [
-                                {
-                                  id: "PRRC_1",
-                                  viewerCanUpdate: true,
-                                  reactionGroups: [viewed("THUMBS_UP", true)],
-                                },
-                              ],
+                    ],
+                  },
+                  reviews: { nodes: [] },
+                  reviewThreads: {
+                    nodes: [
+                      {
+                        comments: {
+                          nodes: [
+                            {
+                              id: "PRRC_1",
+                              viewerCanUpdate: true,
+                              reactionGroups: [viewed("THUMBS_UP", true)],
                             },
-                          },
-                        ],
+                          ],
+                        },
                       },
-                    }
-                  : {
-                      id: "PR_7",
-                      reactionGroups: [group("HEART", 2), group("ROCKET", 1)],
-                      comments: {
-                        nodes: [{ databaseId: 11, reactionGroups: [group("EYES", 1)] }],
-                      },
-                      reviews: { nodes: [] },
-                      reviewThreads: {
-                        totalCount: 1,
-                        nodes: [
-                          {
-                            id: "PRRT_viewed",
-                            path: "src/invite.ts",
-                            line: 12,
-                            startLine: null,
-                            originalLine: 12,
-                            originalStartLine: null,
-                            diffSide: "RIGHT",
-                            startDiffSide: null,
-                            isResolved: false,
-                            isOutdated: false,
-                            comments: {
-                              totalCount: 1,
-                              nodes: [
-                                {
-                                  author: null,
-                                  body: "Why?",
-                                  bodyHTML: '<p dir="auto">Why?</p>',
-                                  createdAt: "2026-10-15T10:59:00Z",
-                                  url: `${PAGE}#discussion_r1`,
-                                  pullRequestReview: { databaseId: 5, state: "APPROVED" },
-                                  id: "PRRC_1",
-                                  reactionGroups: [
-                                    { content: "THUMBS_UP", reactors: { totalCount: 1 } },
-                                  ],
-                                },
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
+                    ],
+                  },
+                },
               },
             },
           });
@@ -1576,6 +1878,45 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
+    "an open pull request's merge box is read in its stack's listing: the methods the repository allows, auto-merge, the queue, its head, its review, and its checks as one word",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
+        const overview = yield* pullRequestPartOf(workspace).pipe(
+          answering(
+            repository({
+              pull: pull(),
+              open: [openPull(NUMBER, "luke/invite-once", "main")],
+              merging: {
+                ...MERGE_FIELDS,
+                pullRequest: {
+                  ...MERGE_FIELDS.pullRequest,
+                  isMergeQueueEnabled: true,
+                  mergeQueueEntry: { position: 2 },
+                },
+              },
+            }),
+          ),
+        );
+
+        assert.deepEqual(
+          overview?.mergeBox,
+          Option.some({
+            methods: ["squash", "rebase"],
+            autoMergeAllowed: true,
+            queue: true,
+            queued: { position: 2 },
+            autoMerge: { method: "squash" },
+            headSha: "a1b2c3d",
+            review: "review-required",
+            checks: "pending",
+          }),
+        );
+      }),
+  );
+
+  it.effect(
     "each pull request of the stack GitHub's merge queue holds says it is queued, the one shown among them, as the open pull requests' listing names it",
     () =>
       Effect.gen(function* () {
@@ -1705,10 +2046,11 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
-    "no stack for a pull request no longer open, or where GitHub will not list the open ones, the rest standing",
+    "no stack for a pull request no longer open, or where GitHub will not list the open ones, the rest standing, the merge box then read on its own",
     () =>
       Effect.gen(function* () {
-        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+        const charles = yield* linkedAccount(CHARLES.id);
+        const workspace = yield* openWorkspace(charles);
         const open = [openPull(9, "luke/invite-copy", "luke/invite-once")];
 
         const merged = yield* pullRequestPartOf(workspace).pipe(
@@ -1720,11 +2062,13 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           ),
         );
 
-        const refused = yield* pullRequestPartOf(workspace).pipe(
+        // Note that the merge box rides in the listing, so where GitHub refuses it the header asks the merge box on its own.
+        const refused = yield* headerOf(workspace, charles).pipe(
           answering(
             repository({
               pull: pull(),
               open: Response.json({ message: "Resource not accessible" }, { status: 403 }),
+              graphql: { data: { repository: MERGE_FIELDS } },
             }),
           ),
         );
@@ -1737,7 +2081,9 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         assert.deepEqual(merged?.stack, []);
         assert.equal(refused?.title, "Send the invite once");
         assert.deepEqual(refused?.stack, []);
+        assert.deepEqual(refused?.merging?.methods, ["squash", "rebase"]);
         assert.deepEqual(unasked?.stack, []);
+        assert.equal(unasked?.mergeBox, undefined);
       }),
   );
 

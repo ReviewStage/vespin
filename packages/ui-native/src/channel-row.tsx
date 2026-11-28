@@ -20,6 +20,15 @@ const CHANNEL_FACE = { SIZE: MARK_SIZE.AVATAR, GAP: 8 } as const;
 /** How wide a channel row's seat stands, its face and the gap after it, which every line of a run's words starts past. */
 export const CHANNEL_SEAT = CHANNEL_FACE.SIZE + CHANNEL_FACE.GAP;
 
+/** How far a sender's name takes a press past its line, above and below, so a name of one short line takes a press across the system's least target. */
+const NAME_REACH = { top: 10, bottom: 10 } as const;
+
+/** What a press on a sender's face or name is heard to do. */
+const SENDER_HINT = "Opens their page";
+
+/** What a hold on a sender's face or name does: nothing, so only a tap opens their page, and a finger resting on it opens nothing on its lift. */
+const HOLD_OPENS_NOTHING = () => undefined;
+
 /** How many of a thread's repliers' faces its summary shows, the rest counted in its words alone, as the panel's shows three. */
 const REPLIER_FACES = 3;
 
@@ -32,6 +41,8 @@ const styles = StyleSheet.create({
   body: { flex: 1, minWidth: 0, gap: SPACE.TIGHT },
   head: { flexDirection: "row", alignItems: "baseline", gap: SPACE.TIGHT + 2 },
   name: { flexShrink: 1, fontWeight: "600" },
+  // Note that a name's press gives way as its words do, so a long name is cut rather than pushing its time out.
+  sender: { flexShrink: 1 },
   summary: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6 },
   faces: { flexDirection: "row", gap: 2 },
   rule: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW },
@@ -78,6 +89,59 @@ function SenderFace({
 }
 
 /**
+ * A sender's name or face where it names their page (`address`): a tap that
+ * opens it, as a press on the panel's sender opens their page, an agent's,
+ * or a GitHub account's; their name or face alone where it names none.
+ * The name is heard as the line's heading with what its tap does, and a face
+ * (`heard` false) is left unheard, since the name beside it already says it.
+ * Note that a scroll begun on it cancels the tap, as the transcript's own
+ * scroll cancels a press on its rows, and that a hold opens nothing, as a
+ * right-click on the panel's name hangs no menu of its own.
+ */
+export function SenderPress({
+  name,
+  address,
+  onOpenLink,
+  heard = true,
+  children,
+}: {
+  readonly name: string;
+  readonly address: string | undefined;
+  readonly onOpenLink: ((address: string) => void) | undefined;
+  readonly heard?: boolean | undefined;
+  readonly children: ReactNode;
+}) {
+  if (address === undefined || onOpenLink === undefined) return children;
+
+  const open = () => onOpenLink(address);
+
+  // Note that a face stands beside the name that says it, so only the name is heard.
+  return heard ? (
+    <Press
+      accessibilityRole="header"
+      accessibilityLabel={name}
+      accessibilityHint={SENDER_HINT}
+      hitSlop={NAME_REACH}
+      style={styles.sender}
+      onPress={open}
+      onLongPress={HOLD_OPENS_NOTHING}
+    >
+      {children}
+    </Press>
+  ) : (
+    <Press
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      onPress={open}
+      onLongPress={HOLD_OPENS_NOTHING}
+    >
+      {children}
+    </Press>
+  );
+}
+
+/**
  * One message of a channel: its sender's face in the row's seat and their
  * name in bold with when it was sent (`stamp`) over what it holds, where it
  * opens their run (`opens`); its words alone past the seat where it goes on
@@ -89,11 +153,14 @@ export function ChannelMessage({
   opens,
   stamp,
   working = false,
+  onOpenLink,
   children,
 }: {
   readonly sender: ChatSender;
   readonly faces: ChannelFaces;
   readonly opens: boolean;
+  /** Opens the page a person's face and name name (`ChatSender.address`); none where they open nothing. */
+  readonly onOpenLink?: ((address: string) => void) | undefined;
   /** When it was sent, as its head says it; none where it is not known. */
   readonly stamp?: string | undefined;
   /** Whether the Manager works on, which its face says. */
@@ -106,18 +173,27 @@ export function ChannelMessage({
     <View style={styles.seated}>
       <View style={styles.seat}>
         {opens ? (
-          <SenderFace sender={sender} faces={faces} size={CHANNEL_FACE.SIZE} working={working} />
+          <SenderPress
+            name={sender.name}
+            address={sender.address}
+            onOpenLink={onOpenLink}
+            heard={false}
+          >
+            <SenderFace sender={sender} faces={faces} size={CHANNEL_FACE.SIZE} working={working} />
+          </SenderPress>
         ) : null}
       </View>
       <View style={styles.body}>
         {opens ? (
           <View style={styles.head} accessibilityRole="header">
-            <Text
-              numberOfLines={1}
-              style={[styles.name, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT }]}
-            >
-              {sender.name}
-            </Text>
+            <SenderPress name={sender.name} address={sender.address} onOpenLink={onOpenLink}>
+              <Text
+                numberOfLines={1}
+                style={[styles.name, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT }]}
+              >
+                {sender.name}
+              </Text>
+            </SenderPress>
             {stamp === undefined ? null : (
               <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{stamp}</Text>
             )}
@@ -171,6 +247,20 @@ export function ThreadReplies({
         {thread.words}
       </Text>
     </Press>
+  );
+}
+
+/** The rule over the first message after the reader's mark of the chat, in copper, saying New at its end, as the panel's chat draws it. */
+export function NewRule({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <View style={styles.rule}>
+      <View style={[styles.ruleLine, { backgroundColor: colors.ACCENT }]} />
+      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.ACCENT_TEXT }}>
+        {words}
+      </Text>
+    </View>
   );
 }
 

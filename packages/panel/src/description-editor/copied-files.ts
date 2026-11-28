@@ -30,7 +30,6 @@ export function copiedFileOf(address: string | null): CopiedFile | undefined {
   return { mediaType, data };
 }
 
-/** Whether two copies carry the same file. */
 export function sameFile(first: CopiedFile, second: CopiedFile): boolean {
   return first.mediaType === second.mediaType && first.data === second.data;
 }

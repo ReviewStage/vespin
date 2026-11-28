@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -8,16 +11,18 @@ import { useQuery } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { entityMark } from "./entities/entity-mark.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { deliveryOf, signedInAs, stateWith } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
-import { appStateQuery } from "./use-app-state.js";
+import { appStateQuery, drawAhead } from "./use-app-state.js";
 
 /**
  * use-app-state.test.ts -- what a window's readers hold across deliveries of
  * the document: each delivery is a new tree, as it is after crossing into the
  * window, and what a reader holds of a slice the delivery did not move is the
- * object it already held.
+ * object it already held; a chip that reads a slice every row shares is drawn
+ * again as that slice moves.
  */
 
 declare global {
@@ -191,4 +196,88 @@ test("a delivery heard after the window's second read is refused asks for the wh
 
   assert.equal(reads, 3, "the delivery asked for the whole document again");
   assert.deepEqual(testQueryClientNow().getQueryData(appStateQuery.queryKey), after);
+});
+
+test("a write drawn ahead that is refused leaves the window on the document main put back, though main delivered it before refusing", async () => {
+  const placed = (position: string): AppStateSnapshot => {
+    const state = stateWith({}, {});
+
+    const section = {
+      id: "section-launch",
+      workspaceId: "workspace",
+      title: "Launch",
+      position,
+      createdAt: 1,
+    };
+
+    return {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        taskSections: { sections: [section], entries: [], agentEntries: [] },
+      },
+    };
+  };
+
+  const positionIn = (state: AppStateSnapshot | undefined) =>
+    state?.tasks.taskSections?.sections[0]?.position;
+
+  const { deliver } = await window(placed("a0"));
+  const held = () => positionIn(testQueryClientNow().getQueryData(appStateQuery.queryKey));
+  const { promise: refused, resolve: refuse } = Promise.withResolvers<boolean>();
+  act(() => drawAhead(testQueryClientNow(), () => placed("a2"), refused));
+  await settle();
+  assert.equal(held(), "a2", "the write is drawn at once");
+
+  // Note that main puts a refused write back before it answers the ask.
+  await deliver({ ...placed("a0"), version: 2 });
+  assert.equal(held(), "a2", "the write is drawn over main's document while it is asked");
+  refuse(false);
+  await settle();
+  assert.equal(held(), "a0");
+});
+
+test("a workspace renamed reaches a chip of it drawn before the rename", async () => {
+  const acme: Workspace = {
+    id: "workspace-acme",
+    name: "Acme",
+    slug: "acme",
+    role: WORKSPACE_ROLE.OWNER,
+    github: null,
+  };
+
+  const holding = (workspace: Workspace, version: number): AppStateSnapshot => ({
+    ...stateWith({}, { tasks: { ...IDLE_TASKS_VIEW, workspaces: [workspace] } }),
+    version,
+  });
+
+  const nobody: KnownNames = {
+    tasks: new Map(),
+    agents: new Map(),
+    agentModels: new Map(),
+    pages: new Map(),
+    pagesTaskId: undefined,
+    inboxItems: new Map(),
+    people: new Map(),
+    automations: new Map(),
+  };
+
+  const { deliver } = await window(holding(acme, 1));
+  // The chip of the workspace by its slug, as an app link to it draws one: its tile, lettered by the workspace's name.
+  const chip = document.body.appendChild(document.createElement("div"));
+  const drawnChip = createRoot(chip);
+
+  const mark = entityMark(
+    { kind: ENTITY_KIND.WORKSPACE, workspace: "acme" },
+    { name: "acme", known: nobody, workspace: "acme", tiles: undefined, standing: undefined },
+  );
+
+  act(() => drawnChip.render(withQueryClient(createElement("span", null, mark))));
+  const letter = () => chip.querySelector(".ui-avatar")?.textContent;
+
+  await vi.waitFor(() => assert.equal(letter(), "A"));
+  await deliver(holding({ ...acme, name: "Zenith" }, 2));
+  assert.equal(letter(), "Z", "the chip draws the workspace's new name");
+  act(() => drawnChip.unmount());
+  chip.remove();
 });

@@ -24,7 +24,9 @@
  * The rows are drawn on their own `transform` and the copy on its own, and
  * the stylesheet (desktop.css) times every slide from the motion tokens, so
  * reduced motion and a capture run hold them still as they hold the rest.
- * Only the drop reaches the list's owner, as one move. It is pointer events
+ * Only the drop reaches the list's owner, as one move, whose store draws the
+ * list in its new order at once, an optimistic write where its order is
+ * main's (`drawAhead`, `use-app-state.ts`). It is pointer events
  * with the pointer captured, never the browser's drag and drop, for the
  * reasons the strip's gives, and the captured pointer's own click lands on
  * the list rather than on the row, so a drop opens nothing.
@@ -77,7 +79,7 @@ import { flushSync } from "react-dom";
 /** How far the pointer goes any way, in CSS pixels, before a press is a drag rather than a click. */
 const DRAG_THRESHOLD = 4;
 
-/** How near the scrolling column's top or foot, in CSS pixels, a held row runs it along: about its faded edge. */
+/** How near the scrolling column's top or foot, in CSS pixels, a held row runs it along. */
 const EDGE_REACH = 32;
 
 /** The most the column runs along in a frame, in CSS pixels, with the pointer at its edge or past it. */
@@ -403,7 +405,7 @@ function mark(press: RowPress, landing: ZoneLanding | undefined): void {
  * classes, inside its scope's classes worn with no box of their own, so the
  * rules that draw the row draw the copy, and in the list's own type and
  * color, which it inherits there. The shell keeps none of a column's
- * scrolling, inset, or faded edge. The layer is hidden from assistive
+ * scrolling or inset. The layer is hidden from assistive
  * technology, since the row it copies is still there.
  */
 function liftCopy(row: HTMLElement, list: HTMLElement, scope: Element | null): HTMLElement {
@@ -524,10 +526,13 @@ function lower(press: RowPress, list: HTMLElement, settle: boolean): void {
 
 /**
  * Lands the copy: plays it from where it was let go, on both axes, into the
- * place the row now stands, on the rows' own timing, then takes it down,
- * the row standing faded beneath it until it does, so the two never show
- * at once. The timing is read at the list, so reduced motion and a capture
- * run, which hold the tokens there, land it at once.
+ * place the row stands in the next frame, on the rows' own timing, then
+ * takes it down, the row standing faded beneath it until it does, so the
+ * two never show at once. Note that the place is read a frame on, because a
+ * store the list draws from may hand the move's order to React a microtask
+ * after the drop, as React Query and TanStack DB do, and the row stands
+ * there only once it has. The timing is read at the list, so reduced motion
+ * and a capture run, which hold the tokens there, land it at once.
  */
 function land(copy: HTMLElement, row: HTMLElement, list: HTMLElement): void {
   const timing = tokenTiming(list, MOTION_TOKEN.DURATION_FAST, MOTION_TOKEN.SPRING_FAST);
@@ -538,20 +543,23 @@ function land(copy: HTMLElement, row: HTMLElement, list: HTMLElement): void {
     return;
   }
 
-  const home = row.getBoundingClientRect();
-  const across = home.left - Number.parseFloat(copy.style.left);
-  const down = home.top - Number.parseFloat(copy.style.top);
   row.setAttribute(DRAGGING_ATTRIBUTE, "true");
 
-  const landed = copy.animate(
-    [{ transform: copy.style.transform }, { transform: `translate(${across}px, ${down}px)` }],
-    { ...timing, fill: "forwards" },
-  );
+  requestAnimationFrame(() => {
+    const home = row.getBoundingClientRect();
+    const across = home.left - Number.parseFloat(copy.style.left);
+    const down = home.top - Number.parseFloat(copy.style.top);
 
-  landed.onfinish = () => {
-    copy.remove();
-    row.removeAttribute(DRAGGING_ATTRIBUTE);
-  };
+    const landed = copy.animate(
+      [{ transform: copy.style.transform }, { transform: `translate(${across}px, ${down}px)` }],
+      { ...timing, fill: "forwards" },
+    );
+
+    landed.onfinish = () => {
+      copy.remove();
+      row.removeAttribute(DRAGGING_ATTRIBUTE);
+    };
+  });
 }
 
 /**

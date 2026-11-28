@@ -6,6 +6,8 @@ export * from "./account-provider-key.js";
 
 export * from "./account-sound.js";
 
+export * from "./account-view-choice.js";
+
 export * from "./agent.js";
 
 export * from "./agent-approval.js";
@@ -35,6 +37,8 @@ export * from "./agent-sandbox.js";
 export * from "./agent-wakeup.js";
 
 export * from "./attachment.js";
+
+export * from "./attachment-blob-tombstone.js";
 
 export * from "./auth.js";
 
@@ -86,6 +90,8 @@ export * from "./integration.js";
 
 export * from "./integration-installation.js";
 
+export * from "./journal-image-move.js";
+
 export * from "./live-activity.js";
 
 export * from "./machine-command.js";
@@ -93,6 +99,8 @@ export * from "./machine-command.js";
 export * from "./machine-command-ask.js";
 
 export * from "./manager-chat-message.js";
+
+export * from "./manager-chat-reaction.js";
 
 export * from "./memory.js";
 

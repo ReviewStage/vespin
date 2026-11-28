@@ -36,6 +36,13 @@ export const MANAGER_SORT = {
 
 export type ManagerSort = (typeof MANAGER_SORT)[keyof typeof MANAGER_SORT];
 
+/** What each sort is called among a Managers list's Sort by choices, in the order they are offered, on every client. */
+export const MANAGER_SORT_WORDS = {
+  [MANAGER_SORT.RECENT_ACTIVITY]: "Recent activity",
+  [MANAGER_SORT.NAME]: "Name",
+  [MANAGER_SORT.CREATED]: "Date created",
+} as const satisfies Record<ManagerSort, string>;
+
 /** What a list of Managers is sorted by where the reader chose nothing: newest started first, as it always stood. */
 export const DEFAULT_MANAGER_SORT: ManagerSort = MANAGER_SORT.CREATED;
 
@@ -90,11 +97,15 @@ export function workspaceManagersOf<Agent extends ListedManager>(
     .toSorted(newestFirst);
 }
 
-/** Whether a Manager's chat said something after the reader's mark of it (`read-mark.ts`); never a coder's, whose row carries no mark. */
+/** Whether a Manager's chat reads unread for the reader (`read-mark.ts`): marked so by hand (Mark as unread), or said something after their mark of it; never a coder's, whose row carries no mark. */
 export function managerChatUnread(
-  agent: Pick<AgentSummary, "kind" | "saidAt" | "readThrough">,
+  agent: Pick<AgentSummary, "kind" | "saidAt" | "readThrough" | "markedUnread">,
 ): boolean {
-  if (agent.kind !== AGENT_KIND.MANAGER || agent.saidAt === undefined) return false;
+  if (agent.kind !== AGENT_KIND.MANAGER) return false;
+
+  if (agent.markedUnread === true) return true;
+
+  if (agent.saidAt === undefined) return false;
 
   return readsUnread(
     { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },

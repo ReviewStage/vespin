@@ -202,7 +202,6 @@ import { AutomationRunsPanel, AutomationRunsScreen } from "./automation-runs-pan
 import { automationDeleteQuestion } from "./automation-words.js";
 import { useRunsPanel } from "./folded-groups.js";
 import { type NarrowColumns, useNarrowFocus } from "./narrow-focus.js";
-import { PaneGlide } from "./pane-motion.js";
 import { PhoneHead, phoneFindGroups } from "./phone-head.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 import {
@@ -957,17 +956,21 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
 
 /**
  * An automation's own acts, as its row and its editor's ⋯ offer them alike:
- * Copy link, where the page hands down a workspace; Run now, where it can
+ * its Manager's page, first, where a phone's row names the Manager its runs
+ * land on; Copy link, where the page hands down a workspace; Run now, where it can
  * run, and beside it Turn on or off on a phone's row; Take over, where its creator left and the reader may take it; and
  * Delete, red, which asks first, last and alone.
  */
 export function automationActionGroups({
+  openManager,
   links,
   runNow,
   turn,
   takeOver,
   onDelete,
 }: {
+  /** Opens the page of the Manager its runs land on, where a phone's row names it inside its own press; none elsewhere. */
+  openManager?: MenuAction | undefined;
   /** Copy link and Open in new tab (`linkItems`); none where the page hands down no workspace. */
   links: readonly MenuAction[];
   runNow: MenuAction | undefined;
@@ -978,6 +981,7 @@ export function automationActionGroups({
   onDelete: () => void;
 }): MenuAction[][] {
   return [
+    openManager === undefined ? [] : [openManager],
     [...links],
     [runNow, turn].filter(Predicate.isNotUndefined),
     takeOver === undefined ? [] : [takeOver],
@@ -2636,7 +2640,6 @@ export function AutomationEditor({
   const runsScreen = useId();
   const runsPanel = useRunsPanel();
   const toggleRuns = single ? () => onRuns(!runsShown) : runsPanel.onToggle;
-  // The form glides to its new middle as the Runs panel comes and goes (pane-motion.tsx).
   const editorLayout = useRef<HTMLDivElement>(null);
   // The name's Escape lets go of the caret and keeps the press, as every field's here does.
   const nameField = useRef<HTMLInputElement>(null);
@@ -2852,12 +2855,7 @@ export function AutomationEditor({
           />
         </AutomationSetup>
       }
-      beside={
-        <>
-          {single ? null : <AutomationRunsPanel panel={runsPanel} {...runsRead} />}
-          <PaneGlide root={editorLayout} layout={{ runsOpen: !single && runsPanel.open }} />
-        </>
-      }
+      beside={single ? null : <AutomationRunsPanel panel={runsPanel} {...runsRead} />}
     >
       {single ? (
         <AutomationRunsScreen

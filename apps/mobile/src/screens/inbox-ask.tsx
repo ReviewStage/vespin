@@ -1,9 +1,11 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, an answered ask's card as the answer left it, a withdrawn or replaced ask's stepped back, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
+  EMPTY_INBOX_DRAFT,
   fieldValueOf,
+  type InboxDraft,
   picksNone,
   shownTicks,
   withNoneOfThese,
@@ -11,13 +13,19 @@ import {
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
-import { INBOX_READ_MARK, isUnread, knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
+import {
+  INBOX_READ_MARK,
+  type InboxKnownAsk,
+  isUnread,
+  knownAsk,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
+  type InboxField,
   type InboxItem,
   type InboxOption,
   type InboxOptionMedia,
@@ -46,7 +54,9 @@ import {
   ComposerFoot,
   GLYPH,
   MentionSuggestions,
+  ResolvableAsk,
   StepList,
+  SteppedBack,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { type ReactNode, useMemo, useState } from "react";
@@ -110,6 +120,8 @@ export interface OptionMediaDoors {
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
+  /** The repository of what holds the thread, `owner/name`, whose GitHub pages a step's words draw as its files' chips. */
+  readonly repository: string | null | undefined;
 }
 
 /** What a picture's, a recording's, and a sound clip's tile is called where its agent gave it no caption, as the CLI names each. */
@@ -164,6 +176,22 @@ function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
   return { label: option.label, detail: option.detail, media };
 }
 
+/** An answer ask's fields as the card draws them, each holding what `draft` gives it. */
+function cardFields(fields: readonly InboxField[], draft: InboxDraft): readonly AnswerField[] {
+  return fields.map((field) => {
+    const value = fieldValueOf(draft, field.label);
+
+    return {
+      kind: FIELD_KIND[field.type],
+      label: field.label,
+      required: field.required === true,
+      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
+      options: field.options,
+      recommended: field.recommended,
+    };
+  });
+}
+
 /** The files an open ask's options carry, by attachment and kind, which the thread reads beside its messages' own. */
 export function openAskFiles(item: InboxItem) {
   const ask = openAsk(item);
@@ -199,7 +227,11 @@ function controlsStand(item: InboxItem): boolean {
  * note typed; an answer's fields to fill. A notice asking nothing has no
  * card: its Got it is the box's empty Send (`ThreadComposer`), as the
  * panel's is. What the last send said where it did not go stands in the
- * box's head, beside the words it put back. None where nothing is asked.
+ * box's head, beside the words it put back. Its × at the top end resolves
+ * the thread without answering, as the panel's question's × does, at once
+ * with Undo (`answer.resolve`). None where nothing is asked, and an ask of
+ * words alone, whose box is its answer, draws no card and so no ×, as the
+ * panel's draws none.
  */
 export function OpenAskCard({
   item,
@@ -210,11 +242,31 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send, asNew } = answer;
   // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
-  const ask = asNew ? undefined : openAsk(item);
+  const ask = answer.asNew ? undefined : openAsk(item);
 
-  if (ask === undefined) return null;
+  if (ask === undefined || !controlsStand(item)) return null;
+
+  return (
+    <ResolvableAsk resolve={{ label: RESOLVE, onPress: answer.resolve }}>
+      <AskControls item={item} ask={ask} answer={answer} doors={doors} />
+    </ResolvableAsk>
+  );
+}
+
+/** The open ask's controls as `OpenAskCard` stands them: a decide's options, a do's steps and presses, or an answer's fields. */
+function AskControls({
+  item,
+  ask,
+  answer,
+  doors,
+}: {
+  readonly item: InboxItem;
+  readonly ask: NonNullable<ReturnType<typeof openAsk>>;
+  readonly answer: ThreadAnswer;
+  readonly doors: OptionMediaDoors;
+}): ReactNode {
+  const { draft, onDraft, send } = answer;
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
@@ -228,6 +280,8 @@ export function OpenAskCard({
         // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
         title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
         onChange={(choices) => onDraft(withPicks(draft, choices))}
+        repository={doors.repository}
+        onOpenLink={doors.openLink}
         none={
           cards
             ? {
@@ -253,6 +307,8 @@ export function OpenAskCard({
         steps={ask.steps.length === 0 ? [item.title] : ask.steps}
         ticked={ticked}
         onToggle={(at) => onDraft(withStep(ask, draft, at))}
+        repository={doors.repository}
+        onOpenLink={doors.openLink}
         acts={[
           { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
           {
@@ -268,29 +324,90 @@ export function OpenAskCard({
 
   if (ask.fields === undefined) return null;
 
-  const fields: readonly AnswerField[] = ask.fields.map((field) => {
-    const kind = FIELD_KIND[field.type];
-    const value = fieldValueOf(draft, field.label);
-
-    return {
-      kind,
-      label: field.label,
-      required: field.required === true,
-      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
-      options: field.options,
-      recommended: field.recommended,
-    };
-  });
+  const fields = cardFields(ask.fields, draft);
 
   return (
     <AnswerFields
       fields={fields}
-      recommendedWord={RECOMMENDED.toLowerCase()}
       onChange={(label, typed) => {
         const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
         onDraft(withValue(draft, label, typedValue(kind, typed)));
       }}
     />
+  );
+}
+
+/**
+ * An ask that no longer waits, as the panel's settled thread stands it,
+ * taking nothing, so what was asked still reads once the thread is settled:
+ * an answered ask at the head of the reply that answered it, with `draft`
+ * the answer it left (a decide's picks checked, a do's steps ticked, its
+ * press said by the reply's stamp over it, an answer's fields as filled),
+ * or a withdrawn or replaced ask on its own message, stepped back with
+ * nothing picked (`HeldAskCard`). Note that an option's media stands with
+ * the agent's message rather than here, since the thread draws a settled
+ * ask's files there.
+ */
+export function SettledAskCard({
+  ask,
+  draft,
+  title,
+  links,
+}: {
+  readonly ask: InboxKnownAsk;
+  readonly draft: InboxDraft;
+  /** The thread's title, which stands as the one step of a do that names none. */
+  readonly title: string;
+  /** What a link or a chip in an option's or a step's words opens with, as the open card's. */
+  readonly links: Pick<OptionMediaDoors, "repository" | "openLink">;
+}): ReactNode {
+  const linked = { repository: links.repository, onOpenLink: links.openLink };
+
+  if (ask.type === INBOX_ASK.DECIDE) {
+    return (
+      <ChoiceList
+        choices={ask.options.map((option) => ({ label: option.label, detail: option.detail }))}
+        recommended={recommendedLabels(ask)}
+        picked={draft.choices}
+        multiple={ask.multiple === true}
+        // Note that a pick of None of these stands checked on its own row, as the open card offered it, since no option is checked.
+        none={
+          optionsCarryMedia(ask) ? { label: NONE_OF_THESE, picked: picksNone(draft) } : undefined
+        }
+        {...linked}
+      />
+    );
+  }
+
+  if (ask.type === INBOX_ASK.DO) {
+    return (
+      <StepList
+        steps={ask.steps.length === 0 ? [title] : ask.steps}
+        ticked={draft.steps ?? []}
+        {...linked}
+      />
+    );
+  }
+
+  if (ask.fields === undefined) return null;
+
+  return <AnswerFields fields={cardFields(ask.fields, draft)} />;
+}
+
+/** A withdrawn or replaced ask on its own message, stepped back with nothing picked, as the panel's `HeldAsk`. */
+export function HeldAskCard({
+  ask,
+  title,
+  links,
+}: {
+  readonly ask: InboxKnownAsk;
+  readonly title: string;
+  readonly links: Pick<OptionMediaDoors, "repository" | "openLink">;
+}) {
+  return (
+    <SteppedBack>
+      <SettledAskCard ask={ask} draft={EMPTY_INBOX_DRAFT} title={title} links={links} />
+    </SteppedBack>
   );
 }
 
@@ -339,8 +456,8 @@ export function ThreadComposer({
   /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
   readonly inColumn?: boolean | undefined;
 }) {
-  const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
-  const { nods, acknowledge } = answer;
+  const { draft, onDraft, note: sendNote, answerReady, sendTyped, asNew, setAsNew } = answer;
+  const { nods } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
   // What the composer reads off the thread's agent, read as the agent's page reads it, so the two stand alike.
   const box = useAgentBox(item.agentId, useFollowedAgent(item.agentId), inColumn === true);
@@ -414,7 +531,7 @@ export function ThreadComposer({
     pills: pillField.pills,
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && (answerReady || nods),
-    onSend: () => (asNew ? start() : nods ? acknowledge() : send()),
+    onSend: sendTyped,
     sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,

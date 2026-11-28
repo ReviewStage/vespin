@@ -47,8 +47,11 @@ import {
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
+  AGENT_SENDER,
+  type AgentAttachment,
   type AgentOrigin,
   type AgentPullRequest,
+  type AgentSender,
   type AgentTranscriptMessage,
   agentMessageWords,
   PULL_REQUEST_STATE,
@@ -65,9 +68,12 @@ import {
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { fileMarkers } from "@repo/features/file-marker";
+import { githubAccountPage, isBotLogin } from "@repo/features/github-login";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import {
+  CHAT_NEW_WORDS,
   CHAT_RUN_ALONE,
   type ChatRunPlace,
   chatWorkWords,
@@ -77,6 +83,7 @@ import {
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import {
@@ -170,6 +177,14 @@ export const TRANSCRIPT_PIECE = {
 
 type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
 
+/** Which rule a rule item draws: a thread's count of its replies, or New over the first message of a Manager's chat after the reader's mark. */
+export const RULE_LOOK = {
+  REPLIES: "replies",
+  NEW: "new",
+} as const;
+
+export type RuleLook = (typeof RULE_LOOK)[keyof typeof RULE_LOOK];
+
 /** Where an item stands among the list's: its turn's message, its row in that turn, the block within a group where it is one, and the piece of it drawn. */
 export interface TranscriptPlace {
   readonly message: string;
@@ -258,6 +273,8 @@ export interface ChatSender {
   readonly manager: boolean;
   /** The person's account, which their picture is read by; none for the Manager or a person no account names. */
   readonly userId: string | undefined;
+  /** Where a press on their face or name opens: the person's page; none for the Manager, whose chat this is, or a person no account names. */
+  readonly address?: string | undefined;
 }
 
 /** The thread a message of a Manager's chat stands in, as its channel row offers it: the message it hangs on, which Reply in thread opens, and its replies summed under it where anyone answered. */
@@ -272,6 +289,12 @@ export interface ChatThreadMark {
   readonly words: string;
 }
 
+/** The card a line stands folded in: its title, and whether the reader opened it. */
+export interface SaidCard {
+  readonly title: string;
+  readonly open: boolean;
+}
+
 export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: number } & (
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
@@ -284,6 +307,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
+      /** Where a press on the sender's name opens, as the panel's sender line opens it; none where it opens nothing. */
+      readonly senderAddress?: string | undefined;
       /** Whether anyone but the reader sent it (another agent, a teammate, the app, an automation, GitHub), so it stands at the column's leading edge, as the panel stands a received line at its left; the reader's own alone stand trailing. */
       readonly received: boolean;
       /** Whether the Manager whose chat this is said it, or greeted with it, so it stands among the people's lines as their bubbles do. */
@@ -294,10 +319,14 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly channel?: ChatSender | undefined;
       /** In a Manager's chat's channel, the thread it stands in, which Reply in thread opens, its replies summed under it; none in a thread's own page, or outside a chat. */
       readonly thread?: ChatThreadMark | undefined;
+      /** In a Manager's chat, whether its sender edited its words since it was sent, which a mark after them says; none outside one. */
+      readonly edited?: boolean | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
+      /** The card an automation's prompt stands folded in, as the panel's Prompt card stands: titled by its first line, its words drawn only while open; none for every other line. */
+      readonly card?: SaidCard | undefined;
       /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
       readonly by: string | undefined;
       /** When it was sent; none where the row kept no time. */
@@ -366,8 +395,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.RULE;
-      /** How the thread's replies are counted ("2 replies"). */
+      /** How the thread's replies are counted ("2 replies"), or New over the first message after the reader's mark. */
       readonly words: string;
+      /** Which rule it is: a thread's count of its replies, or New; a thread's where none is named. */
+      readonly look?: RuleLook | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PAGE;
@@ -428,8 +459,8 @@ interface TranscriptReading {
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
   /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
   readonly origin?: TranscriptOrigin | undefined;
-  /** The address of an agent whose suggestion a line was sent from, which the line's head opens; none where it can't be named, when the head names the agent alone. */
-  readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
+  /** The address of a place of the agent's workspace, such as the agent a line was suggested by or a line's sender, which the line's head opens; none where the workspace can't be named, when the head names them alone. */
+  readonly placeAddress?: ((place: LinkDestination) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
@@ -444,6 +475,10 @@ interface ChatReading extends Omit<TranscriptReading, "origin"> {
   readonly managerName?: string | undefined;
   /** The reader's own name, which heads their messages on their way, as their rows will name them. */
   readonly readerName?: string | undefined;
+  /** The instant New stands after, over the first message after it the reader did not send (`useManagerChatLooks`); none where New stands nowhere. */
+  readonly newAfter?: number | undefined;
+  /** Whether New may stand over the reader's own message too, as where they marked the chat unread from it. */
+  readonly newOverOwn?: boolean | undefined;
 }
 
 /** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
@@ -580,12 +615,49 @@ function suggestionFrom(
   const by = {
     lead: SUGGESTION_LEAD,
     words: suggestedBy.name,
-    address: reading.suggestionAddress?.(suggestedBy.agent_id),
+    address: reading.placeAddress?.({
+      kind: LINK_DESTINATION.AGENT,
+      agentId: suggestedBy.agent_id,
+    }),
   };
 
   if (suggestionStartOf(line) === undefined) return [by];
 
   return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
+}
+
+/**
+ * Where a press on a line's sender opens, as the panel's sender line opens
+ * it (`lineSender`, `useActorDoor`): another agent its page, an
+ * automation its page, a member their page, and a GitHub account its own
+ * page on GitHub; none for the app, someone no account names, a member who
+ * left that the line names by no id, or a place whose workspace can't be
+ * named.
+ */
+function senderAddressOf(sentBy: AgentSender, reading: TranscriptReading): string | undefined {
+  const address = reading.placeAddress;
+
+  if (sentBy.agent === true) {
+    return sentBy.agentId === undefined
+      ? undefined
+      : address?.({ kind: LINK_DESTINATION.AGENT, agentId: sentBy.agentId });
+  }
+
+  switch (sentBy.kind) {
+    case AGENT_SENDER.AUTOMATION:
+      return sentBy.automationId === undefined
+        ? undefined
+        : address?.({ kind: LINK_DESTINATION.AUTOMATION, automationId: sentBy.automationId });
+    case AGENT_SENDER.GITHUB:
+      return githubAccountPage(sentBy.name, isBotLogin(sentBy.name));
+    case AGENT_SENDER.MEMBER:
+    case undefined:
+      return sentBy.userId === undefined
+        ? undefined
+        : address?.({ kind: LINK_DESTINATION.PERSON, userId: sentBy.userId });
+    default:
+      return undefined;
+  }
 }
 
 /** The media types a sent line's file is drawn as a picture for. */
@@ -732,6 +804,10 @@ function saidItem(
     ...placedPictures(shown, saidPictures(messageFileChips(line))),
     files: saidFiles(messageFileChips(line)),
     sender: started ? undefined : sender,
+    senderAddress:
+      started || own || line.sentBy === undefined
+        ? undefined
+        : senderAddressOf(line.sentBy, reading),
     received: !own,
     from,
     by: sender === undefined ? undefined : line.sentBy?.userId,
@@ -742,11 +818,12 @@ function saidItem(
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried, folded in its card until the reader opens it. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   origin: TranscriptOrigin,
+  toggles: TranscriptToggles,
 ): TranscriptItem {
   const words = origin.prompt ?? messageWords(line);
 
@@ -766,6 +843,8 @@ function originItem(
     joinsBelow: false,
     from: origin.from,
     body: origin.body,
+    // Note that the prompt stands closed under its first line, as the panel's Prompt card does, since it is there to be read rather than in the way of the agent's own words, and a prompt runs long.
+    card: { title: cardTitle(words), open: foldTurned(toggles, base.place) },
   };
 }
 
@@ -958,6 +1037,7 @@ function callItems(
     part.tool,
     part.input,
     part.output,
+    part.pictures,
   ).flatMap((each) =>
     each.kept
       ? [
@@ -1205,10 +1285,17 @@ function inRuns(
  * place, as the host draws them (`AppTranscript.sending`); a message the
  * service refused stands there too, where it went, which the page marks Not
  * delivered (`AgentTranscript`'s `undelivered`), as the panel keeps it.
+ * Note that each line carries the files this phone still holds of it
+ * (`held`, by the line's id) as its row will carry them, so a picture its
+ * words name stands as its chip from the moment it goes, as the panel's
+ * sent line draws it (`sentLineMessage`), rather than as its marker's words
+ * until the row lands; a file the phone holds no bytes of, such as one sent
+ * from another device, is left off, as the panel leaves it.
  */
 export function withSending(
   messages: readonly AgentTranscriptMessage[],
   sending: readonly SendingMessage[],
+  held: (lineId: string) => readonly AgentAttachment[],
 ): readonly AgentTranscriptMessage[] {
   if (sending.length === 0) return messages;
 
@@ -1218,7 +1305,15 @@ export function withSending(
       (message): AgentTranscriptMessage => ({
         id: message.id,
         role: MESSAGE_ROLE.USER,
-        parts: [{ type: AGENT_PART.TEXT, text: message.text }],
+        parts: [
+          { type: AGENT_PART.TEXT, text: message.text },
+          ...held(message.id).map((file) => ({
+            type: "file",
+            mediaType: file.mediaType,
+            filename: file.name,
+            url: `data:${file.mediaType};base64,${file.data}`,
+          })),
+        ],
         sentAt: message.sentAt,
       }),
     ),
@@ -1303,7 +1398,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, origin)
+          ? originItem(message, base, origin, reading.toggles)
           : saidItem(message, base, reading),
       ];
     }
@@ -1448,14 +1543,22 @@ function chatWorkFold(
   ];
 }
 
-/** Who sent a message of the chat, as its row heads it. */
-function chatSenderOf(message: ManagerChatLine["message"]): ChatSender {
+/** Who sent a message of the chat, as its row heads it, and the page a press on a person's face or name opens where `reading` can name it. */
+function chatSenderOf(
+  message: ManagerChatLine["message"],
+  reading?: TranscriptReading | undefined,
+): ChatSender {
   const manager = message.authorKind === MANAGER_CHAT_AUTHOR.AGENT;
+  const userId = manager ? undefined : (message.authorUserId ?? undefined);
 
   return {
     name: message.authorName,
     manager,
-    userId: manager ? undefined : (message.authorUserId ?? undefined),
+    userId,
+    address:
+      userId === undefined
+        ? undefined
+        : reading?.placeAddress?.({ kind: LINK_DESTINATION.PERSON, userId }),
   };
 }
 
@@ -1515,8 +1618,9 @@ function chatLineItems(
     stamp: undefined,
     joinsAbove: false,
     joinsBelow: false,
-    channel: chatSenderOf(message),
+    channel: chatSenderOf(message, reading),
     thread: threads ? threadMarkOf(line, view) : undefined,
+    edited: message.editedAt !== null,
   } as const;
 
   if (message.authorKind === MANAGER_CHAT_AUTHOR.PERSON) {
@@ -1601,6 +1705,32 @@ function sendingTo(
   return (sending ?? []).filter((line) => line.threadRoot === root);
 }
 
+/** The first message of the chat's top after `newAfter`, skipping the reader's own where `readerId` names them, which New stands over; none where New stands nowhere. */
+function newLineOf(
+  top: readonly ManagerChatLine[],
+  newAfter: number | undefined,
+  readerId: string | undefined,
+): ManagerChatLine | undefined {
+  if (newAfter === undefined) return undefined;
+
+  return top.find(
+    (line) =>
+      line.message.createdAt > newAfter &&
+      (readerId === undefined || line.message.authorUserId !== readerId),
+  );
+}
+
+/** The New rule over a message of the chat, by its id. */
+function newRuleItem(id: string): TranscriptItem {
+  return {
+    place: { ...linePlace(id, id), piece: TRANSCRIPT_PIECE.RULE },
+    depth: 0,
+    kind: TRANSCRIPT_ITEM.RULE,
+    words: CHAT_NEW_WORDS,
+    look: RULE_LOOK.NEW,
+  };
+}
+
 /**
  * A Manager's chat as the list's items, oldest first, as the panel's chat
  * draws it from its rows (`managerChatView`), a team channel: the greeting
@@ -1609,8 +1739,9 @@ function sendingTo(
  * offering its thread with its replies summed under it, with no turn's
  * foot; the reader's messages on their way to it after them; and while the
  * Manager may still write, its working line, the turn under way's work under
- * it once the reader opens it. The transcript is read only for the work its
- * turns did. A thread's replies stand on its own page
+ * it once the reader opens it; and New over the first message after the
+ * reader's mark where one is handed (`newAfter`). The transcript is read
+ * only for the work its turns did. A thread's replies stand on its own page
  * (`managerThreadItems`).
  */
 export function managerChatItems(
@@ -1621,13 +1752,28 @@ export function managerChatItems(
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
   // Note that a turn's journal message stands under the turn's id, which a message's work names.
   const turns = new Map(transcript.map((message) => [message.id, message]));
-  const items = view.top.flatMap((line) => chatLineItems(line, view, turns, read, true));
+
+  const fresh = newLineOf(
+    view.top,
+    reading.newAfter,
+    reading.newOverOwn === true ? undefined : reading.readerId,
+  );
+
+  const items = view.top.flatMap((line) => [
+    ...(line === fresh ? [newRuleItem(line.message.id)] : []),
+    ...chatLineItems(line, view, turns, read, true),
+  ]);
+
   const newest = view.top.at(-1)?.message;
   const going = sendingTo(reading.sending, undefined);
   const sending = chatSendingItems(going, view.sending.channel, reading);
 
+  // Note that the message under New opens a run of its own, under its sender's name, as the panel heads it.
   const runs = new Map<string, ChatRunPlace>([
-    ...view.top.map((line) => [line.message.id, line.place] as const),
+    ...view.top.map(
+      (line) =>
+        [line.message.id, line === fresh ? { ...line.place, opens: true } : line.place] as const,
+    ),
     ...sending.map(({ item, place }) => [item.place.message, place] as const),
   ]);
 

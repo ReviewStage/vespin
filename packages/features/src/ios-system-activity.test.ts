@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { type InboxRow, inboxRowOf } from "./inbox-digest.js";
 import { taskHolder } from "./inbox-list-model.js";
-import {
-  INBOX_MESSAGE_AUTHOR,
-  INBOX_STATUS,
-  INBOX_WIRE_VERSION,
-  type InboxItem,
-} from "./inbox-wire.js";
+import { INBOX_MESSAGE_AUTHOR, INBOX_STATUS, INBOX_WIRE_VERSION } from "./inbox-wire.js";
 import {
   agentActivity,
   desktopHandoffOf,
@@ -62,8 +58,8 @@ function task(id: string, workspaceId: string, more: Partial<TaskSummary> = {}):
   };
 }
 
-function thread(id: string, title: string, words: string): InboxItem {
-  return {
+function thread(id: string, title: string, words: string): InboxRow {
+  return inboxRowOf({
     id,
     agentId: "agent-1",
     key: id,
@@ -77,7 +73,7 @@ function thread(id: string, title: string, words: string): InboxItem {
     ],
     postedAt: 1,
     updatedAt: 1,
-  };
+  });
 }
 
 const INVITES = task("task-1", ACME.id, { number: 42, name: "Resend expired invites" });

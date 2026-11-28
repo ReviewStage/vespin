@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { LIVE_COUNT, liveKeysIn } from "@repo/database/core/live-statement";
+import { LIVE_COUNT, liveKeysBound, liveKeysIn } from "@repo/database/core/live-statement";
 import {
   Database,
   type DatabaseServices,
@@ -7,6 +6,15 @@ import {
   type StoreFailure,
 } from "@repo/database/core/query";
 import { CURRENT_TXID } from "@repo/database/core/txid";
+import { AGENT_SHOWN_NAME, containing } from "@repo/database/models/agent-store";
+import {
+  type AttachmentBody,
+  attachmentBodyFields,
+  attachmentBodyOf,
+  type StoredAttachment,
+  StoredAttachmentSchema,
+  storedAttachmentColumns,
+} from "@repo/database/models/attachment-body";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
   agentReachableBy,
@@ -36,7 +44,7 @@ import {
   userSync,
 } from "@repo/database/sync/tables";
 import type { AccountInboxEntry, AccountInboxTask } from "@repo/features/account-inbox-wire";
-import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import type { ConversationMediaType } from "@repo/features/conversation-picture-wire";
 import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import {
@@ -45,8 +53,16 @@ import {
   inboxAttachmentAddress,
   inboxPictureDestination,
 } from "@repo/features/inbox-attachment-link";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, SCOPE_INBOX_PARTS } from "@repo/features/inbox-live";
 import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_PAGE_SIZE,
+  INBOX_SEARCH_LIMIT,
+  SCOPE_INBOX_PARTS,
+} from "@repo/features/inbox-live";
+import {
+  fieldValueWords,
+  INBOX_ASK,
   INBOX_ASK_STATUS,
   INBOX_ASK_STATUS_MOVES,
   INBOX_BOUNDS,
@@ -73,6 +89,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
+import { searchTokens } from "@repo/features/search-tokens";
 import {
   MP4_TYPE,
   PLAYABLE_VIDEO_TYPE,
@@ -87,6 +104,7 @@ import {
   exists,
   getTableName,
   gte,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -103,6 +121,13 @@ import { type AnyPgColumn, type AnyPgTable, alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { columnAs, liveRowsStatement, outerJoined } from "../live/live-read-binding.js";
+import {
+  type AttachmentUploads,
+  phoneCopyType,
+  putAttachment,
+  withAttachmentUploads,
+} from "../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import type { SyncMoved } from "../sync/live-query.js";
 
 /**
@@ -180,6 +205,13 @@ import type { SyncMoved } from "../sync/live-query.js";
 /** What an inbox store operation answers: an effect over the ambient client, composed into whatever called it. */
 export type InboxStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
+/** A write of the store that keeps files: its bytes are put in the Blob store first, which may fail too. */
+export type InboxFileWriteEffect<A> = Effect.Effect<
+  A,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+>;
+
 /** The agent an item belongs to, as every write of the agent's names it: the task it works on, none for an agent on no task. */
 export interface InboxAgent {
   readonly userId: string;
@@ -225,6 +257,13 @@ export interface InboxImage {
   readonly bytes: Uint8Array;
   /** A recording's MP4 copy, made in the agent's sandbox beside it for a phone; none for a still, or where the sandbox made none. */
   readonly mp4Bytes?: Uint8Array | undefined;
+  /** Where its bytes already stand in the Blob store, its copy for a phone with them, where its sandbox uploaded them; none where the store is to put them. */
+  readonly stored?: StoredAttachment | undefined;
+}
+
+/** A picture its sandbox already uploaded to the Blob store. */
+export interface StoredInboxImage extends InboxImage {
+  readonly stored: StoredAttachment;
 }
 
 /** A picture as the agent's message on a thread carries it: its file's own name, the type its bytes were sniffed to be, and the bytes. */
@@ -232,13 +271,22 @@ export interface InboxNamedImage extends InboxImage {
   readonly name: string;
 }
 
-/** One file of a message's as the store writes it: its own name, its type, and its bytes. */
+/** One file of a message's as the store writes it: its own name, its type, where its bytes stand in the Blob store, whose id it is kept under, and a picture's size as its header states it. */
 interface MessageFile {
-  /** The id it is kept under, where the message's words name it by its address; minted by the database where none is given. */
-  readonly id?: string;
+  readonly name: string;
+  readonly contentType: InboxFileType;
+  readonly stored: StoredAttachment;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/** A file a message carries as a writer hands it in: its own name, its type, its bytes, and where they stand where they are in the store already. */
+interface MessageFileToKeep {
   readonly name: string;
   readonly contentType: InboxFileType;
   readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+  readonly stored?: StoredAttachment | undefined;
 }
 
 /** A file an item's answer carried as a read answers it: the type it traveled as, and the bytes; a picture of a block's reads the same way. */
@@ -771,12 +819,12 @@ const MessageFileWriteSchema = Schema.Struct({
   name: Schema.String,
   position: Schema.Number,
   contentType: inboxFileTypeSchema,
-  bytes: Schema.Uint8Array,
-  mp4Bytes: Schema.optional(Schema.Uint8Array),
+  /** Where its bytes stand in the Blob store, under the id the file is kept under, which the message's words may name it by. */
+  stored: StoredAttachmentSchema,
+  width: Schema.NullOr(Schema.Int),
+  height: Schema.NullOr(Schema.Int),
   now: Schema.Date,
   messageId: Schema.String,
-  /** The id the file is kept under, where the message's words name it; minted by the database where none is given. */
-  id: Schema.optionalKey(Schema.String),
 });
 
 /**
@@ -797,19 +845,60 @@ const insertMessageFiles = SqlSchema.void({
   execute: (files) =>
     Database.use((db) =>
       db.insert(attachment).values(
-        files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
+        files.map(({ now, itemId, messageId, stored, ...file }) => ({
           ...file,
-          ...pictureSizeOf(file.bytes),
-          mp4Bytes: mp4Bytes ?? null,
+          ...storedAttachmentColumns(stored),
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,
-          byteCount: file.bytes.byteLength,
           createdAt: now,
         })),
       ),
     ),
 });
+
+/**
+ * Where a file's bytes are to stand: in the Blob store already, where its
+ * sandbox uploaded them, or put there now, a recording's or a clip's copy
+ * for a phone beside them, under a fresh id.
+ */
+function storedOf(file: {
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+  readonly stored?: StoredAttachment | undefined;
+}): Effect.Effect<StoredAttachment, BlobStoreFailure, AttachmentUploads> {
+  if (file.stored !== undefined) return Effect.succeed(file.stored);
+  const copyType = phoneCopyType(file.contentType);
+
+  const phone =
+    file.mp4Bytes === undefined || copyType === undefined
+      ? undefined
+      : { bytes: file.mp4Bytes, contentType: copyType };
+
+  return putAttachment(file.bytes, file.contentType, phone);
+}
+
+/** A message's file as the store writes it, its bytes put in the Blob store where they are not there already. */
+function messageFileOf(
+  file: MessageFileToKeep,
+): Effect.Effect<MessageFile, BlobStoreFailure, AttachmentUploads> {
+  return Effect.map(storedOf(file), (stored) => ({
+    name: file.name,
+    contentType: file.contentType,
+    stored,
+    ...pictureSizeOf(file.bytes),
+  }));
+}
+
+/** A member's files, as they traveled, as the store writes them, each put in the Blob store. */
+function memberFilesOf(
+  files: readonly AgentAttachment[],
+): Effect.Effect<readonly MessageFile[], BlobStoreFailure, AttachmentUploads> {
+  return Effect.forEach(files, (file) =>
+    messageFileOf({ name: file.name, contentType: file.mediaType, bytes: bytesOf(file) }),
+  );
+}
 
 /** A message's files written as rows of the item's in one statement, each naming the message, at its place among the message's files. */
 function writeMessageFiles(
@@ -1023,7 +1112,7 @@ function attachmentQuery(
 /** The attachment as it was kept: its type and its bytes. */
 const findAttachment = SqlSchema.findOneOption({
   Request: AttachmentAskSchema,
-  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
+  Result: Schema.Struct({ contentType: inboxFileTypeSchema, ...attachmentBodyFields }),
   execute: (ask) => attachmentQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
 });
 
@@ -1032,7 +1121,7 @@ const findServedAttachment = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...AttachmentAskSchema.fields, playable: playableVideoTypeSchema }),
   Result: Schema.Struct({
     contentType: Schema.Union([inboxFileTypeSchema, Schema.Literal(MP4_TYPE)]),
-    bytes: Schema.Uint8Array,
+    ...attachmentBodyFields,
   }),
   execute: ({ playable, ...ask }) => attachmentQuery(ask, playable),
 });
@@ -1155,39 +1244,17 @@ const ScopeSchema = Schema.Struct({
   id: Schema.String,
   /** The one workspace the read keeps to, where a coding agent reads beyond its own threads; none for a member's read, which `itemVisibleTo` bounds. */
   workspaceId: Schema.optionalKey(Schema.String),
-  /** False where the build reading reads no agent on a workspace's machine, whose items are then left out (`itemServed`); every item where unsaid. */
-  workspaceMachines: Schema.optionalKey(Schema.Boolean),
 });
 
 type InboxScope = typeof ScopeSchema.Type;
 
-/**
- * The items the build reading reads: none of an agent on a workspace's
- * machine for one before `HOSTED_API_VERSION` 7 (`workspaceMachines`
- * false), which reads no agent there (`workspace-machine-reads.ts`), so it
- * never lists an item whose agent it would read as not found; every item
- * otherwise.
- */
-function itemServed(workspaceMachines: boolean | undefined): SQL | undefined {
-  if (workspaceMachines !== false) return undefined;
-
-  return notExists(
-    queryBuilder
-      .select({ one: agentTable.id })
-      .from(agentTable)
-      .where(
-        and(eq(agentTable.id, inboxItem.agentId), eq(agentTable.machine, AGENT_MACHINE.WORKSPACE)),
-      ),
-  );
-}
-
 /** The rows a scope names, kept to its workspace where it names one. */
 function inScope(scope: InboxScope) {
-  return and(
-    scopeRows(scope),
-    scope.workspaceId === undefined ? undefined : eq(inboxItem.organizationId, scope.workspaceId),
-    itemServed(scope.workspaceMachines),
-  );
+  const named = scopeRows(scope);
+
+  return scope.workspaceId === undefined
+    ? named
+    : and(named, eq(inboxItem.organizationId, scope.workspaceId));
 }
 
 /** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
@@ -1302,18 +1369,16 @@ const findSettledStamps = SqlSchema.findAll({
 /**
  * The open items on the tasks of the account's workspaces, whichever
  * member's agent posted each, but those that are their agent's turn
- * (`AGENTS_TURN`), and those the build reading reads none of
- * (`itemServed`): the rows the account's read of what waits names. Those
+ * (`AGENTS_TURN`): the rows the account's read of what waits names. Those
  * on no task, a Manager's, are among them only where `taskless`, for a
  * build that reads a null task (`tasklessLiveParam`).
  */
-function accountWaiting({ userId, workspaceMachines }: InboxReader, taskless = false) {
+function accountWaiting(userId: string, taskless = false) {
   return and(
     taskless ? undefined : isNotNull(inboxItem.taskId),
     itemVisibleTo(userId),
     eq(inboxItem.status, INBOX_STATUS.OPEN),
     not(AGENTS_TURN),
-    itemServed(workspaceMachines),
   );
 }
 
@@ -1379,13 +1444,7 @@ function accountUnreadSettled(userId: string) {
   );
 }
 
-/** Who reads the account's inbox, and whether the build they read it in reads an agent on a workspace's machine (`itemServed`), which a read from no build, such as a tool's or a push's, leaves true. */
-const AccountRequestSchema = Schema.Struct({
-  userId: Schema.String,
-  workspaceMachines: Schema.Boolean,
-});
-
-type InboxReader = typeof AccountRequestSchema.Type;
+const AccountRequestSchema = Schema.Struct({ userId: Schema.String });
 
 /** One open item as the account's read carries it, with its agent as its row names it now. */
 const WaitingRowSchema = Schema.Struct({
@@ -1409,7 +1468,7 @@ const WaitingRowSchema = Schema.Struct({
 const findWaitingItems = SqlSchema.findAll({
   Request: AccountRequestSchema,
   Result: WaitingRowSchema,
-  execute: (reader) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
         .select({
@@ -1425,13 +1484,13 @@ const findWaitingItems = SqlSchema.findAll({
           status: inboxItem.status,
           postedAt: inboxItem.postedAt,
           updatedAt: inboxItem.updatedAt,
-          unread: unreadFor(reader.userId),
+          unread: unreadFor(userId),
           asking: ASKING,
-          remindAt: remindAtMillisFor(reader.userId),
+          remindAt: remindAtMillisFor(userId),
         })
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .where(accountWaiting(reader))
+        .where(accountWaiting(userId))
         .orderBy(...LATEST_FIRST),
     ),
 });
@@ -1440,18 +1499,13 @@ const findWaitingItems = SqlSchema.findAll({
 const findWaitingStamps = SqlSchema.findAll({
   Request: AccountRequestSchema,
   Result: StampRowSchema,
-  execute: (reader) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
-        .select(stampColumns(reader.userId))
+        .select(stampColumns(userId))
         .from(inboxItem)
         .leftJoin(task, eq(task.id, inboxItem.taskId))
-        .where(
-          and(
-            or(accountWaiting(reader), accountUnreadSettled(reader.userId)),
-            itemServed(reader.workspaceMachines),
-          ),
-        )
+        .where(or(accountWaiting(userId), accountUnreadSettled(userId)))
         .orderBy(...LATEST_FIRST),
     ),
 });
@@ -1474,9 +1528,9 @@ const LATEST_ITEM = max(inboxItem.updatedAt);
  * changed latest first.
  */
 const findTasksWithItems = SqlSchema.findAll({
-  Request: AccountRequestSchema,
+  Request: Schema.Struct({ userId: Schema.String }),
   Result: TaskItemsRowSchema,
-  execute: ({ userId, workspaceMachines }) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
         .select({
@@ -1486,9 +1540,7 @@ const findTasksWithItems = SqlSchema.findAll({
           updatedAt: LATEST_ITEM,
         })
         .from(inboxItem)
-        .where(
-          and(isNotNull(inboxItem.taskId), itemVisibleTo(userId), itemServed(workspaceMachines)),
-        )
+        .where(and(isNotNull(inboxItem.taskId), itemVisibleTo(userId)))
         .groupBy(inboxItem.taskId)
         .orderBy(desc(LATEST_ITEM), desc(inboxItem.taskId)),
     ),
@@ -1510,11 +1562,7 @@ const findTasksWithItems = SqlSchema.findAll({
  * items' agents and their automations, so its columns read as they did,
  * and takes no row.
  */
-export function accountInboxLiveStatements(
-  userId: string,
-  served: { readonly taskless: boolean; readonly workspaceMachines: boolean },
-) {
-  const reader = { userId, workspaceMachines: served.workspaceMachines };
+export function accountInboxLiveStatements(userId: string, served: { readonly taskless: boolean }) {
   const { parts } = ACCOUNT_INBOX_READ;
 
   const items = liveRowsStatement(
@@ -1546,7 +1594,7 @@ export function accountInboxLiveStatements(
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .where(accountWaiting(reader, served.taskless)),
+        .where(accountWaiting(userId, served.taskless)),
   );
 
   const taskless = liveRowsStatement(
@@ -1600,13 +1648,7 @@ export function accountInboxLiveStatements(
       queryBuilder
         .select(selection)
         .from(inboxItem)
-        .where(
-          and(
-            isNotNull(inboxItem.taskId),
-            itemVisibleTo(userId),
-            itemServed(reader.workspaceMachines),
-          ),
-        )
+        .where(and(isNotNull(inboxItem.taskId), itemVisibleTo(userId)))
         .groupBy(inboxItem.taskId),
   );
 
@@ -1833,47 +1875,162 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
  * from before the inbox's channels were removed decodes a stamp without it
  * as no stamp: the key goes with the minimum supported desktop version.
  * An item on no task is carried only where `taskless`, for a build that
- * reads one, and one of an agent on a workspace's machine only where
- * `workspaceMachines` (`itemServed`).
+ * reads one.
  */
 export function accountItemsLiveStatements(reader: AccountItemsReader, since: Date) {
   return accountItemsOf(reader, sql`true`, gte(inboxItem.updatedAt, since));
 }
 
-/** Whose items an account-wide read carries: the reader's, settled ones since `settledSince`, those on no task only where `taskless`, and those of an agent on a workspace's machine only where `workspaceMachines`. */
+/** Whose items an account-wide read carries: the reader's, settled ones since `settledSince`, and those on no task only where `taskless`. */
 export interface AccountItemsReader {
   readonly userId: string;
-  readonly workspaceMachines: boolean;
   readonly settledSince: Date;
   readonly taskless: boolean;
 }
 
 /**
  * Every item an account-wide read carries for its reader: those the account
- * may read and is served, those on no task only where `taskless`, and the
+ * may read, those on no task only where `taskless`, and the
  * settled ones by `settledSince`, as `accountItemsLiveStatements` reads
  * them; where a whole answer in pages reads its parents
  * (`../live/reads/inbox-items.ts`).
  */
-export function accountItemsCarried({
-  userId,
-  settledSince,
-  taskless,
-  workspaceMachines,
-}: AccountItemsReader): SQL {
+export function accountItemsCarried({ userId, settledSince, taskless }: AccountItemsReader): SQL {
   return (
     and(
       // Every item the account may read, as its read of what waits names them (`accountWaiting`).
       itemVisibleTo(userId),
-      itemServed(workspaceMachines),
       // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
       taskless ? undefined : isNotNull(inboxItem.taskId),
-      // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
-      or(
-        eq(inboxItem.status, INBOX_STATUS.OPEN),
-        sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
-      ),
+      withinWindow(userId, settledSince),
     ) ?? sql`true`
+  );
+}
+
+/**
+ * Whether an account-wide read carries an item by its standing: open, or
+ * settled and moved at or after `settledSince`. Note that a settled item
+ * stands by the latest of its last change, its settling, and the time the
+ * reader's reminder brings it back, since a nod on an old notice settles it
+ * without moving its last change, and a reminder must find it still carried
+ * when it comes back.
+ */
+function withinWindow(userId: string, settledSince: Date): SQL {
+  return (
+    or(
+      eq(inboxItem.status, INBOX_STATUS.OPEN),
+      sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
+    ) ?? sql`true`
+  );
+}
+
+/**
+ * Where a page of the account's older items ends, past which the next
+ * reads: its last item's last change, as the text Postgres reads it as so
+ * an instant keeps its microseconds, and its id, which breaks a tie.
+ */
+export interface OlderItemsPast {
+  readonly updatedAt: string;
+  readonly id: string;
+}
+
+/**
+ * The items an account-wide read leaves out by the clock alone: those the
+ * account may read, on no task only where `taskless`, that its window does
+ * not carry (`withinWindow`), so every item the reader may read stands in
+ * exactly one of the two.
+ */
+function accountOlderItems({ userId, settledSince, taskless }: AccountItemsReader): SQL {
+  return (
+    and(
+      itemVisibleTo(userId),
+      taskless ? undefined : isNotNull(inboxItem.taskId),
+      not(withinWindow(userId, settledSince)),
+    ) ?? sql`false`
+  );
+}
+
+/** The account's older items past `past`, where it names one. */
+function olderItemsPast(reader: AccountItemsReader, past: OlderItemsPast | undefined): SQL {
+  const beyond =
+    past === undefined
+      ? undefined
+      : sql`(${inboxItem.updatedAt}, ${inboxItem.id}) < (${past.updatedAt}::timestamptz, ${past.id}::uuid)`;
+
+  return and(accountOlderItems(reader), beyond) ?? sql`false`;
+}
+
+/** The order a page of older items stands in: the latest changed first, and by id between those changed at one instant. */
+const OLDER_FIRST = [desc(inboxItem.updatedAt), desc(inboxItem.id)] as const;
+
+/** An older item's place in that order, its last change as the text Postgres reads it as. */
+const OLDER_PLACE = {
+  id: inboxItem.id,
+  updatedAt: sql<string>`${inboxItem.updatedAt}::text`.as("updated_at_text"),
+};
+
+/** One page of the account's older items: their ids, in the order they stand, and where it ends, which the page after it reads past; none where it is the last. */
+export interface OlderItemsPage {
+  readonly keys: readonly string[];
+  readonly end: OlderItemsPast | undefined;
+}
+
+/**
+ * The page of the account's older items past `past`, or from the first
+ * where it names none, at most `INBOX_OLDER_PAGE_SIZE` of them. It reads
+ * one more item than a page holds, so a page that leaves more is told by
+ * its length, and ends at its own last item.
+ */
+export function accountOlderItemsPage(
+  reader: AccountItemsReader,
+  past: OlderItemsPast | undefined,
+): InboxStoreEffect<OlderItemsPage> {
+  const read = Database.use((db) =>
+    db
+      .select(OLDER_PLACE)
+      .from(inboxItem)
+      .where(olderItemsPast(reader, past))
+      .orderBy(...OLDER_FIRST)
+      .limit(INBOX_OLDER_PAGE_SIZE + 1),
+  );
+
+  return Effect.map(read, (rows) => {
+    const page = rows.slice(0, INBOX_OLDER_PAGE_SIZE);
+    const last = rows.length > INBOX_OLDER_PAGE_SIZE ? page.at(-1) : undefined;
+
+    return {
+      keys: page.map((row) => row.id),
+      end: last === undefined ? undefined : { updatedAt: last.updatedAt, id: last.id },
+    };
+  });
+}
+
+/**
+ * The older items among `keys` the account may read, as a statement
+ * selects their ids. Note that the keys are a bookmark, never a grant: an
+ * item stands only where the rule that found it still keeps it.
+ */
+export function accountOlderItemsKeyed(reader: AccountItemsReader, keys: readonly string[]): SQL {
+  return sql`${queryBuilder
+    .select({ id: inboxItem.id })
+    .from(inboxItem)
+    .where(and(liveKeysBound(inboxItem.id, keys), accountOlderItems(reader)))}`;
+}
+
+/**
+ * One page of the account's older items (`INBOX_OLDER_READ`), those among
+ * `keys` the account may read (`accountOlderItemsKeyed`): each whole, its
+ * stamp, its row, and the messages and files its thread draws, as the
+ * account-wide read answers an item, so an item the account may not read
+ * reads no row.
+ */
+export function accountOlderItemsPageStatements(
+  reader: AccountItemsReader,
+  keys: readonly string[],
+) {
+  return stampsAndItemsOf(
+    reader.userId,
+    and(liveKeysBound(inboxItem.id, keys), accountOlderItems(reader)),
   );
 }
 
@@ -1882,6 +2039,15 @@ function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL)
   const { userId } = reader;
   const carried = and(accountItemsCarried(reader), narrowed);
 
+  return stampsAndItemsOf(userId, carried, and(carried, changed));
+}
+
+/** The stamps of the items `stamped` names, and those `whole` names whole, with their threads and files, each as the reader reads it. */
+function stampsAndItemsOf(
+  userId: string,
+  stamped: SQL | undefined,
+  whole: SQL | undefined = stamped,
+) {
   const stamps = liveRowsStatement(
     INBOX_ITEMS_READ.parts.stamps,
     {
@@ -1900,10 +2066,10 @@ function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL)
       },
       instants: { updatedAt: inboxItem.updatedAt, ...liveReminderFor(userId) },
     },
-    (selection) => queryBuilder.select(selection).from(inboxItem).where(carried),
+    (selection) => queryBuilder.select(selection).from(inboxItem).where(stamped),
   );
 
-  return { stamps, ...itemsLiveStatements(userId, and(carried, changed)) };
+  return { stamps, ...itemsLiveStatements(userId, whole) };
 }
 
 /** The tables whose moved rows name the tasks and agents whose items they move. */
@@ -1969,9 +2135,204 @@ export function accountItemsPageStatements(
   return accountItemsOf(reader, liveKeysIn(inboxItem.id, keys), gte(inboxItem.updatedAt, since));
 }
 
+/** A jsonb value as an array of its elements, none where it is no array, so a message of another shape reads as offering no words rather than failing the statement. */
+function jsonArray(value: SQL): SQL {
+  return sql`(case when jsonb_typeof(${value}) = 'array' then ${value} else '[]'::jsonb end)`;
+}
+
+/** Whether any text element of a jsonb array holds `pattern`. */
+function anyTextHolding(array: SQL, pattern: string): SQL {
+  return sql`exists (select 1 from jsonb_array_elements_text(${jsonArray(array)}) as said(words) where said.words ilike ${pattern})`;
+}
+
+/** Whether any object of a jsonb array holds `pattern` in what `words` reads of it, which names the object `each`. */
+function anyObjectHolding(array: SQL, words: (each: SQL) => SQL): SQL {
+  return sql`exists (select 1 from jsonb_array_elements(${jsonArray(array)}) as listed(each) where ${words(sql`listed.each`)})`;
+}
+
+/** The words a boolean form value reads as, as `fieldValueWords` writes them, which no jsonb text of it holds. */
+const BOOLEAN_WORDS = { TRUE: fieldValueWords(true), FALSE: fieldValueWords(false) } as const;
+
+/** Whether a form value that is a boolean reads as words holding `pattern` (`BOOLEAN_WORDS`). */
+function booleanValueHolding(value: SQL, pattern: string): SQL {
+  return sql`(jsonb_typeof(${value}) = 'boolean' and (case when ${value} = 'true'::jsonb then ${BOOLEAN_WORDS.TRUE} else ${BOOLEAN_WORDS.FALSE} end) ilike ${pattern})`;
+}
+
+/**
+ * Characters jsonb's text may write escaped, a quote, a backslash, or a
+ * control character, so a word holding one is found in a path but not in the text.
+ */
+const JSON_ESCAPED = /["\\\p{Cc}]/u;
+
+/**
+ * Whether a jsonb value's whole text holds `pattern`, which it does wherever
+ * any path of it does: a cheap guard before its arrays are unpacked. Note
+ * that a token holding a character the text escapes (`JSON_ESCAPED`) takes
+ * no guard, since its text would hold the escape rather than the character.
+ */
+function jsonTextMayHold(value: SQL, token: string, pattern: string): SQL {
+  return JSON_ESCAPED.test(token) ? sql`true` : sql`(${value}::text ilike ${pattern})`;
+}
+
+/**
+ * The condition that the message a statement reads holds `pattern` in what
+ * it says, as the client's search reads a message (`inboxItemWords`): its
+ * text; its ask's words, a decision's options and the trade-off under each,
+ * a to-do's steps, and a form's field labels and a select's options, for an
+ * ask of a type this build knows; and its answer's choices and each value's
+ * label and words. Each is read from its own path in the jsonb, never the
+ * whole of it, so a key, an id, or a type matches nothing.
+ *
+ * Note that each jsonb path is read only once the whole of its jsonb's
+ * text holds the pattern (`jsonTextMayHold`), because a word any path
+ * holds its text holds too, but for a boolean value's words, read apart, and the text is read in a scan where unpacking
+ * every message's arrays is not: some four times as slow on the account
+ * measured.
+ *
+ * Note too that the text and the steps are matched as stored, their markdown
+ * and files' markers included, where the client reads the plain words they
+ * draw (`plainWords`, `markersAsNames`), since SQL cannot read markdown as
+ * the client does and no column keeps the plain words. So a word only a
+ * link's address, a fence's language, or a marker's lead holds is found
+ * too, which costs one of the search's hits and no more, because a client
+ * runs its own search (`searchedItem`) over the hits it joins, and a word a
+ * mark or an escape breaks (`foo**bar**` searched as "foobar") is not.
+ */
+function messageHolding(token: string, pattern: string): SQL {
+  const ask = sql`${inboxMessage.ask}`;
+  const answers = sql`${inboxMessage.answers}`;
+  const askType = sql`(${ask} ->> 'type')`;
+
+  const asked = sql`(
+    (${askType} = ${INBOX_ASK.DECIDE} and ${anyObjectHolding(sql`(${ask} -> 'options')`, (each) => sql`(${each} ->> 'label' ilike ${pattern} or ${each} ->> 'detail' ilike ${pattern})`)})
+    or (${askType} = ${INBOX_ASK.DO} and ${anyTextHolding(sql`(${ask} -> 'steps')`, pattern)})
+    or (${askType} = ${INBOX_ASK.ANSWER} and ${anyObjectHolding(sql`(${ask} -> 'fields')`, (each) => sql`(${each} ->> 'label' ilike ${pattern} or ${anyTextHolding(sql`(${each} -> 'options')`, pattern)})`)})
+  )`;
+
+  const values = sql`(${answers} -> 'values')`;
+
+  // A value that is no boolean is read as its own text, as `fieldValueWords` reads it.
+  const answered = sql`(
+    ${anyTextHolding(sql`(${answers} -> 'choices')`, pattern)}
+    or ${anyObjectHolding(values, (each) => sql`(${each} ->> 'label' ilike ${pattern} or (jsonb_typeof(${each} -> 'value') <> 'boolean' and ${each} -> 'value' #>> '{}' ilike ${pattern}))`)}
+  )`;
+
+  // Note that a boolean's words stand in no jsonb text, so they are read past the guard, and only for a word they can hold.
+  const yesOrNo = Object.values(BOOLEAN_WORDS).some((words) => words.includes(token))
+    ? anyObjectHolding(values, (each) => booleanValueHolding(sql`(${each} -> 'value')`, pattern))
+    : sql`false`;
+
+  return sql`(${inboxMessage.text} ilike ${pattern} or (${jsonTextMayHold(ask, token, pattern)} and ${asked}) or (${jsonTextMayHold(answers, token, pattern)} and ${answered}) or ${yesOrNo})`;
+}
+
+/**
+ * The condition that the item a statement reads holds `token` in its
+ * title, in a message of its thread (`messageHolding`), or in its holder's
+ * name: its task's, or, for an item on no task, the name its agent is shown
+ * by, as the client's search reads an item's words beside its holder's
+ * (`inboxItemWords`, `holderName`). Note that every message of the thread is
+ * read, where a client holds only the messages its thread draws.
+ */
+function itemHolding(token: string): SQL | undefined {
+  const pattern = containing(token);
+
+  const inThread = exists(
+    queryBuilder
+      .select({ one: inboxMessage.id })
+      .from(inboxMessage)
+      .where(and(eq(inboxMessage.itemId, inboxItem.id), messageHolding(token, pattern))),
+  );
+
+  const inTaskName = exists(
+    queryBuilder
+      .select({ one: task.id })
+      .from(task)
+      .where(and(eq(task.id, inboxItem.taskId), ilike(task.name, pattern))),
+  );
+
+  const inAgentName = and(
+    isNull(inboxItem.taskId),
+    exists(
+      queryBuilder
+        .select({ one: agentTable.id })
+        .from(agentTable)
+        .where(and(eq(agentTable.id, inboxItem.agentId), ilike(AGENT_SHOWN_NAME, pattern))),
+    ),
+  );
+
+  return or(ilike(inboxItem.title, pattern), inThread, inTaskName, inAgentName);
+}
+
+/** Whose items an Inbox search finds: the reader's, those on no task only where `taskless`, as `AccountItemsReader` names them, of any age. */
+export interface InboxSearchReader {
+  readonly userId: string;
+  readonly taskless: boolean;
+}
+
+/**
+ * The inbox items a search's `query` finds, by id, the latest changed first:
+ * every item the account may read (`itemVisibleTo`), those on no task only
+ * where `taskless`, of any age, every word of the query (`searchTokens`, as
+ * the client splits one) held by its title, its thread, or its holder's name
+ * (`itemHolding`), each word by any of them, at most `INBOX_SEARCH_LIMIT`. A
+ * query of no words finds none, and reads nothing. Note that the words are
+ * bound as parameters, never written into the statement's text, so a span
+ * naming the statement names no word searched; and that the text is matched
+ * by a scan of the reader's items' messages, with no index of its own, which
+ * is why it is read once, by the read's `serve`, rather than within each of
+ * its parts' statements.
+ */
+export function findInboxSearchHits(
+  { userId, taskless }: InboxSearchReader,
+  query: string,
+): InboxStoreEffect<readonly string[]> {
+  const tokens = searchTokens(query);
+
+  if (tokens.length === 0) return Effect.succeed([]);
+
+  return Effect.map(findSearchHits({ userId, taskless, tokens }), (rows) =>
+    rows.map((row) => row.id),
+  );
+}
+
+const findSearchHits = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    taskless: Schema.Boolean,
+    tokens: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, taskless, tokens }) =>
+    Database.use((db) =>
+      db
+        .select({ id: inboxItem.id })
+        .from(inboxItem)
+        .where(
+          and(
+            itemVisibleTo(userId),
+            taskless ? undefined : isNotNull(inboxItem.taskId),
+            ...tokens.map(itemHolding),
+          ),
+        )
+        .orderBy(...LATEST_FIRST)
+        .limit(INBOX_SEARCH_LIMIT),
+    ),
+});
+
+/**
+ * The inbox items a search found (`findInboxSearchHits`), written for a
+ * live read as the account's inbox items are (`accountItemsLiveStatements`):
+ * each with its stamp, and whole, with its thread and files, read again on
+ * the rule of who may read an item, so an id the account does not reach is
+ * never answered.
+ */
+export function inboxSearchStatements(userId: string, found: readonly string[]) {
+  return stampsAndItemsOf(userId, and(itemVisibleTo(userId), liveKeysBound(inboxItem.id, found)));
+}
+
 /** One plan's inbox written for Neon Realtime, as `taskInboxItems` reads it. */
-export function taskInboxLiveStatements(userId: string, taskId: string, workspaceMachines = true) {
-  return scopeLiveStatements({ userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines });
+export function taskInboxLiveStatements(userId: string, taskId: string) {
+  return scopeLiveStatements({ userId, scope: INBOX_SCOPE.TASK, id: taskId });
 }
 
 /** One agent's inbox written for Neon Realtime, as `memberAgentInboxItems` reads it. */
@@ -2456,28 +2817,21 @@ interface PostView {
   readonly needsReply: boolean;
 }
 
-/** One picture a post keeps as a file of its message: the id its words or its ask's options name it by, its file's own name, its type, and its bytes. */
-export interface PostPicture extends InboxNamedImage {
-  readonly id: string;
-}
-
-/** One file a post keeps as a file of its message, a picture or a PDF: the id it is kept under, its file's own name, its type, its bytes, and a recording's MP4 copy. */
-interface PostFile {
-  readonly id: string;
+/** One picture a post keeps as a file of its message, already in the Blob store under the id its ask's options name it by: its file's own name, its type, and its bytes. */
+export interface PostPicture extends StoredInboxImage {
   readonly name: string;
-  readonly contentType: InboxFileType;
-  readonly bytes: Uint8Array;
-  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /**
  * One file the agent's words name by its path in the agent's sandbox, as
  * the caller read it there: the path as written, its file's own name, its
- * type, and its bytes. A picture is drawn where the words name it; a PDF
- * the caller has cut out of the words, so its path names nothing there,
- * and it is kept as a file of the message alone.
+ * type, and its bytes, in the store already where its sandbox uploaded
+ * them, or a picture already kept, copied, whose bytes the store puts. A
+ * picture is drawn where the words name it; a PDF the caller has cut out of
+ * the words, so its path names nothing there, and it is kept as a file of
+ * the message alone.
  */
-export interface InboxBodyPicture extends Omit<PostFile, "id"> {
+export interface InboxBodyPicture extends MessageFileToKeep {
   readonly path: string;
 }
 
@@ -2489,7 +2843,7 @@ interface PostWrite {
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
   /** The message's files: the files its words name, then those its ask's options carry. */
-  readonly pictures: readonly PostFile[];
+  readonly pictures: readonly MessageFile[];
   readonly addresseeId: string | null;
 }
 
@@ -2515,23 +2869,36 @@ function pictureAddressOf(
   return (pictureId) => inboxAttachmentAddress(place, pictureId, workspace.workspaceStep);
 }
 
-/** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under an id minted for it, and the id of the first each path names. */
+/** A picture a post's words name by its path, as the store writes it: in the Blob store, under the id it was stored under. */
+interface PathFile extends MessageFile {
+  readonly path: string;
+}
+
+/** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under the id it was stored under, and the id of the first each path names. */
 interface PicturesByPath {
-  readonly kept: readonly PostFile[];
+  readonly kept: readonly MessageFile[];
   readonly idOf: (path: string) => string | undefined;
 }
 
-/** The pictures handed in, each under an id minted for it, found by the path the agent's words name it by. */
-function picturesByPath(pictures: readonly InboxBodyPicture[]): PicturesByPath {
-  const kept = pictures.map(({ path: _path, ...picture }) => ({ ...picture, id: randomUUID() }));
+/** The pictures handed in, each under the id it was stored under, found by the path the agent's words name it by. */
+function picturesByPath(pictures: readonly PathFile[]): PicturesByPath {
+  const kept = pictures.map(({ path: _path, ...picture }) => picture);
   const ids = new Map<string, string>();
-  pictures.forEach((picture, at) => {
-    const id = kept[at]?.id;
 
-    if (id !== undefined && !ids.has(picture.path)) ids.set(picture.path, id);
-  });
+  for (const picture of pictures) {
+    if (!ids.has(picture.path)) ids.set(picture.path, picture.stored.id);
+  }
 
   return { kept, idOf: (path) => ids.get(path) };
+}
+
+/** The pictures a post's words name, each put in the Blob store where it is not there already. */
+function pathFilesOf(
+  pictures: readonly InboxBodyPicture[],
+): Effect.Effect<readonly PathFile[], BlobStoreFailure, AttachmentUploads> {
+  return Effect.forEach(pictures, (picture) =>
+    Effect.map(messageFileOf(picture), (file) => ({ ...file, path: picture.path })),
+  );
 }
 
 /**
@@ -2596,17 +2963,13 @@ function keepPost(
     if (ask !== null) yield* holdAsk({ itemId, messageId: message.id });
     yield* writeMessageFiles(
       post.pictures.map((picture, position) => ({
-        id: picture.id,
+        ...picture,
         userId: agent.userId,
         taskId: agent.taskId,
         organizationId,
         itemId,
         messageId: message.id,
-        name: picture.name,
         position,
-        contentType: picture.contentType,
-        bytes: picture.bytes,
-        mp4Bytes: picture.mp4Bytes,
         now,
       })),
     );
@@ -2688,7 +3051,7 @@ function followUp(
   workspace: LockedWorkspace,
   itemId: string,
   post: InboxThreadPost,
-  pictures: readonly InboxBodyPicture[],
+  pictures: readonly PathFile[],
 ): InboxStoreEffect<InboxItem> {
   return Effect.suspend(() => {
     const { kept, idOf } = picturesByPath(pictures);
@@ -2734,8 +3097,25 @@ function followUp(
 export function postInboxThread(
   agent: InboxAgent,
   post: InboxThreadPost,
-  pictures: readonly InboxBodyPicture[] = [],
-  optionFiles: readonly PostPicture[] = [],
+  bodyPictures: readonly InboxBodyPicture[] = [],
+  optionPictures: readonly PostPicture[] = [],
+): InboxFileWriteEffect<Result.Result<InboxItem, InboxPostRefusal>> {
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const pictures = yield* pathFilesOf(bodyPictures);
+      const optionFiles = yield* Effect.forEach(optionPictures, messageFileOf);
+
+      return yield* postThreadWrite(agent, post, pictures, optionFiles);
+    }),
+  );
+}
+
+/** A post written, as `postInboxThread` writes one, its files already in the Blob store. */
+function postThreadWrite(
+  agent: InboxAgent,
+  post: InboxThreadPost,
+  pictures: readonly PathFile[],
+  optionFiles: readonly MessageFile[],
 ): InboxStoreEffect<Result.Result<InboxItem, InboxPostRefusal>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2780,13 +3160,18 @@ export function postInboxThread(
   );
 }
 
-/** The picture or the answer's file, where it is the item's: its type and its bytes; nothing where the account reaches no such item or the item carries no such attachment. */
+/** The picture or the answer's file, where it is the item's: its type and where its bytes stand; nothing where the account reaches no such item or the item carries no such attachment. */
 export function readInboxAttachment(
   userId: string,
   itemId: string,
   attachmentId: string,
-): InboxStoreEffect<Option.Option<InboxFile>> {
-  return findAttachment({ userId, itemId, attachmentId });
+): InboxStoreEffect<
+  Option.Option<{ readonly contentType: InboxFile["contentType"]; readonly body: AttachmentBody }>
+> {
+  return Effect.map(
+    findAttachment({ userId, itemId, attachmentId }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /** The attachment as `readInboxAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
@@ -2795,8 +3180,13 @@ export function readServedInboxAttachment(
   itemId: string,
   attachmentId: string,
   playable: PlayableVideoType,
-): InboxStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
-  return findServedAttachment({ userId, itemId, attachmentId, playable });
+): InboxStoreEffect<
+  Option.Option<{ readonly contentType: string; readonly body: AttachmentBody }>
+> {
+  return Effect.map(
+    findServedAttachment({ userId, itemId, attachmentId, playable }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /**
@@ -2873,10 +3263,9 @@ export function agentInboxItems(
 export function taskInboxItems(
   userId: string,
   taskId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly InboxItem[]> {
   return scopeItems(
-    { userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines },
+    { userId, scope: INBOX_SCOPE.TASK, id: taskId },
     INBOX_BOUNDS.MAX_ITEMS_READ,
     userId,
   );
@@ -2948,9 +3337,8 @@ export function memberAgentInboxStamps(
 export function taskInboxStamps(
   userId: string,
   taskId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly InboxStamp[]> {
-  return scopeStamps({ userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines });
+  return scopeStamps({ userId, scope: INBOX_SCOPE.TASK, id: taskId });
 }
 
 /** Where the scope's items stand: every open one, then the latest settled, as `scopeItems` reads them, the two at once. */
@@ -3266,6 +3654,21 @@ export function closeInboxItemAsMember(
     text: "",
     files: [],
   },
+): InboxFileWriteEffect<Option.Option<InboxItemWritten>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(note.files), (files) =>
+      closeAsMember(userId, itemId, revision, closeKey, { text: note.text, files }),
+    ),
+  );
+}
+
+/** A member's close written, as `closeInboxItemAsMember` writes one, its note's files already in the Blob store. */
+function closeAsMember(
+  userId: string,
+  itemId: string,
+  revision: number,
+  closeKey: string,
+  note: { readonly text: string; readonly files: readonly MessageFile[] },
 ): InboxStoreEffect<Option.Option<InboxItemWritten>> {
   const noted = note.text !== "" || note.files.length > 0;
 
@@ -3423,7 +3826,7 @@ interface AnswerWrite {
   readonly itemId: string;
   readonly answerKey: string;
   readonly words: string;
-  readonly files: readonly AgentAttachment[];
+  readonly files: readonly MessageFile[];
   /** The message whose ask the answer settles. */
   readonly askId: string;
   /** The answer to the ask as a member's message carries it. */
@@ -3459,7 +3862,7 @@ function keepMemberMessage(write: {
   readonly itemId: string;
   readonly clientKey: string;
   readonly words: string;
-  readonly files: readonly AgentAttachment[];
+  readonly files: readonly MessageFile[];
   readonly answers: InboxAnswers | null;
   readonly now: Date;
 }): InboxStoreEffect<void> {
@@ -3482,13 +3885,11 @@ function keepMemberMessage(write: {
     const scope = yield* itemScope({ itemId });
     yield* writeMessageFiles(
       write.files.map((file, position) => ({
+        ...file,
         ...scope,
         itemId,
         messageId: written.value.id,
-        name: file.name,
         position,
-        contentType: file.mediaType,
-        bytes: bytesOf(file),
         now,
       })),
     );
@@ -3603,9 +4004,26 @@ export function answerInboxAsk(
     readonly clientKey: string;
     readonly files?: readonly AgentAttachment[] | undefined;
   },
-): InboxStoreEffect<Option.Option<InboxAskAnswered>> {
-  const files = sent.files ?? [];
+): InboxFileWriteEffect<Option.Option<InboxAskAnswered>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(sent.files ?? []), (files) =>
+      answerAsk(userId, itemId, sent, files),
+    ),
+  );
+}
 
+/** A member's answer written, as `answerInboxAsk` writes one, its files already in the Blob store. */
+function answerAsk(
+  userId: string,
+  itemId: string,
+  sent: {
+    readonly answers: InboxAnswers;
+    readonly text: string;
+    readonly clientKey: string;
+    readonly files?: readonly AgentAttachment[] | undefined;
+  },
+  files: readonly MessageFile[],
+): InboxStoreEffect<Option.Option<InboxAskAnswered>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
@@ -3630,7 +4048,7 @@ export function answerInboxAsk(
             sameMessage(keyed.value, {
               userId,
               text: sent.text,
-              files: files.map((file) => ({ name: file.name, contentType: file.mediaType })),
+              files,
             });
 
           return resent
@@ -3653,7 +4071,7 @@ export function answerInboxAsk(
         const refusal =
           ask === undefined
             ? "The ask is one this version does not know."
-            : inboxAnswersRefusal(ask, sent.answers, sent.text, files);
+            : inboxAnswersRefusal(ask, sent.answers, sent.text, sent.files ?? []);
 
         if (refusal !== undefined) return standing(INBOX_ASK_ANSWER.REFUSED, refusal);
         const now = yield* DateTime.nowAsDate;
@@ -3919,23 +4337,24 @@ export function postInboxMessage(
     /** The revision of the notice the member was shown, which the message settles where it still stands there. */
     readonly revision?: number | undefined;
   },
-): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
+): InboxFileWriteEffect<Option.Option<InboxMessageWritten>> {
   const { clientKey, revision } = message;
 
-  return Effect.flatMap(findItem({ userId, itemId }), (found) =>
-    Option.isNone(found)
-      ? Effect.succeed(Option.none())
-      : writeInboxMessage(
-          userId,
-          itemId,
-          { author: INBOX_MESSAGE_AUTHOR.MEMBER, userId, clientKey, revision },
-          message.text,
-          (message.files ?? []).map((file) => ({
-            name: file.name,
-            contentType: file.mediaType,
-            bytes: bytesOf(file),
-          })),
-        ),
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const found = yield* findItem({ userId, itemId });
+
+      if (Option.isNone(found)) return Option.none();
+      const files = yield* memberFilesOf(message.files ?? []);
+
+      return yield* writeInboxMessage(
+        userId,
+        itemId,
+        { author: INBOX_MESSAGE_AUTHOR.MEMBER, userId, clientKey, revision },
+        message.text,
+        files,
+      );
+    }),
   );
 }
 
@@ -4113,6 +4532,20 @@ export function startInboxThread(
     readonly clientKey: string;
     readonly files?: readonly AgentAttachment[] | undefined;
   },
+): InboxFileWriteEffect<Option.Option<InboxMessageWritten>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(thread.files ?? []), (files) =>
+      startThread(userId, agent, thread, files),
+    ),
+  );
+}
+
+/** A member's thread started, as `startInboxThread` starts one, its files already in the Blob store. */
+function startThread(
+  userId: string,
+  agent: InboxAgent,
+  thread: { readonly title: string; readonly text: string; readonly clientKey: string },
+  files: readonly MessageFile[],
 ): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
   const { title, text, clientKey } = thread;
 
@@ -4125,12 +4558,6 @@ export function startInboxThread(
         const locked = yield* lockAgent(agent);
 
         if (Option.isNone(locked)) return Option.none();
-
-        const files = (thread.files ?? []).map((file) => ({
-          name: file.name,
-          contentType: file.mediaType,
-          bytes: bytesOf(file),
-        }));
 
         const started = yield* findStartedThread({ userId, agentId: agent.agentId, clientKey });
 
@@ -4268,20 +4695,24 @@ export function replyInboxItem(
   key: string,
   text: string,
   pictures: readonly InboxNamedImage[] = [],
-): InboxStoreEffect<Option.Option<InboxItem>> {
-  return Effect.flatMap(findAgentItem({ ...agent, key }), (found) =>
-    Option.isNone(found)
-      ? Effect.succeed(Option.none())
-      : Effect.map(
-          writeInboxMessage(
-            agent.userId,
-            found.value.id,
-            { author: INBOX_MESSAGE_AUTHOR.AGENT, addresseeId: null },
-            text,
-            pictures,
-          ),
-          Option.map((written) => written.item),
-        ),
+): InboxFileWriteEffect<Option.Option<InboxItem>> {
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const found = yield* findAgentItem({ ...agent, key });
+
+      if (Option.isNone(found)) return Option.none();
+      const files = yield* Effect.forEach(pictures, messageFileOf);
+
+      const written = yield* writeInboxMessage(
+        agent.userId,
+        found.value.id,
+        { author: INBOX_MESSAGE_AUTHOR.AGENT, addresseeId: null },
+        text,
+        files,
+      );
+
+      return Option.map(written, (each) => each.item);
+    }),
   );
 }
 
@@ -4323,9 +4754,8 @@ type AccountWaitingRow = AccountInboxEntry & Pick<InboxStamp, "status">;
  */
 export function accountWaitingItems(
   userId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly AccountWaitingRow[]> {
-  return Effect.map(findWaitingItems({ userId, workspaceMachines }), (rows) =>
+  return Effect.map(findWaitingItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
       // Note that the reminder is carried under `snoozedUntil` too, as `liveReminderFor` carries it.
@@ -4338,11 +4768,8 @@ export function accountWaitingItems(
 }
 
 /** Where each item `accountWaitingItems` reads stands, the same items and none of their words: what a held read of the account compares between looks. */
-export function accountWaitingStamps(
-  userId: string,
-  workspaceMachines = true,
-): InboxStoreEffect<readonly InboxStamp[]> {
-  return Effect.map(findWaitingStamps({ userId, workspaceMachines }), (rows) =>
+export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly InboxStamp[]> {
+  return Effect.map(findWaitingStamps({ userId }), (rows) =>
     rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),
   );
 }
@@ -4404,11 +4831,8 @@ export function inboxItemWaitsOn(itemId: string): InboxStoreEffect<Option.Option
  * changed, the task whose item changed latest first: what the desktop's
  * Inbox lists.
  */
-export function accountInboxTasks(
-  userId: string,
-  workspaceMachines = true,
-): InboxStoreEffect<readonly AccountInboxTask[]> {
-  return Effect.map(findTasksWithItems({ userId, workspaceMachines }), (rows) =>
+export function accountInboxTasks(userId: string): InboxStoreEffect<readonly AccountInboxTask[]> {
+  return Effect.map(findTasksWithItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
       taskId: taskId,

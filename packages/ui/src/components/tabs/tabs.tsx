@@ -22,7 +22,6 @@ import { cn } from "../../cn.js";
 import { cssCustomProperties } from "../../css.js";
 import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
-import { PRESS_PULSE, pulseOnPress, pulsePress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
@@ -71,7 +70,7 @@ import { type TabMove, useTabDrag } from "./use-tab-drag.js";
  * tab's hint, or in the card a tab with more to say hangs in its hint's
  * place. Past holding every tab, the strip scrolls along with no bar drawn,
  * a wheel turned up and down running it sideways, with the chosen tab pinned
- * at whichever edge it would pass and a fade where tabs go on. All of that
+ * at whichever edge it would pass. All of that
  * is the stylesheet's (tabs.css): the strip measures nothing, and asks only
  * for its tabs' count, as `--ui-tab-count`, so it may ask for room for
  * every tab at its widest. A narrow tab other than the chosen one stands as
@@ -134,7 +133,7 @@ const WHEEL_LINE = 16;
 /** What an unread tab says in its hint and to a reader beyond its label. */
 const UNREAD_TAB_NOTE = "New result";
 
-/** The ground a strip stands on, which its fades and its pinned tab paint over the tabs passing beneath. */
+/** The ground a strip stands on, which its pinned tab paints over the tabs passing beneath it. */
 export const TABS_GROUND = {
   /** A side panel's well. */
   WELL: "well",
@@ -559,11 +558,7 @@ export function Tab({
       aria-controls={controls}
       aria-description={unread ? UNREAD_TAB_NOTE : undefined}
       {...rovingItem()}
-      onClick={(event) => {
-        // Note that the tab around the button is the pill a press is seen on.
-        pulsePress(event.currentTarget.closest<HTMLElement>(".ui-tab") ?? event.currentTarget);
-        onSelect();
-      }}
+      onClick={onSelect}
       {...contextMenu}
       onKeyDown={(event) => {
         if (onMenu !== undefined && opensMenu(event)) {
@@ -723,12 +718,11 @@ export function TabCard({
           ? (event) => {
               if (event.button !== 0) return;
               event.preventDefault();
-              pulsePress(event.currentTarget, PRESS_PULSE.QUIET);
               onPick();
             }
           : undefined
       }
-      onClick={pickOnPress ? undefined : pulseOnPress(onPick, PRESS_PULSE.QUIET)}
+      onClick={pickOnPress ? undefined : onPick}
       // Note that a card handed the focus is picked by Return or Space, as a press on it picks it.
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -752,7 +746,7 @@ export function TabCard({
           <ReplayWords unmasked={labelReplayUnmasked}>{label}</ReplayWords>
         </Text>
       </div>
-      <div className="ui-tab-card-detail flex items-center gap-1 whitespace-nowrap [&>.ui-text]:min-w-0 [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
+      <div className="ui-tab-card-detail flex items-center gap-icon-gap-compact whitespace-nowrap [&>.ui-text]:min-w-0 [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
         {detail === undefined ? null : (
           <>
             {detailIcon}

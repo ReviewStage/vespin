@@ -9,12 +9,12 @@ import {
   type AgentUsage,
 } from "@repo/features/agent-wire";
 import { type CatalogModel, MODEL_PROVIDER, type ModelChoice } from "@repo/features/models-wire";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeAppPlatform } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { useAgentPermissionMode } from "./agent-approvals.js";
 import { AgentModelChip } from "./agent-model-chip.js";

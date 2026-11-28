@@ -290,6 +290,7 @@ function namingLines(
     `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${things}.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
     "Tag a person by their mention link, never a bare `@Name`.",
+    "Write a date or time to people as a date chip, `[@<label>](mention://date/<ISO>)`, with its offset for a time (`mention://date/2026-11-24T20:49-05:00`) and a range as `<start>/<end>`, never as typed UTC.",
   ];
 }
 
@@ -472,7 +473,7 @@ export function managerInstructions(place: ManagerPlace, posts: boolean): string
         ]
       : []),
     `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
-    `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
+    `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers; make another Manager (\`${AGENT_TOOL.CREATE_MANAGER}\`) only when a member asks you for one.`,
     `Keep a memory for yourself alone (\`scope: "manager"\`) when it bears only on how you work or on the people you manage; keep it for the workspace when any agent would need it.`,
   ].join("\n");
 }

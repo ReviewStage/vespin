@@ -1,4 +1,5 @@
 import { LEGACY_APP_WORD, type WireBoundaryInput } from "@repo/wire";
+import type { ProviderMetadata } from "ai";
 import { Schema as EffectSchema, Option } from "effect";
 import { AUDIO_TYPE, type AudioType } from "./audio-signature.js";
 import { INBOX_IMAGE_TYPE } from "./inbox-wire.js";
@@ -128,6 +129,47 @@ export type KeptPicture = typeof keptPictureSchema.Type;
  * (`packages/database/src/models/attached-file-parts.ts`).
  */
 export const KEPT_IMAGE_PROVIDER_KEY = "app";
+
+/**
+ * A settled tool part's `resultProviderMetadata` with the pictures its
+ * answer carried, which the agent's runner kept beside the transcript apart
+ * from its events, named under the same key beside what it already names
+ * there (an out-of-memory mark, `out-of-memory-wire.ts`). Note that the
+ * answer's own text keeps its stand-in for each, so a client built before
+ * them reads the part as it always did.
+ */
+export function withKeptPictures(
+  metadata: ProviderMetadata | undefined,
+  pictures: readonly KeptPicture[],
+): ProviderMetadata {
+  return {
+    ...metadata,
+    [KEPT_IMAGE_PROVIDER_KEY]: {
+      ...metadata?.[KEPT_IMAGE_PROVIDER_KEY],
+      pictures: pictures.map((picture) => ({ ...picture })),
+    },
+  };
+}
+
+const keptPicturesMetadataSchema = EffectSchema.Struct({
+  [KEPT_IMAGE_PROVIDER_KEY]: EffectSchema.Struct({
+    pictures: EffectSchema.Array(keptPictureSchema),
+  }),
+});
+
+const readKeptPicturesMetadata = EffectSchema.decodeUnknownOption(keptPicturesMetadataSchema);
+
+/** The pictures a settled tool part's `resultProviderMetadata` names its runner kept (`withKeptPictures`); none where it names none. */
+export function keptPicturesOf(
+  resultProviderMetadata: WireBoundaryInput,
+): readonly KeptPicture[] | undefined {
+  return Option.getOrUndefined(
+    Option.map(
+      readKeptPicturesMetadata(resultProviderMetadata),
+      (read) => read[KEPT_IMAGE_PROVIDER_KEY].pictures,
+    ),
+  );
+}
 
 /** What an image file part names of its picture under that key: the attachment it was kept as, or why it was not kept. */
 const keptImageSchema = EffectSchema.Union([

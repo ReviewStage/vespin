@@ -1,12 +1,12 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { deleteTaskSectionIn, writeTaskSections } from "@repo/database/models/task-section-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { emojiSchema } from "@repo/features/emoji-wire";
 import {
   TASK_SECTION_BOUNDS,
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
   type TaskSection,
-  taskSectionEmojiSchema,
   taskSectionTitleSchema,
 } from "@repo/features/task-section-wire";
 import { describeWire } from "@repo/wire/effect";
@@ -68,7 +68,7 @@ const CREATE_SECTION_INPUT = Schema.Struct({
   ),
   emoji: Schema.optionalKey(
     describeWire(
-      taskSectionEmojiSchema,
+      emojiSchema,
       "One emoji the section wears beside its title; leave it out for none.",
     ),
   ),

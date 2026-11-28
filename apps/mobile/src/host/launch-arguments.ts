@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-pillField true`, which opens on the pill field's scratch page, `-streamTurn <ms>`, which has a fixture run's release Manager stream a turn, a change every that many milliseconds, while its page follows it, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-busyRender <ms>`, which has a fixture run's agent page take that long over each render (`rig-busy-render.ts`), `-pillField true`, which opens on the pill field's scratch page, `-streamTurn <ms>`, which has a fixture run's release Manager stream a turn, a change every that many milliseconds, while its page follows it, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -27,9 +27,11 @@ const LAUNCH_ARGUMENT = {
   UPDATE_NEEDED: "updateNeeded",
   REFUSE_WRITES: "refuseWrites",
   BUSY_ACCOUNT: "busyAccount",
+  BUSY_RENDER: "busyRender",
   PILL_FIELD: "pillField",
   STREAM_TURN: "streamTurn",
   SENTRY_TEST: "sentryTest",
+  MEDIA_ORIGIN: "mediaOrigin",
 } as const;
 
 /** The test reports `-sentryTest` may ask for: a handled JavaScript error, or a native crash. */
@@ -122,6 +124,14 @@ export function launchBusyAccount(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.BUSY_ACCOUNT);
 }
 
+/** How long each render of a fixture run's agent page takes, in milliseconds, as `-busyRender <ms>` asks (`maestro/rig/manager-send-once.yaml`); none in a live run, and where none is named. */
+export function launchBusyRender(): number | undefined {
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.BUSY_RENDER);
+  const ms = Predicate.isNumber(named) ? named : Number(named);
+
+  return launchFixtureProfile() !== undefined && Number.isInteger(ms) && ms > 0 ? ms : undefined;
+}
+
 /** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`). */
 export function launchUpdateNeeded(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.UPDATE_NEEDED);
@@ -144,6 +154,17 @@ export function launchStreamTurn(): number | undefined {
 /** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`). */
 export function launchRefusesWrites(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.REFUSE_WRITES);
+}
+
+/** Where a fixture run's agent recording is served over HTTP, as `-mediaOrigin <http://127.0.0.1:port>` names it on the rig, so its player takes the remote path a device's does; none where the launch names none, or a word that is no loopback HTTP origin. */
+export function launchMediaOrigin(): string | undefined {
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.MEDIA_ORIGIN);
+
+  if (!Predicate.isString(named) || !URL.canParse(named)) return undefined;
+  const url = new URL(named);
+  const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+
+  return loopback && url.protocol === "http:" ? url.origin : undefined;
 }
 
 /** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none for a word that is no test. */

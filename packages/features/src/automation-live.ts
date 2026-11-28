@@ -3,8 +3,8 @@ import { agentStatusAt, type StatusTurn, statusClockEdge } from "./agent-status.
 import {
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentRunsOnRequest,
   agentFailureSchema,
-  type PersonalRunsOn,
 } from "./agent-wire.js";
 import {
   AUTOMATION_TARGET,
@@ -111,6 +111,8 @@ const automationLiveRowSchema = EffectSchema.Struct({
   runsOnMachine: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   runsOnDeviceId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   createdAt: countedNumber,
+  /** When it was last changed, never by a run; absent from a service before it. */
+  updatedAt: EffectSchema.optionalKey(countedNumber),
   mine: EffectSchema.Boolean,
   runId: EffectSchema.NullOr(EffectSchema.String),
   runFiring: EffectSchema.NullOr(automationFiringSchema),
@@ -309,7 +311,7 @@ export function withWebhookUrl(
 function runsOnOfRow(row: {
   readonly runsOnMachine?: string | null;
   readonly runsOnDeviceId?: string | null;
-}): PersonalRunsOn | null {
+}): AgentRunsOnRequest | null {
   if (row.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
 
   if (
@@ -348,6 +350,7 @@ export function automationsOfLiveRows(
       nextRunAt: row.nextRunAt,
       lastRun: lastRunOf(row, now),
       createdAt: row.createdAt,
+      ...(row.updatedAt === undefined ? undefined : { updatedAt: row.updatedAt }),
       scope: row.scope,
       repositories:
         row.repositories.length === 0 && row.taskRepository !== null

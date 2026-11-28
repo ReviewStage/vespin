@@ -25,7 +25,8 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 # A decide: the options as a card of rows, the recommended tagged; a
 # pick lights Send, which sends it with the note typed, and the thread reads
-# it answered at once: the card gone, and the answer's stamp under "You".
+# it answered at once: the card standing at the head of the reply under
+# "You", its pick checked and taking no press, as the panel's answered card.
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -38,9 +39,11 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-decide-picked
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "Chose Both"
+    visible: "Answered"
     timeout: 5000
-- assertNotVisible: "The member who sent it"
+- assertVisible: "Both, Recommended.*"
+- assertVisible: "The member who sent it"
+- assertNotVisible: "Add a note"
 - waitForAnimationToEnd
 - takeScreenshot: answer-decide-sent
 
@@ -101,8 +104,9 @@ appId: dev.vespin.ios
     notVisible: "Not delivered.*"
     timeout: 5000
 
-# An answer's fields: a select's menu with its recommended option said so, a
-# toggle, and a number on the decimal pad; Send submits what was filled.
+# An answer's fields: a select's options as rows, its recommended one tagged
+# and none picked, a yes or no's checkbox, and a number on the decimal pad;
+# Send submits what was filled.
 - launchApp:
     clearState: true
     arguments:
@@ -114,12 +118,12 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "Invite limits"
-- assertVisible: "None"
+- assertVisible: "Every member, Recommended"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "None"
-- tapOn: "Every member \\(recommended\\)"
-- tapOn: "Email the sender when an invite is accepted.*"
+- tapOn: "Every member, Recommended"
+- tapOn: "Email the sender when an invite is accepted, Optional"
+- assertVisible: "Email the sender when an invite is accepted, Optional, ticked"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
@@ -157,10 +161,13 @@ appId: dev.vespin.ios
     text: "20"
 - takeScreenshot: answer-fields-filled
 - tapOn: "Send"
+# Note that the form stands at the head of the reply as it was filled, in the stamp's place, as the panel's answered card does, so the thread reads answered rather than "Submitted".
 - extendedWaitUntil:
-    visible: "Submitted"
+    visible: "Answered"
     timeout: 5000
-- assertNotVisible: "None"
+- assertNotVisible: "Every member, Recommended"
+- waitForAnimationToEnd
+- takeScreenshot: answer-fields-sent
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.

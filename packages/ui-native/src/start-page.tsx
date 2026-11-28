@@ -6,11 +6,10 @@ import {
   HStack,
   Image,
   Menu,
-  Picker,
   ScrollView,
   Section,
   Button as SwiftUIButton,
-  Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -24,12 +23,10 @@ import {
   font,
   foregroundStyle,
   frame,
-  labelsHidden,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
   padding,
-  pickerStyle,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -51,14 +48,15 @@ import {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+import type { ComposerSend } from "./composer-press.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, PickOption } from "./glyph-label.js";
-import type { MenuChoice } from "./list-row.js";
+import { actContent } from "./glyph-label.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { RepositoryPicture } from "./marks.js";
-import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
-import { toneColor, useColors } from "./tokens/colors.js";
+import { Text } from "./text.js";
+import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -216,9 +214,7 @@ export function MenuChip(props: MenuChipProps) {
     >
       {menu.groups.map((group, at) => (
         // Note that a group is keyed by its place, since a group may have no heading.
-        <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
-          <GroupPicker group={group} />
-        </Section>
+        <GroupChoices key={at} group={group} />
       ))}
       {actions.length === 0 ? null : <Divider />}
       {actions.map((action) => (
@@ -238,36 +234,33 @@ export function MenuChip(props: MenuChipProps) {
 }
 
 /**
- * A capsule menu's group as SwiftUI's own single choice: an inline picker,
- * its options standing in the menu with the one chosen checked, as the
- * system checks it, its label left to the group's section. Note that each
- * option is tagged by its place in the group, never its label or id, so two
- * choices of one name, such as two Macs both called MacBook Pro, stay two;
- * and that a pick of the option already chosen sends nothing, as the
- * system's picker answers only a change.
+ * A capsule menu's group, as a bar's menu stands one (`BarMenuButton`): a
+ * section under its heading, each choice the system's toggle, the one on
+ * checked. Note that the group is not an inline picker, since in a menu an
+ * inline picker is a section of its own, and the heading over it, on the
+ * section around it or as its label, drew nowhere (#11171's shots); that
+ * each choice is keyed by its place, so two of one name, such as two Macs
+ * both called MacBook Pro, stay two; and that a press on the choice already
+ * on sends nothing, as a pick of one already picked changes nothing.
  */
-function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
+function GroupChoices({ group }: { readonly group: ChipMenuGroup }) {
   const colors = useColors();
-  const chosen = group.choices.findIndex((choice) => choice.on);
 
-  return (
-    <Picker
-      label={group.title ?? ""}
-      {...(chosen === -1 ? {} : { selection: String(chosen) })}
-      onSelectionChange={(value: string) => group.choices[Number(value)]?.onPress()}
-      modifiers={[pickerStyle("inline"), labelsHidden()]}
-    >
-      {group.choices.map((choice, at) => (
-        <PickOption
-          // Note that an option is keyed by its place, as it is tagged, since two may share a name.
-          key={at}
-          label={choice.label}
-          value={String(at)}
-          look={choiceLook(choice)}
-          toneInk={(tone) => toneColor(colors, tone)}
-        />
-      ))}
-    </Picker>
+  const choices = group.choices.map((choice, at) => (
+    <Toggle
+      key={at}
+      {...choiceContent(choice, colors)}
+      isOn={choice.on}
+      onIsOnChange={() => {
+        if (!choice.on) choice.onPress();
+      }}
+    />
+  ));
+
+  return group.title === undefined ? (
+    <Section>{choices}</Section>
+  ) : (
+    <Section title={group.title}>{choices}</Section>
   );
 }
 
@@ -332,12 +325,13 @@ type StartPageProps = {
   readonly dictation?: ComposerDictation | undefined;
   /** Whether Start may be pressed now: there is something to start on, and no start is out. */
   readonly ready: boolean;
-  readonly onStart: () => void;
+  /** Starts on the words Start took out of the field (`ComposerSend`). */
+  readonly onStart: ComposerSend;
   /** Talk in Start's place while the field holds nothing, as an agent's composer offers it; none where the page offers no Talk. */
   readonly onTalk?: (() => void) | undefined;
   /** The names a flow finds the field and the + by. */
   readonly testIds: { readonly field: string; readonly add: string };
-  /** Draws the words with their mentions and files as pills (`ComposerPills`), the files then standing in the words rather than in a row over them; the system's plain field where none is given. */
+  /** Draws the words with their mentions and files as pills (`ComposerPills`), the files then standing in the words rather than in a row over them; the same field, with no holder of its own, where none is given. */
   readonly pills?: ComposerPills | undefined;
 };
 

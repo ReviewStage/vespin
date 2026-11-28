@@ -3,6 +3,9 @@
  */
 
 import { ORPCError } from "@orpc/client";
+import { signedInAccountId } from "@repo/credentials/snapshot";
+import type { ViewChoiceWriteParams, ViewChoiceWrittenView } from "@repo/features/agent-view";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type {
   RepositoryChangesAnswerView,
   RepositoryPullRequestParams,
@@ -15,7 +18,7 @@ import {
   type TasksFileAnswer,
   type TasksView,
 } from "@repo/features/tasks-view";
-import type { AppStateDelivery, AppStateRead } from "@repo/host/app-state";
+import type { AppStateDelivery, AppStateRead, AppStateSnapshot } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -37,6 +40,8 @@ import {
 } from "@repo/host/contract";
 import type { WireBoundaryInput } from "@repo/wire";
 import { installActPortClient, installAppBridge } from "../app-bridge.js";
+import { drawAhead } from "../use-app-state.js";
+import { testQueryClientNow } from "./copy-feedback.js";
 
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
@@ -106,7 +111,7 @@ export function fakeAppBridgeCalls(): Partial<AppBridge> {
   return answering;
 }
 
-/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a Manager's chat, a pull request's chapters and parts, the account's beats, hosts, machines, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, Slack channels, and own machines, and a task's description. */
+/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a Manager's chat, a pull request's chapters and parts, the account's beats, hosts, machines, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, and Slack channels, and a task's description. */
 type HoldKind =
   | typeof AGENT_ACT_KIND.AGENTS_ORIGIN_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_TRANSCRIPT
@@ -131,6 +136,7 @@ type HoldKind =
   | typeof ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_FOLLOW
   | typeof ACCOUNT_ASK_ACT_KIND.ALLOWED_COMMANDS_FOLLOW
   | typeof ACCOUNT_ASK_ACT_KIND.MEMORIES_FOLLOW
+  | typeof ACCOUNT_ASK_ACT_KIND.VIEW_CHOICES_FOLLOW
   | typeof INSTALLED_SKILL_ACT_KIND.INSTALLED_SKILLS_FOLLOW
   | typeof AUTOMATION_ACT_KIND.AUTOMATIONS_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_COMMENTS_FOLLOW
@@ -140,7 +146,6 @@ type HoldKind =
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW
-  | typeof WORKSPACE_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_HELD_FOLLOW;
 
 /** Every hold a window keeps on a read the host lays on app state, which a test's port holds quietly unless it answers it. */
@@ -168,6 +173,7 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   ACCOUNT_ASK_ACT_KIND.GITHUB_TOKEN_FOLLOW,
   ACCOUNT_ASK_ACT_KIND.ALLOWED_COMMANDS_FOLLOW,
   ACCOUNT_ASK_ACT_KIND.MEMORIES_FOLLOW,
+  ACCOUNT_ASK_ACT_KIND.VIEW_CHOICES_FOLLOW,
   INSTALLED_SKILL_ACT_KIND.INSTALLED_SKILLS_FOLLOW,
   AUTOMATION_ACT_KIND.AUTOMATIONS_FOLLOW,
   TASKS_ACT_KIND.TASKS_COMMENTS_FOLLOW,
@@ -177,7 +183,6 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW,
-  WORKSPACE_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW,
   TASKS_ACT_KIND.TASKS_HELD_FOLLOW,
 ]);
 
@@ -214,6 +219,41 @@ export function heldUntilClosed<Kind extends HoldKind>(
   return Promise.resolve(stream as PortActResult<Kind>);
 }
 
+/** A promise that never settles, so a patch drawn ahead over it stands for the window's life, as the host goes on holding what it drew. */
+const NEVER_SETTLED = new Promise<never>(() => undefined);
+
+/**
+ * A view choice kept or forgotten, drawn over the account's choices at
+ * once, in its place, as the host draws it before the service answers
+ * (`@repo/host`'s `viewChoiceWritten`): over the test's document and over
+ * every document the window is handed after it (`drawAhead`), so a later
+ * push or a window drawn anew still reads it, as the host goes on holding
+ * it, under the account each document names. A document with no account
+ * signed in draws nothing, as the host keeps nothing for it.
+ */
+export function drawnViewChoice(write: ViewChoiceWriteParams): Promise<ViewChoiceWrittenView> {
+  const { id, key, workspaceId, value } = write;
+
+  // Note that the choice is drawn under each document's own account as it is drawn, since a test may hand the window's account, and its id, after the write.
+  const drawn = (snapshot: AppStateSnapshot): AppStateSnapshot => {
+    const accountId = signedInAccountId(snapshot.account);
+
+    if (accountId === undefined) return snapshot;
+    const held = snapshot[LIVE_READ.VIEW_CHOICES][accountId]?.rows ?? [];
+    const others = held.filter((row) => row.key !== key || row.workspaceId !== workspaceId);
+    const rows = value === null ? others : [...others, { id, key, workspaceId, value }];
+
+    return {
+      ...snapshot,
+      [LIVE_READ.VIEW_CHOICES]: { ...snapshot[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } },
+    };
+  };
+
+  drawAhead(testQueryClientNow(), drawn, NEVER_SETTLED);
+
+  return Promise.resolve({});
+}
+
 /**
  * Installs an act port answering only the procedures given, each by its
  * kind, as a test's window calls them. A hold it does not answer, on a
@@ -244,6 +284,7 @@ export function fakeActPort(procedures: Partial<FakeActPort>): void {
     [AGENT_ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.resolve(),
     [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: () => Promise.resolve(),
     [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: () => Promise.resolve(),
+    [ACCOUNT_ASK_ACT_KIND.VIEW_CHOICE_WRITE]: drawnViewChoice,
     ...procedures,
   };
 
@@ -430,5 +471,6 @@ export function fakeActs(
     });
   }
 
-  fakeActPort(procedures);
+  // Note that a view choice is drawn as the host draws it, as `fakeActPort` draws one, rather than asked of the switch, since a surface reads its own choice back; a test that answers it otherwise hands it to `fakeActPort` after.
+  fakeActPort({ ...procedures, [ACCOUNT_ASK_ACT_KIND.VIEW_CHOICE_WRITE]: drawnViewChoice });
 }

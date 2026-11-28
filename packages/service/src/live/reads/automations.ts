@@ -13,12 +13,16 @@
  * turns on it, is the reader's, and so is the order (`ordered: false`), as
  * the statements never wrote one.
  *
- * Each is woken on the workspace's topic by an automation made, changed,
- * or deleted, a run fired, started, or settled, the run's agent renamed or
- * its turn queued, started, or settled, and a membership of the workspace
- * moved, all of which name it. An automation's runs name no topic of their
- * automation, so its read serves the workspace the automation stands in,
- * read once as it is asked. Note that a line awaiting the agent's next turn
+ * Each is woken on the workspace's automations' topic by an automation
+ * made, changed, or deleted, a run fired, started, or settled, and a
+ * membership of the workspace moved, all of which name it, rather than on
+ * the workspace's own topic, which every task, agent, turn, and sandbox
+ * write of the workspace names too. A run's agent renamed, or its turn
+ * queued, started, or settled, names its agent's workspace alone, so that
+ * shows at the hold's end, or with the run's own next write. An
+ * automation's runs name no topic of their automation, so its read serves
+ * the workspace the automation stands in, read once as it is asked. Note
+ * that a line awaiting the agent's next turn
  * is written on its conversation's topic alone (`messagesSync`), because
  * every streamed step rewrites a journal and waking the workspace on each
  * would re-run every workspace-keyed read for nothing: the mark that line
@@ -127,7 +131,7 @@ function runAgentColumns(userId: string, latest: ReturnType<typeof latestTurnOf>
 
 export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const lastRun = queryBuilder
       .select({
@@ -146,7 +150,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       .as("last_run");
 
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
-    const { nextRunAt, createdAt, updatedAt: _updatedAt, ...columns } = AUTOMATION_COLUMNS;
+    const { nextRunAt, createdAt, updatedAt, ...columns } = AUTOMATION_COLUMNS;
 
     const own = {
       columns: {
@@ -160,7 +164,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
         taskRepository: LIVE_NO_TASK,
         mine: sql<boolean>`${eq(automation.userId, userId)}`,
       },
-      instants: { nextRunAt, createdAt },
+      instants: { nextRunAt, createdAt, updatedAt },
     };
 
     const run = {
@@ -207,7 +211,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
  */
 export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUNS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const readable = and(automationReadableBy(userId), eq(automation.organizationId, workspaceId));
 
@@ -260,7 +264,7 @@ export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUN
 
 export const automationRunsRead = bindLiveRead(AUTOMATION_RUNS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, id }) => {
     const newest = queryBuilder
       .select({ id: automationRun.id })

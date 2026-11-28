@@ -229,11 +229,12 @@ it.effect("the Mac's commands route refuses a session cookie every account route
     const { plugin, userId, cookie } = yield* openSignedIn;
     // The deployment's auth service keeps its sessions in a database this suite never reaches, so it reads the cookie as Better Auth over the plugin's PGlite does.
     vi.spyOn(auth.api, "getSession").mockImplementation(
-      // SAFETY: the deployment reads the session's user id alone (`browser-session.ts`), which both instances answer from the same row.
+      // SAFETY: the deployment reads the session's user id alone, with the headers it asks for (`browser-session.ts`), which both instances answer from the same row.
       async (context) =>
-        (await plugin.api.getSession({ headers: context?.headers ?? new Headers() })) as Awaited<
-          ReturnType<typeof auth.api.getSession>
-        >,
+        (await plugin.api.getSession({
+          headers: context?.headers ?? new Headers(),
+          returnHeaders: true,
+        })) as never,
     );
 
     const asked = () =>

@@ -832,10 +832,12 @@ export const tasksFindParamsSchema = EffectSchema.Struct({
   number: taskNumberSchema,
 });
 
-/** The task a link names by its number, as the window hears it: its id, or that none was found or the service did not answer. */
+/** The task a link names by its number, as the window hears it: its id, that none the account reaches was found, or that the service did not answer. */
 export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
-  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+  EffectSchema.Struct({
+    failure: EffectSchema.Literals([TASK_CALL_FAILURE.NOT_FOUND, TASK_CALL_FAILURE.UNANSWERED]),
+  }),
 ]);
 
 /** The most characters a task search sends the service. */

@@ -1,4 +1,4 @@
-import { GITHUB_ORIGIN } from "@repo/features/link-grammar";
+import { githubAccountPage } from "@repo/features/github-login";
 import { ACTOR_KIND, type Actor, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { createContext, useContext, useEffect } from "react";
 import { appPlatform } from "./app-platform.js";
@@ -49,17 +49,6 @@ export function usePreloadedPerson(userId: string): void {
   useEffect(() => preload?.(userId, workspaceId), [preload, userId, workspaceId]);
 }
 
-/** What an App's bot's login ends with, which its App's slug comes before. */
-const BOT_SUFFIX = "[bot]";
-
-/** A GitHub account's own page: a person's profile, or the App's page for an App's bot. */
-function githubPageOf(login: string, bot: boolean): string {
-  const app = bot && login.endsWith(BOT_SUFFIX);
-  const path = app ? `apps/${login.slice(0, -BOT_SUFFIX.length)}` : login;
-
-  return new URL(path, `${GITHUB_ORIGIN}/`).href;
-}
-
 /** What a press on `actor` opens, where the window can open anything for them; nothing for the rest. */
 export function useActorDoor(actor: Actor): (() => void) | undefined {
   const openPerson = useContext(OpenPersonContext);
@@ -85,7 +74,7 @@ export function useActorDoor(actor: Actor): (() => void) | undefined {
     }
 
     case ACTOR_KIND.GITHUB: {
-      const url = githubPageOf(actor.login, actor.bot);
+      const url = githubAccountPage(actor.login, actor.bot);
 
       return () => appPlatform().openGitHub(url);
     }

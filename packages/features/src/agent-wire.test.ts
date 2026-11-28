@@ -115,3 +115,15 @@ test("a message carries a still GIF and refuses an animated one, which no model 
   const cut = btoa(String.fromCharCode(...GIF_HEAD, 0x2c));
   assert.equal(decode([{ name: "cut.gif", mediaType: "image/gif", data: cut }])._tag, "None");
 });
+
+test("a message carries a binary file as a file of any other kind, never as a text file, which must spell UTF-8", () => {
+  const decode = Schema.decodeUnknownOption(agentAttachmentsSchema);
+  // A zip's local file header: its signature, then a NUL and a byte no UTF-8 text holds.
+  const zip = btoa(String.fromCharCode(0x50, 0x4b, 0x03, 0x04, 0x00, 0xff));
+
+  assert.equal(
+    decode([{ name: "notes.zip", mediaType: "application/octet-stream", data: zip }])._tag,
+    "Some",
+  );
+  assert.equal(decode([{ name: "notes.zip", mediaType: "text/plain", data: zip }])._tag, "None");
+});

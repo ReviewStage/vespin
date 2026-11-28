@@ -1,6 +1,8 @@
 export {
   isProductSurfaceEventName,
   PRODUCT_ACCOUNT_ACTION,
+  PRODUCT_ATTACHMENT_KIND,
+  PRODUCT_ATTACHMENT_SIZE,
   PRODUCT_EVENT,
   PRODUCT_EVENT_BATCH_LIMIT,
   PRODUCT_EVENT_BUILD_FIELD,
@@ -34,6 +36,8 @@ export {
   PRODUCT_UPDATE_FAILURE,
   type ProductAccountAction,
   ProductAccountActionSchema,
+  type ProductAttachmentKind,
+  type ProductAttachmentSize,
   type ProductClientPlatform,
   type ProductEvent,
   type ProductEventBatch,
@@ -69,6 +73,7 @@ export {
   type ProductSurface,
   type ProductSurfaceEventName,
   type ProductUpdateFailure,
+  productAttachmentSize,
   productDrawnMilliseconds,
   productElapsedSeconds,
   productEventBatchFromWire,
@@ -81,6 +86,7 @@ export {
   productLoadMilliseconds,
   productOpenMilliseconds,
   productPictureBytes,
+  productResumeCounted,
   productSessionCountBucket,
   type RecordProductEvent,
 } from "./product-events.js";

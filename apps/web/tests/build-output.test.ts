@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { build } from "esbuild";
 import { test } from "vitest";
 import {
@@ -52,10 +53,30 @@ const PLACEHOLDER_DATABASE_URL = "postgresql://isolation:load@127.0.0.1:5432/app
  */
 const LOAD_ENVIRONMENT = { PATH: process.env.PATH ?? "" } as const;
 
-async function emitFromTask(): Promise<{
+/** How many `.func` loads run at once: each is a node process, and the file's time is its slowest part. */
+const LOAD_CONCURRENCY = 4;
+
+const execFileAsync = promisify(execFile);
+
+interface EmittedTree {
   readonly outputDirectory: string;
   readonly paths: readonly string[];
-}> {
+}
+
+/**
+ * The tree is emitted once for the file, because the three tests only read
+ * it and the esbuild run that makes it is the file's largest cost: built per
+ * test, the file took 79 to 90 s on CI, which is the cap it is held to.
+ */
+let emittedTree: Promise<EmittedTree> | undefined;
+
+function emitFromTask(): Promise<EmittedTree> {
+  emittedTree ??= emitTree();
+
+  return emittedTree;
+}
+
+async function emitTree(): Promise<EmittedTree> {
   const task = await functionBundlePlan(WEB);
   const result = await build({ ...task.options, write: false });
   const profilerBinary = await profilerBinaryFiles(result.metafile, WEB);
@@ -132,21 +153,25 @@ test("every planned function and every rewrite lands on a .func, and a queue's c
 test("each .func loads with nothing above it available", { timeout: 180_000 }, async () => {
   const { outputDirectory, paths } = await emitFromTask();
 
-  for (const path of paths) {
-    const directory = functionDirectory(outputDirectory, path);
+  const pending = [...paths];
 
-    const loaded = spawnSync(
-      process.execPath,
-      ["--input-type=module", "-e", LOAD_MODULE, functionEntryPath(outputDirectory, path)],
-      {
-        cwd: directory,
-        encoding: "utf8",
-        env: LOAD_ENVIRONMENT,
-      },
-    );
+  // Note that a failed load is thrown from its worker, so the first one to fail names its path.
+  const worker = async () => {
+    for (let path = pending.shift(); path !== undefined; path = pending.shift()) {
+      const loaded = await execFileAsync(
+        process.execPath,
+        ["--input-type=module", "-e", LOAD_MODULE, functionEntryPath(outputDirectory, path)],
+        { cwd: functionDirectory(outputDirectory, path), encoding: "utf8", env: LOAD_ENVIRONMENT },
+      ).then(
+        () => undefined,
+        (error: { readonly stderr?: string }) => `${path}: ${error.stderr}`,
+      );
 
-    assert.equal(loaded.status, 0, `${path}: ${loaded.stderr}`);
-  }
+      assert.equal(loaded, undefined);
+    }
+  };
+
+  await Promise.all(Array.from({ length: LOAD_CONCURRENCY }, worker));
 });
 
 test("the default .func, loaded alone, lands the fallback's requests on the hosted oRPC router", {

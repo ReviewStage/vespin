@@ -50,6 +50,9 @@ const KEPT = {
   MAIL_ICON: "fixture-picture-mail-icon",
 } as const;
 
+/** The recording the fixture's agent showed, by the id the service kept it under, which a rig run may serve over HTTP (`-mediaOrigin`). */
+export const FIXTURE_RECORDING_ID = KEPT.RECORDING;
+
 /** The mail app the digest agent reads its draft in on the reader's Mac, as the Mac names it. */
 const MAIL_APP = { name: "Mail", bundleId: "com.apple.mail" } as const;
 
@@ -848,6 +851,25 @@ const LONG_ASKS = [
   "Anything left before this is settled?",
 ] as const;
 
+/** One part of the teammate's brief that opens the rounding agent's run, numbered `n`: a heading, its points, and a closing line. */
+function briefPart(n: number): string {
+  return [
+    `## ${n}. Read the last 24 hours`,
+    "- Pull requests opened in the last 24 hours, each read for its comments, reviews and check runs, and classed as reviewed by another bot, by ours, both, or neither; use a script, not one call per thought.",
+    "- Our automation's runs, newest first: count the runs that reviewed, stopped at step 0 and why, were skipped and why, and failed.",
+    "- How every bot's findings fared over the last 72 hours: whether a later commit fixed each, the author pushed back, or it was ignored.",
+    "",
+    "Never widen what it reviews without the numbers to back it; a false finding costs a round, since a merge waits on every thread.",
+  ].join("\n");
+}
+
+/** The teammate's brief that opens the rounding agent's run, as long as an automation's prompt runs (about 13,000 characters), which stands thousands of points tall far above the page's newest row. */
+const LONG_BRIEF = [
+  "Long brief: check that every pull request gets a code review from someone, and tune the reviewer from how its findings fared.",
+  ...Array.from({ length: 24 }, (_, n) => briefPart(n + 1)),
+  "End of the long brief.",
+].join("\n\n");
+
 /** What the rounding agent answered each ask, in Markdown as an agent writes: some of it a code block whose lines run long, and a table wider than a phone. */
 const LONG_ANSWERS = [
   "Totals round in `src/ledger/total.ts`, half-cents **up**, through one helper every report shares. Invoices call the same helper per line, then sum, so an invoice can come out a cent off the ledger's own total.",
@@ -861,7 +883,7 @@ const LONG_ANSWERS = [
   "All 412 ledger tests pass, with six new cases for half-cents at each boundary.",
 ] as const;
 
-/** The rounding agent's run, ten turns long and finished, its last words its last row: a transcript long enough that its page opens far below its first row, with long links, a wide code block, and a wide table among its words. */
+/** The rounding agent's run, a teammate's long brief and then ten turns, finished, its last words its last row: a transcript long enough that its page opens far below its first row, with a row thousands of points tall at its head, long links, a wide code block, and a wide table among its words. */
 export function fixtureLongTranscript(
   startedAt: number,
   reader: { readonly userId: string; readonly name: string },
@@ -883,9 +905,14 @@ export function fixtureLongTranscript(
     ];
   });
 
+  const messages = [
+    asked("fixture-rounding-brief", startedAt - MINUTE, LONG_BRIEF, TEAMMATE),
+    ...turns,
+  ];
+
   return {
-    messages: turns,
-    cursor: `${turns.length}:0`,
+    messages,
+    cursor: `${messages.length}:0`,
     word: { status: AGENT_STATUS.COMPLETED, runStartedAt: startedAt, title, caughtUp: true },
     pages: 1,
   };

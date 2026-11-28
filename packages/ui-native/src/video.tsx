@@ -1,28 +1,16 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its own shape held to the media's one rule, or saying so where its bytes did not land.
 
-import { HStack, Image, Button as SwiftUIButton, Text as SwiftUIText } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
-import {
-  accessibilityHint,
-  accessibilityLabel,
-  buttonStyle,
-  controlSize,
-  font,
-  lineLimit,
-  monospacedDigit,
-  tint,
-} from "@expo/ui/swift-ui/modifiers";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
 import { Predicate } from "effect";
-import { useEvent, useEventListener } from "expo";
+import { useEvent } from "expo";
+import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoSource, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
-import { GLYPH, glyphImage } from "./glyph.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
-import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
@@ -30,23 +18,20 @@ import { mediaFrame } from "./media-frame.js";
 import {
   type PictureRef,
   type PictureSource,
-  pictureUri,
   usePictureEvents,
   usePictureRef,
 } from "./picture-source.js";
 import { Press } from "./press.js";
+import { BRAND_COLOR } from "./tokens/brand-colors.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
 
 /** What the system's player stands as to a flow that drives the app, once it has read the video's file and can play it. */
 const VIDEO_PLAYER_ID = "video-player";
-
-/** What a video not yet played is heard to do, as a press on its play mark starts it in place. */
-const PLAYS_IN_PLACE = "Plays the video";
 
 /** What Open in Safari is heard to do. */
 const OPENS_IN_SAFARI = "Opens the video in Safari";
@@ -65,8 +50,15 @@ const styles = StyleSheet.create({
     padding: SPACE.ROW,
     gap: SPACE.TIGHT,
   },
-  spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  playMark: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
+  playMark: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   // Note that at an accessibility size an unplayable well grows with its words rather than holding the film's shape, which would cut them off.
   grown: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
 });
@@ -111,78 +103,6 @@ function useRefusedOnce(source: PictureSource | null | undefined, failed: boolea
   }, [address, events, failed]);
 }
 
-/**
- * Whether the player has played the video it now plays, so a video stands
- * with its play mark until it is first played and leaves the system's
- * controls to it after. Note that the played source is kept rather than a
- * flag, since expo-video loads a new source into the same player, so a new
- * video in the same place stands its mark again.
- */
-function usePlayedOnce(player: VideoPlayer, source: string): boolean {
-  const [playedSource, setPlayedSource] = useState<string | undefined>(
-    player.playing ? source : undefined,
-  );
-
-  useEventListener(player, "playingChange", ({ isPlaying }) => {
-    if (isPlaying) setPlayedSource(source);
-  });
-
-  return playedSource === source;
-}
-
-/**
- * A video's play mark over its first frame until it is first played, as
- * Messages and Photos mark a video so it never reads as a picture: the play
- * glyph and how long it runs in the system's glass capsule, which starts it
- * in place where the system's own controls take over. iOS draws its glass
- * solid where the reader turned on Reduce Transparency.
- */
-function PlayMark({
-  label,
-  runs,
-  onPress,
-}: {
-  readonly label: string;
-  /** How long the video runs, as a player says it ("0:12"); none where it isn't known. */
-  readonly runs: string | undefined;
-  readonly onPress: () => void;
-}) {
-  const colors = useColors();
-
-  return (
-    <View style={styles.playMark} pointerEvents="box-none">
-      <InlineHost matchContents>
-        <SwiftUIButton
-          onPress={onPress}
-          modifiers={[
-            buttonStyle("glass"),
-            SwiftModifiers.buttonBorderShape("capsule"),
-            controlSize("large"),
-            tint(colors.TEXT),
-            accessibilityLabel(runs === undefined ? label : `${label}, ${runs}`),
-            accessibilityHint(PLAYS_IN_PLACE),
-          ]}
-        >
-          <HStack spacing={SPACE.TIGHT}>
-            <Image {...glyphImage(GLYPH.RUN)} size={MARK_SIZE.GLYPH + 2} />
-            {runs === undefined ? null : (
-              <SwiftUIText
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
-                  monospacedDigit(),
-                  lineLimit(1),
-                ]}
-              >
-                {runs}
-              </SwiftUIText>
-            )}
-          </HStack>
-        </SwiftUIButton>
-      </InlineHost>
-    </View>
-  );
-}
-
 type VideoProps = {
   /** What the video plays from: a file, such as one the thread wrote under the app's caches, or the service's address with the header its read carries, or one kept by its id that it reads where it is drawn (`PictureByIdProvider`); none while its bytes are on their way, which stands its well alone, and `null` where they could not be read, which says so in its well. */
   readonly source: PictureRef | null | undefined;
@@ -197,14 +117,15 @@ type VideoProps = {
 };
 
 /**
- * A video in the system's own player, its controls, full screen, and
- * Picture in Picture the system's, standing paused until it is played, as a
- * message's video stands. Note that one the player cannot read, such as the
- * WebM an agent's browser records, says so in its place and offers where it
- * plays, rather than standing as a player that never starts; and one whose
- * bytes are on their way, or that the player still reads, stands the
- * system's spinner in its well, as Photos does, so it never reads as an
- * empty box. To VoiceOver, a player that can play is one element, the
+ * A video in the system's own player, standing paused on its first frame
+ * with the system's own controls over it from the start, its play button,
+ * scrubber, full screen, and Picture in Picture, as a message's video stands
+ * in Messages and Photos; no mark or control of ours stands over it. Note
+ * that one the player cannot read, such as the WebM an agent's browser
+ * records, says so in its place and offers where it plays, rather than
+ * standing as a player that never starts; and one whose bytes are not yet
+ * at hand stands the system's spinner in its well, so it never reads as an
+ * empty box, while one the player still reads shows the player's own wait. To VoiceOver, a player that can play is one element, the
  * video's name, which opens the system's player full screen, where its
  * controls are read, as a video in Messages is.
  */
@@ -214,6 +135,8 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   const source = usePictureRef(ref);
   const player = useVideoPlayer(playerSource(source));
   const view = useRef<VideoView>(null);
+  const [full, setFull] = useState(false);
+  const floating = useRef(false);
   const { status } = useEvent(player, "statusChange", { status: player.status });
   // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
   const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
@@ -221,7 +144,6 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   const failed = status === "error";
   useRefusedOnce(source, failed);
   const length = useVideoLength(player);
-  const played = usePlayedOnce(player, source == null ? "" : pictureUri(source));
 
   // Note that a tile fills its tile at the tile's shape, and any other video stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
@@ -300,38 +222,59 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   }
 
   // Note that the player stands as one element, its name, which opens it full screen, as a video in Messages does, because the system's inline player nests a dozen views under it, and a thread's video in an iPad's split view stood past the depth XCTest can serialize (Foundation's "Too many nested arrays or dictionaries"), so no flow could read that screen.
-  // Note that the frame is heard with the video's length while its play mark stands, since the frame is the one element and the mark inside it isn't heard on its own.
-  const marked = status === "readyToPlay" && !played;
+  // Note that a video stands in its message as its still first frame under the system's play mark, and a tap opens it in the system's own player full screen with every control there, play, the scrubber, and Picture in Picture, as Messages opens one (the developer, Nov 26, 2026), because at a message's width the system's inline controls leave full screen and Picture in Picture out of their bar. The controls stand only while it is full screen, since inline they would take the tap.
   const runs = length === undefined ? undefined : playheadText(length * 1000);
+  const open = () => void view.current?.enterFullscreen();
+
+  // Note that the video pauses as full screen closes, so its still stands again under its mark rather than playing on behind it, as Messages leaves one; but not where it closed into Picture in Picture, which closes full screen too and plays on in its window.
+  const closeFullScreen = () => {
+    if (!floating.current) player.pause();
+    setFull(false);
+  };
+
+  // Note that Picture in Picture may start after full screen's close paused it, the two events reaching here in either order, so its start plays the video on in its window.
+  const startFloating = () => {
+    floating.current = true;
+    player.play();
+  };
 
   return (
     <MediaBox frame={frame}>
       <HeldMenu acts={acts}>
-        <View
-          style={[styles.frame, tiled]}
-          accessible
-          accessibilityLabel={marked && runs !== undefined ? `${label}, ${runs}` : label}
-          accessibilityHint={OPENS_FULL_SCREEN}
-          onAccessibilityTap={() => void view.current?.enterFullscreen()}
-          testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
-        >
-          <VideoView
-            ref={view}
-            player={player}
-            // Note that the system's controls stand only once the video has played, so its own play button never shows under the play mark.
-            nativeControls={played}
-            contentFit="contain"
-            fullscreenOptions={{ enable: true }}
-            allowsPictureInPicture
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
-          />
-          {status === "readyToPlay" ? null : (
-            <View style={styles.spinner} pointerEvents="none">
-              <ActivityIndicator color={colors.TEXT_MUTED} />
+        <Press onPress={open} accessible={false}>
+          <View
+            style={[styles.frame, tiled]}
+            accessible
+            accessibilityLabel={runs === undefined ? label : `${label}, ${runs}`}
+            accessibilityHint={OPENS_FULL_SCREEN}
+            onAccessibilityTap={open}
+            testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
+          >
+            <VideoView
+              ref={view}
+              player={player}
+              nativeControls={full}
+              onFullscreenEnter={() => setFull(true)}
+              onFullscreenExit={closeFullScreen}
+              onPictureInPictureStart={startFloating}
+              onPictureInPictureStop={() => {
+                floating.current = false;
+              }}
+              contentFit="contain"
+              fullscreenOptions={{ enable: true }}
+              allowsPictureInPicture
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
+            />
+            {/* Note that the mark stands in white in either theme, as the system's stands over a video, since it is drawn over the video's frame, never the page. */}
+            <View style={styles.playMark} pointerEvents="none">
+              <SymbolView
+                name={glyphSymbol(GLYPH.VIDEO_PLAY)}
+                size={MARK_SIZE.VIDEO_PLAY}
+                tintColor={BRAND_COLOR.LIGHT.ON_ACCENT}
+              />
             </View>
-          )}
-          {marked ? <PlayMark label={label} runs={runs} onPress={() => player.play()} /> : null}
-        </View>
+          </View>
+        </Press>
       </HeldMenu>
     </MediaBox>
   );

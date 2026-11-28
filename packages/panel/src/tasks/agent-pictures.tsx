@@ -6,9 +6,9 @@ import {
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
 import {
-  AGENT_ATTACHMENT_TYPE,
   type AgentAttachment,
   type AgentTranscriptMessage,
+  agentAttachmentTypeOf,
 } from "@repo/features/agent-wire";
 import type { FileChip } from "@repo/features/attachment-model";
 import { isPlayedType, type KeptPicture } from "@repo/features/conversation-picture-wire";
@@ -33,7 +33,6 @@ import {
   usePicture,
 } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
-import { Schema } from "effect";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { pictureUnread } from "../failure-report.js";
@@ -554,16 +553,19 @@ export function CallPictures({
   tool,
   input,
   output,
+  runnerKept,
   place = CALL_PICTURES_PLACE.UNDER_ROW,
 }: {
   tool: string;
   input: Parameters<typeof calledPicturesOf>[1];
   output: Parameters<typeof calledPicturesOf>[2];
+  /** The pictures the call's runner kept beside the transcript, the part's `pictures`. */
+  runnerKept?: readonly KeptPicture[] | undefined;
   place?: CallPicturesPlace | undefined;
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const { open, viewer } = useViewer(door);
-  const called = calledPicturesOf(tool, input, output);
+  const called = calledPicturesOf(tool, input, output, runnerKept);
   const recorded = recordedVideosOf(tool, output);
 
   if (door === undefined || (called.length === 0 && recorded.length === 0)) return null;
@@ -617,20 +619,15 @@ export function CallPictures({
   );
 }
 
-/** The media types a message may carry a file of, as the wire takes them. */
-const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTACHMENT_TYPE)));
-
 /** A file's bytes as a message carries them, read off a `data:` address; none for any other address. */
 function attachmentOfData(name: string, url: string): AgentAttachment | undefined {
   const read = /^data:([^;,]+);base64,(.+)$/u.exec(url);
   const mediaType = read?.[1];
   const data = read?.[2];
 
-  if (mediaType === undefined || data === undefined || !isAgentAttachmentType(mediaType)) {
-    return undefined;
-  }
+  if (mediaType === undefined || data === undefined) return undefined;
 
-  return { name, mediaType, data };
+  return { name, mediaType: agentAttachmentTypeOf(mediaType), data };
 }
 
 /** One of a line's files as Edit carries it again, by its place on the line, which never changes. */

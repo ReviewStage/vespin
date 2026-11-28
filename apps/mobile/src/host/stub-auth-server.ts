@@ -137,12 +137,12 @@ export const stubAuthSession: AuthSession = {
 };
 
 /** A service's answer to a request's address, or none where it leaves the request to the stub's own. */
-export type StubAnswer = (url: URL) => Promise<Response> | undefined;
+export type StubAnswer = (request: Request) => Promise<Response> | undefined;
 
 /** Answers every request of this launch from the stub, in place of the network: from `first` where it answers, as a busy account's reads do (`busy-account-server.ts`), and from the stub's own otherwise. */
 export function standStubAuthServer(first?: StubAnswer): void {
   globalThis.fetch =
     first === undefined
       ? stubAuthFetch
-      : (input, init) => first(new URL(new Request(input, init).url)) ?? stubAuthFetch(input, init);
+      : (input, init) => first(new Request(input, init)) ?? stubAuthFetch(input, init);
 }

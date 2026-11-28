@@ -27,7 +27,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { INBOX_ASK } from "@repo/features/inbox-wire";
-import { DateTime, Duration, Effect, Option, Result } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { TASKLESS_LIVE } from "../agents/taskless-reads.js";
 import {
@@ -39,6 +39,7 @@ import {
 import { accountInboxRead } from "../live/reads/account-inbox.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import type { LiveParams } from "./live-query.js";
 
 /**
@@ -85,6 +86,8 @@ const itemTopics = (world: InboxWorld): readonly SyncTopic[] => [
   [TOPIC.WORKSPACE, world.workspaceId],
   [TOPIC.ACCOUNT, world.owner],
   [TOPIC.ACCOUNT, world.teammate],
+  [TOPIC.ACCOUNT_INBOX, world.owner],
+  [TOPIC.ACCOUNT_INBOX, world.teammate],
 ];
 
 /** A read as one reader follows it: its definition, and the params its procedure binds. */
@@ -144,7 +147,10 @@ const postQuestion = (world: InboxWorld) =>
     },
   );
 
-it.layer(getTestDB())("what moves an inbox notifies", (it) => {
+/** The suite's database, and the Blob store a message's files are put in. */
+const SUITE = Layer.merge(getTestDB(), memoryBlobStore().layer);
+
+it.layer(SUITE)("what moves an inbox notifies", (it) => {
   it.effect(
     "an agent's post wakes the task's and the agent's inbox, and every member's account-level reads",
     () =>
@@ -211,6 +217,7 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
           markInboxItemRead(world.teammate, itemId),
           [
             [TOPIC.ACCOUNT, world.teammate],
+            [TOPIC.ACCOUNT_INBOX, world.teammate],
             [TOPIC.TASK, world.taskId],
             [TOPIC.AGENT, world.agentId],
           ],
@@ -232,6 +239,8 @@ it.layer(getTestDB())("what moves an inbox notifies", (it) => {
         const ownerTopics: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, world.workspaceId],
           [TOPIC.ACCOUNT, world.owner],
+          [TOPIC.WORKSPACE_AUTOMATIONS, world.workspaceId],
+          [TOPIC.ACCOUNT_INBOX, world.owner],
         ];
 
         const made = yield* wakes(

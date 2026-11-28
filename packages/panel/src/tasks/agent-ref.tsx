@@ -1,4 +1,5 @@
 import {
+  AGENT_KIND,
   AGENT_SOURCE,
   type AgentStatus,
   type AgentSummary,
@@ -37,6 +38,7 @@ import {
   heldLatest,
   lastFinished,
 } from "./agent-tab-card.js";
+import { ManagerCard } from "./manager-card.js";
 import { MentionedAgentCard } from "./mentioned-agent-card.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
@@ -264,6 +266,13 @@ export function AgentCard({
   /** One row at the foot, said by a place naming the agent off its task's page: the task it works on. */
   foot?: CardFoot | undefined;
 }): React.JSX.Element {
+  const { agent } = subject;
+
+  // Note that a Manager hangs its own card wherever it is named, which says no task it is on, since it works on none.
+  if (agent?.kind === AGENT_KIND.MANAGER) {
+    return <ManagerCard subject={subject} agentId={agent.id} models={models ?? []} />;
+  }
+
   return <AgentTabCard name={subject.name} models={models ?? []} read={subject.read} foot={foot} />;
 }
 

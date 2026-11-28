@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import {
   createAutomation,
   recordAutomationRun,
@@ -18,7 +19,6 @@ import { inboxItemRead } from "@repo/database/schemas/inbox-item-read";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
-  connectWorkspaceMachine,
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
@@ -29,11 +29,7 @@ import {
   ACCOUNT_INBOX_REPOSITORYLESS,
   type AccountInboxTask,
 } from "@repo/features/account-inbox-wire";
-import {
-  AGENT_ATTACHMENT_TYPE,
-  AGENT_MACHINE,
-  type AgentAttachment,
-} from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -65,7 +61,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { eq } from "drizzle-orm";
-import { Clock, DateTime, Duration, Effect, Option, Result, Schema } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import {
@@ -81,7 +77,6 @@ import {
   INBOX_MESSAGE_OUTCOME,
   INBOX_POST_REFUSAL,
   type InboxAgent,
-  type InboxFile,
   type InboxItemWritten,
   markInboxItemRead,
   markInboxItemUnread,
@@ -102,9 +97,9 @@ import {
 import { accountInboxRead } from "../../live/reads/account-inbox.js";
 import { inboxItemsRead } from "../../live/reads/inbox-items.js";
 import { agentInboxRead, taskInboxRead } from "../../live/reads/scope-inbox.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { wokenOnHub } from "../../testing/sync-woken.js";
 import { TASKLESS_LIVE } from "../taskless-reads.js";
-import { WORKSPACE_MACHINE_LIVE, type WorkspaceMachineLive } from "../workspace-machine-reads.js";
 import { accountInboxPast, agentInboxPast, taskInboxPast } from "./inbox-page.js";
 
 /**
@@ -309,7 +304,6 @@ const liveAnswerOf = (
         userId,
         repositoryless: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
         taskless,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
       }),
     );
 
@@ -334,13 +328,11 @@ const accountItemIdsOf = (
   since: number,
   settledSince: number,
   taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
-  workspaceMachines: WorkspaceMachineLive = WORKSPACE_MACHINE_LIVE.CARRIED,
 ) =>
   Effect.gen(function* () {
     const parts = Option.getOrThrow(
       inboxItemsRead.statements({
         userId,
-        workspaceMachines,
         since: String(since),
         settledSince: String(settledSince),
         taskless,
@@ -367,7 +359,10 @@ const accountItemIdsOf = (
     };
   });
 
-it.layer(getTestDB())("the inbox store", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("the inbox store", (it) => {
   it.effect(
     "the account's items read teammates' items on shared tasks of two workspaces, and none of another workspace",
     () =>
@@ -486,47 +481,6 @@ it.layer(getTestDB())("the inbox store", (it) => {
   );
 
   it.effect(
-    "an item of an agent on a workspace's machine is left out of the account's inbox, live and held, and its task's, for a build that reads no such agent",
-    () =>
-      Effect.gen(function* () {
-        const { agent, workspaceId } = yield* openAgentIn;
-        const posted = yield* post(agent);
-        const box = yield* connectWorkspaceMachine(workspaceId, agent.userId);
-        yield* (yield* Database)
-          .update(agentTable)
-          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
-          .where(eq(agentTable.id, agent.agentId));
-
-        const readBy = (workspaceMachines: boolean) =>
-          Effect.gen(function* () {
-            const live = yield* accountItemIdsOf(
-              agent.userId,
-              0,
-              0,
-              TASKLESS_LIVE.LEFT_OUT,
-              workspaceMachines ? WORKSPACE_MACHINE_LIVE.CARRIED : WORKSPACE_MACHINE_LIVE.LEFT_OUT,
-            );
-
-            const held = yield* accountWaitingItems(agent.userId, workspaceMachines);
-            const ofTask = yield* taskInboxItems(agent.userId, agent.taskId, workspaceMachines);
-
-            return {
-              live: live.items,
-              held: held.map((item) => item.id),
-              ofTask: ofTask.map((item) => item.id),
-            };
-          });
-
-        assert.deepEqual(yield* readBy(true), {
-          live: [posted.id],
-          held: [posted.id],
-          ofTask: [posted.id],
-        });
-        assert.deepEqual(yield* readBy(false), { live: [], held: [], ofTask: [] });
-      }),
-  );
-
-  it.effect(
     "the live statements of a plan's inbox and an agent's deliver the items their held reads answer, open, answered, and closed alike, to a member and to no one else",
     () =>
       Effect.gen(function* () {
@@ -561,11 +515,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
 
         for (const reader of [agent.userId, teammate, outsider]) {
           const plan = Option.getOrThrow(
-            taskInboxRead.statements({
-              userId: reader,
-              id: agent.taskId ?? "",
-              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-            }),
+            taskInboxRead.statements({ userId: reader, id: agent.taskId ?? "" }),
           );
 
           const ofAgent = Option.getOrThrow(
@@ -899,10 +849,17 @@ it.layer(getTestDB())("the inbox store", (it) => {
         for (const reader of [agent.userId, teammate]) {
           const read = Option.getOrThrow(yield* readInboxItem(reader, id)).item;
           assert.deepEqual(answeringOf(read)?.files, kept);
-          const found = yield* readInboxAttachment(reader, id, trace.attachmentId);
-          const served: InboxFile = Option.getOrThrow(found);
+
+          const found: Option.Option<{
+            readonly contentType: string;
+            readonly body: AttachmentBody;
+          }> = yield* readInboxAttachment(reader, id, trace.attachmentId);
+
+          const served: { readonly contentType: string; readonly body: AttachmentBody } =
+            Option.getOrThrow(found);
+
           assert.equal(served.contentType, AGENT_ATTACHMENT_TYPE.TEXT);
-          assert.deepEqual(new Uint8Array(served.bytes), TRACE);
+          assert.deepEqual(new Uint8Array(blobs.bytesOf(served.body)), TRACE);
         }
 
         assert.ok(Option.isNone(yield* readInboxAttachment(outsider, id, shot.attachmentId)));
@@ -925,7 +882,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [file] = answeringOf(Option.getOrThrow(answered))?.files ?? [];
         assert.ok(file);
         const served = yield* readInboxAttachment(agent.userId, posted.id, file.attachmentId);
-        assert.equal(Option.getOrThrow(served).bytes.byteLength, spec.byteLength);
+        assert.equal(blobs.bytesOf(Option.getOrThrow(served).body).byteLength, spec.byteLength);
       }),
   );
 
@@ -1405,7 +1362,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [trace] = message?.files ?? [];
         assert.ok(trace);
         const served = yield* readInboxAttachment(agent.userId, id, trace.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), TRACE);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(Option.getOrThrow(served).body)), TRACE);
 
         const askedAgain = yield* post(agent, { ...SETTINGS, title: "Require two reviews" });
         // Note that the agent is handed no member's key.
@@ -1477,7 +1434,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
 });
 
 /** Whether the item is unread for the reader, as their read of it says. */
-it.layer(getTestDB())("the inbox's held reads on Vespin Sync", (it) => {
+it.layer(Layer.merge(getTestDB(), blobs.layer))("the inbox's held reads on Vespin Sync", (it) => {
   it.effect(
     "a task's, an agent's, and the account's held reads each answer an agent's post within a coalesce window of it",
     () =>
@@ -1528,7 +1485,7 @@ const postedItem = (agent: InboxAgent, key: string) => post(agent, { ...SETTINGS
 const postedId = (agent: InboxAgent, key: string) =>
   Effect.map(postedItem(agent, key), (posted) => posted.id);
 
-it.layer(getTestDB())("an inbox item's read state", (it) => {
+it.layer(Layer.merge(getTestDB(), blobs.layer))("an inbox item's read state", (it) => {
   it.effect(
     "a new item is unread for every member until each reads it, and unread again for a reader once anything happens on it after their read but the agent withdrawing its ask",
     () =>
@@ -2016,7 +1973,7 @@ it.layer(getTestDB())("an inbox item's read state", (it) => {
   );
 });
 
-it.layer(getTestDB())("a member's writes on an item", (it) => {
+it.layer(Layer.merge(getTestDB(), blobs.layer))("a member's writes on an item", (it) => {
   it.effect(
     "an answer and a close each answer the transaction they were taken in, which a follower of the inbox waits for, and one taken in another transaction than the last",
     () =>
@@ -2103,16 +2060,12 @@ it.layer(getTestDB())("a member's writes on an item", (it) => {
   );
 });
 
-it.layer(getTestDB())("who an inbox item waits on", (it) => {
+it.layer(Layer.merge(getTestDB(), blobs.layer))("who an inbox item waits on", (it) => {
   /** A plan's inbox as the desktop builds it from the live rows. */
   const liveTaskInbox = (readerId: string, taskId: string) =>
     Effect.gen(function* () {
       const statements = Option.getOrThrow(
-        taskInboxRead.statements({
-          userId: readerId,
-          id: taskId,
-          workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-        }),
+        taskInboxRead.statements({ userId: readerId, id: taskId }),
       );
 
       const sql = yield* SqlClient.SqlClient;
@@ -2256,7 +2209,7 @@ it.layer(getTestDB())("who an inbox item waits on", (it) => {
   );
 });
 
-it.layer(getTestDB())("a thread's addressee", (it) => {
+it.layer(Layer.merge(getTestDB(), blobs.layer))("a thread's addressee", (it) => {
   it.effect(
     "a thread addressed to a member waits on them over the task's assignee, in its read and the account's stamps, and on the assignee again once a post names nobody, its first ask still naming whom it was addressed to",
     () =>

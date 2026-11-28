@@ -24,10 +24,18 @@ import { Effect, Exit, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { attachment } from "../../schemas/attachment.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import {
+  blobKeyOf,
+  getTestDB,
+  joinWorkspace,
+  openWorkspace,
+  storedAttachmentOf,
+} from "../../testing/index.js";
+import { ATTACHMENT_BODY } from "../attachment-body.js";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
+  type DescriptionAttachmentToKeep,
+  keepDescriptionAttachment as keepStored,
   readDescriptionAttachment,
   readServedDescriptionAttachment,
 } from "../description-attachments.js";
@@ -74,6 +82,21 @@ const openSharedTask = Effect.gen(function* () {
   return { owner, teammate, outsider, taskId };
 });
 
+/** Keeps the file on the description as its writer is handed it: as though uploaded, counted at its bytes' length, with its copy for a phone where one is given. */
+function keepDescriptionAttachment(
+  userId: string,
+  taskId: string,
+  file: DescriptionFile,
+  phoneCopy?: Uint8Array,
+) {
+  const toKeep: DescriptionAttachmentToKeep = {
+    contentType: file.contentType,
+    stored: storedAttachmentOf(file.bytes.length, phoneCopy?.length),
+  };
+
+  return keepStored(userId, taskId, toKeep);
+}
+
 /** The id a keep answered, failing the test where it kept nothing. */
 function keptId(kept: { readonly status: string; readonly id?: string }): string {
   assert.equal(kept.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
@@ -94,7 +117,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
         const read = yield* readDescriptionAttachment(owner, taskId, id);
         assert.ok(Option.isSome(read));
         assert.equal(read.value.contentType, PICTURE_TYPE.PNG);
-        assert.deepEqual([...read.value.bytes], [...PICTURE.bytes]);
+        assert.equal(blobKeyOf(read.value.body), `attachments/${id}`);
         assert.ok(Option.isNone(yield* readDescriptionAttachment(outsider, taskId, id)));
         assert.equal(
           (yield* keepDescriptionAttachment(outsider, taskId, PICTURE)).status,
@@ -172,7 +195,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
         const read = yield* readDescriptionAttachment(teammate, taskId, id);
         assert.ok(Option.isSome(read));
         assert.equal(read.value.contentType, recording.contentType);
-        assert.equal(read.value.bytes.length, PICTURE_BOUNDS.MAX_VIDEO_BYTES);
+        assert.equal(blobKeyOf(read.value.body), `attachments/${id}`);
 
         const tooLong = {
           ...video,
@@ -209,7 +232,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
       const read = yield* readDescriptionAttachment(teammate, taskId, id);
       assert.ok(Option.isSome(read));
       assert.equal(read.value.contentType, DESCRIPTION_FILE_TYPE.PDF);
-      assert.equal(read.value.bytes.length, AGENT_BOUNDS.MAX_PDF_BYTES);
+      assert.equal(blobKeyOf(read.value.body), `attachments/${id}`);
 
       const tooLong = { ...pdf, bytes: paddedTo(head, AGENT_BOUNDS.MAX_PDF_BYTES + 1) };
 
@@ -225,24 +248,30 @@ it.layer(getTestDB())("a description's pictures", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, outsider, taskId } = yield* openSharedTask;
 
-        const id = keptId(
-          yield* keepDescriptionAttachment(owner, taskId, { ...VIDEO, mp4Bytes: MP4 }),
-        );
+        const id = keptId(yield* keepDescriptionAttachment(owner, taskId, VIDEO, MP4));
 
         const older = keptId(yield* keepDescriptionAttachment(owner, taskId, VIDEO));
 
         const served = (account: string, attachmentId: string, playable: PlayableVideoType) =>
           Effect.map(
             readServedDescriptionAttachment(account, taskId, attachmentId, playable),
-            Option.getOrUndefined,
+            (read) => Option.getOrUndefined(read),
           );
+
+        const stored = (blobKey: string) => ({ kind: ATTACHMENT_BODY.STORED, blobKey });
 
         assert.deepEqual(yield* served(teammate, id, PLAYABLE_VIDEO_TYPE.MP4), {
           contentType: MP4_TYPE,
-          bytes: MP4,
+          body: stored(`attachments/${id}/phone`),
         });
-        assert.deepEqual(yield* served(teammate, id, PLAYABLE_VIDEO_TYPE.WEBM), VIDEO);
-        assert.deepEqual(yield* served(teammate, older, PLAYABLE_VIDEO_TYPE.MP4), VIDEO);
+        assert.deepEqual(yield* served(teammate, id, PLAYABLE_VIDEO_TYPE.WEBM), {
+          contentType: VIDEO.contentType,
+          body: stored(`attachments/${id}`),
+        });
+        assert.deepEqual(yield* served(teammate, older, PLAYABLE_VIDEO_TYPE.MP4), {
+          contentType: VIDEO.contentType,
+          body: stored(`attachments/${older}`),
+        });
         assert.equal(yield* served(outsider, id, PLAYABLE_VIDEO_TYPE.MP4), undefined);
 
         assert.ok(yield* deleteTask(owner, taskId));

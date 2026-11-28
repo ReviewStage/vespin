@@ -94,9 +94,11 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
+import type { InboxRowsSource } from "@repo/host/inbox-rows";
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
+import { ForegroundClock } from "@repo/runtime/effect";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
@@ -126,6 +128,8 @@ export interface MobileHost {
   readonly bridge: AppBridge;
   /** The screens' client of the act port, for the acts that ride oRPC (`@repo/host/contract`). */
   readonly acts: ActPortClient;
+  /** The pool's Inbox kind, which the screens read through live queries where its items are kept on disk (`@repo/host/inbox-rows`). */
+  readonly inboxRows: InboxRowsSource;
 }
 
 export class MobileHostTag extends Context.Service<MobileHostTag, MobileHost>()(
@@ -148,6 +152,8 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
+  /** The clock the host's deadlines run on, stopped while the app is in the background (`launch-state.ts`); a device whose process is never suspended, as a test's, hands none, and the host runs on its monotonic time. */
+  readonly foregroundClock?: ForegroundClock;
   /** Whether the device has a network: its reading now, then each change, for as long as the subscription stands. */
   readonly onNetworkChanged: (listener: (online: boolean) => void) => () => void;
   /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`). */
@@ -184,6 +190,8 @@ export interface MobileHostOptions {
   readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
+  /** Where a fixture run's agent recording is served over HTTP on the rig (`-mediaOrigin`), so its player takes the remote path a device's does; never in a live run. */
+  readonly fixtureMediaOrigin?: string | undefined;
   /** How often a fixture run's release Manager moves its turn while its page follows it, in milliseconds, which `-streamTurn <ms>` asks; never in a live run. */
   readonly fixtureStreamTurn?: number | undefined;
   /** This build's version, as the app's config names it. */
@@ -507,7 +515,7 @@ const composedMobile = (options: MobileHostOptions) =>
         yield* HttpClient.HttpClient,
       );
 
-      return { bridge: made.bridge, acts, operator, state };
+      return { bridge: made.bridge, acts, operator, state, inboxRows: assembly.inboxRows };
     }),
   );
 
@@ -557,6 +565,7 @@ export function composeMobile(
       const standing = Layer.mergeAll(
         Layer.succeed(MobileHostTag, {
           bridge: mobile.bridge,
+          inboxRows: mobile.inboxRows,
           acts:
             fixture === undefined || fixtureHost === undefined
               ? mobile.acts
@@ -565,6 +574,7 @@ export function composeMobile(
                   fixture,
                   mobile.state,
                   options.fixtureRefusesWrites === true,
+                  options.fixtureMediaOrigin,
                   options.fixtureStreamTurn,
                 ),
         }),
@@ -587,9 +597,15 @@ export function composeMobile(
     }),
   );
 
+  // Note that the device's clock stands around the whole host rather than among the assembly's seams, which reach only its construction, since the loops it arms and the acts it answers run in the context the host stands in.
   return launched.pipe(
     Layer.provideMerge(composedMobile(options)),
     Layer.provideMerge(assembly),
     Layer.provide(httpClient),
+    Layer.provideMerge(
+      device.foregroundClock === undefined
+        ? Layer.empty
+        : Layer.succeed(ForegroundClock, device.foregroundClock),
+    ),
   );
 }

@@ -6,6 +6,8 @@ import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { holdExits } from "../../testing/held-exits.js";
+import { IconButton } from "../button/button.js";
+import { IconPickerChoice } from "../icon-picker/icon-picker.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { NO_CONTEXT_MENU } from "./context-menu.js";
 import {
@@ -824,6 +826,95 @@ test("the mouse resting on an item that opens a panel opens it with the keyboard
   expect(searching()).toBe(true);
   mouseMove(arrived, button("Attachment"), { clientX: 50, clientY: 20 });
   expect(serversPanel()).toBeNull();
+});
+
+/** A panel holding one icon picker's choice, Cat, whose colors float in a flyout once pressed, as a Manager's Change face › panel does; a color picked is chosen and closes the menu. */
+function FacePanel({ chosen, close }: { chosen: Chosen; close: () => void }): React.JSX.Element {
+  const [floating, setFloating] = useState(false);
+
+  const color = (label: string) =>
+    createElement(IconButton, {
+      key: label,
+      icon: label.slice(0, 1),
+      label,
+      onClick: () => {
+        chosen.push(label);
+        close();
+      },
+    });
+
+  return createElement(
+    "div",
+    { role: "dialog", "aria-label": "Faces" },
+    createElement(IconPickerChoice, {
+      label: "Cat",
+      pressed: false,
+      stop: true,
+      face: "C",
+      popup: true,
+      flyout: floating
+        ? {
+            label: "Colors",
+            content: [color("Gray"), color("Purple")],
+            onClose: () => setFloating(false),
+          }
+        : undefined,
+      onPress: () => setFloating((was) => !was),
+    }),
+  );
+}
+
+/** The colors the cat floats, standing, if they are. */
+function catColors(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".ui-icon-picker-flyout");
+}
+
+test("a picker's colors floated from a menu's panel take the keyboard with the menu standing, keep it as the pointer comes back over them, Escape puts them away alone, and a color picked closes the menu", async () => {
+  const chosen: Chosen = [];
+
+  mount(
+    createElement(Harness, {
+      groups: [
+        [
+          {
+            label: "Change face",
+            panel: ({ close }) => createElement(FacePanel, { chosen, close }),
+          },
+        ],
+      ],
+    }),
+  );
+  press(button("More"));
+  press(button("Change face"));
+  const cat = button("Cat");
+  await act(async () => cat.click());
+
+  const gray = catColors()?.querySelector<HTMLElement>('[aria-label="Gray"]');
+
+  assert.ok(gray, "the cat floats its colors");
+  expect(document.activeElement).toBe(gray);
+  expect(openMenu()).not.toBeNull();
+  await act(async () =>
+    gray.dispatchEvent(
+      new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
+    ),
+  );
+  expect(document.activeElement).toBe(gray);
+
+  await act(async () =>
+    gray.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+  );
+  expect(catColors()).toBeNull();
+  expect(openMenu()).not.toBeNull();
+  expect(document.activeElement).toBe(cat);
+
+  await act(async () => cat.click());
+  const purple = catColors()?.querySelector<HTMLElement>('[aria-label="Purple"]');
+
+  assert.ok(purple, "the cat floats its colors again");
+  await act(async () => purple.click());
+  expect(chosen).toEqual(["Purple"]);
+  await vi.waitFor(() => expect(openMenu()).toBeNull());
 });
 
 /** A menu of one submenu whose choice its owner holds: Group by, `chosen` checked. */

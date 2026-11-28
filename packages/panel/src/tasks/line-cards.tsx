@@ -42,7 +42,7 @@ import { ChipOrLink, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ReviewBadge } from "./pull-request-people.js";
 import { EntryPictures, usePictureDrawer } from "./pull-request-pictures.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords } from "./transcript-blocks.js";
 
 /**
  * line-cards.tsx -- a line steered into an agent drawn from what its metadata says carried it: a thread's, a comment's, or a Slack message's line under its head, and GitHub's word as its card.
@@ -304,7 +304,7 @@ const NO_PICTURE: GitHubPictureDrawer = () => undefined;
  * line kept that, drawn as the Pull request tab draws a comment, its
  * pictures read through the service as the agent's and opening the viewer
  * over them; else, on a line kept before it did or whose rendering could
- * not be read, the words as markdown.
+ * not be read, the words as markdown, through the same steps.
  */
 function GitHubLineWords({
   words,
@@ -317,11 +317,13 @@ function GitHubLineWords({
   const scope = useMemo(() => ({ agentId: agentId ?? "" }), [agentId]);
   const drawn = usePictureDrawer(scope);
 
-  if (html === undefined) return <TranscriptWords text={words} />;
+  const picture = agentId === undefined ? NO_PICTURE : drawn;
+
+  if (html === undefined) return <GitHubWords source={{ markdown: words }} picture={picture} />;
 
   return (
     <EntryPictures html={html}>
-      <GitHubWords html={html} picture={agentId === undefined ? NO_PICTURE : drawn} />
+      <GitHubWords source={{ html }} picture={picture} />
     </EntryPictures>
   );
 }
@@ -415,11 +417,13 @@ export function GitHubLineCard({
       open={fold.folds ? undefined : false}
       fill={DISCLOSURE_FILL.ACTIONS}
       actions={
-        // Note that the head clips with room for the sender's wash, whose ring stands at its edge, so its corners are not cut square.
+        // Note that the head and the sender's own box clip with room for the sender's wash, whose ring stands at their edge, so its corners are not cut square.
         // Note that a head too narrow for one line puts what was done on a line of its own under who did it, rather than shrinking a chip under the words beside it; there the count fades first, then the words, and the pull request's chip stays whole.
         <span className="github-line-head flex min-w-0 flex-1 flex-wrap items-baseline gap-x-tight-gap gap-y-tight-gap overflow-clip [overflow-clip-margin:var(--ui-inline-ref-bleed)] py-row-inset">
           {by == null ? null : (
-            <span className="inline-flex min-w-0 max-w-full overflow-clip">{by}</span>
+            <span className="inline-flex min-w-0 max-w-full overflow-clip [overflow-clip-margin:var(--ui-inline-ref-bleed)]">
+              {by}
+            </span>
           )}
           <span className="flex min-w-0 max-w-full flex-1 basis-auto items-baseline gap-tight-gap whitespace-nowrap">
             <OneLine className="min-w-0 text-muted-foreground">{fold.does}</OneLine>

@@ -18,7 +18,7 @@ import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { CHAT_THREAD_WORDS, type ManagerChatLine } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { ThreadReplies } from "@repo/ui";
-import { MessageSquareReplyIcon } from "@repo/ui/icons";
+import { MessageSquareTextIcon } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { createContext, type ReactNode, use } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -32,7 +32,7 @@ export const THREAD_WORDS = CHAT_THREAD_WORDS;
 export function ThreadReplyAction({ onOpen }: { onOpen: () => void }): ReactNode {
   return (
     <MessageAction label={THREAD_WORDS.REPLY} tooltip={THREAD_WORDS.REPLY} onClick={onOpen}>
-      <MessageSquareReplyIcon />
+      <MessageSquareTextIcon />
     </MessageAction>
   );
 }

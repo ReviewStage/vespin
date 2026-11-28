@@ -28,6 +28,7 @@ import type {
   AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type {
   GitHubRepositoriesAnswer,
   GitHubRepositoryIssueAnswer,
@@ -36,6 +37,7 @@ import type {
 } from "@repo/features/github-repositories-wire";
 import type { GitHubTokenSummary } from "@repo/features/github-token-wire";
 import type { HostLine } from "@repo/features/host-live";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
@@ -68,10 +70,10 @@ import {
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import type { WorkspaceMembersAnswer } from "@repo/features/workspace-wire";
 import type { SessionReplayBootstrap } from "@repo/gateway/window-session";
@@ -285,13 +287,18 @@ export interface AppInboxSlice {
 /**
  * One read the host holds for the panel (`live-collection.ts`), as every
  * window draws it: its rows as it last answered, absent until it first
- * does, and whether it said it could not answer before it ever had. A read
- * that stops answering once it has keeps its rows, since its next answer
- * brings them up to date. What the panel reads through a live read's query.
+ * does, and whether it said it could not answer before it ever had, with
+ * what failed beneath it where the read said, so the window that shows it
+ * reports a read that got no answer as the network's failure rather than the
+ * app's (`@repo/features/shown-failure`). A read that stops answering once it
+ * has keeps its rows, since its next answer brings them up to date. What the
+ * panel reads through a live read's query.
  */
 export interface AppHostRead<Rows> {
   rows?: Rows;
   failed?: true;
+  /** What failed beneath a read that never answered, where it said; only beside `failed`. */
+  cause?: FailureFacts;
   /** Whether the rows are the ones the phone kept on disk, drawn before the service's first answer took their place; only the account's Inbox sets it (`account-items-follow.ts`). */
   kept?: true;
 }
@@ -423,7 +430,29 @@ export type AppInboxItems = {
  */
 export interface AppInboxRead extends AppHostRead<AppInboxItems> {
   keptHolders?: readonly TaskSummary[];
+  /** That the items stand in the pool's Inbox kind kept on disk, which a screen reads through live queries, so the rows told here are none (`inbox-rows.ts`). */
+  stored?: true;
 }
+
+/** The items one place's search found on the service (`AGENTS_INBOX_SEARCH`): the words they were found by, and the items, by the plan each is on and those on no task by their agent, as the feed's are. */
+export interface AppInboxFound {
+  readonly query: string;
+  readonly items: AppInboxItems;
+}
+
+/**
+ * The items each place a search is asked from found on the service, by the
+ * place (`INBOX_SEARCH_PLACE`), each as the host's read of it stands, the
+ * member's own writes drawn over them: held from the place's first answer
+ * until its words clear, or its screen goes, and replaced by each answer to
+ * its newer words. One absent holds nothing found.
+ */
+export type AppInboxFoundPlaces = Readonly<
+  Partial<Record<InboxSearchPlace, AppHostRead<AppInboxFound>>>
+>;
+
+/** No place holding anything found, as the host stands before any search and after a sign-out. */
+export const NO_INBOX_FOUND: AppInboxFoundPlaces = {};
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;
@@ -540,6 +569,9 @@ export type AppMachines = Readonly<Record<string, AppHostRead<readonly MachineLi
 /** The asks the account's machines hold for its answer, by the account, as the host's read of them stands. */
 export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly MachineAskLine[]>>>;
 
+/** The account's view choices the windows hold, by the account, as the host's read of them stands, every choice still out drawn over them. */
+export type AppViewChoices = Readonly<Record<string, AppHostRead<readonly ViewChoiceLiveRow[]>>>;
+
 /**
  * Each workspace's pending invitations the host holds for an owner's or an
  * admin's windows (`workspace-invitations-read.ts`): those a window draws,
@@ -549,16 +581,6 @@ export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly Machin
  */
 export type AppWorkspaceInvitations = Readonly<
   Record<string, AppHostRead<readonly WorkspaceInvitation[]>>
->;
-
-/**
- * The machines each workspace owns the host holds for its windows
- * (`workspace-machines-follow.ts`), by the workspace's id, each by name, with
- * a rename still out drawn over it and a removal drawn gone, once its read
- * answered. One absent is held by nobody.
- */
-export type AppWorkspaceMachines = Readonly<
-  Record<string, AppHostRead<readonly WorkspaceMachineLine[]>>
 >;
 
 /**
@@ -787,6 +809,8 @@ export interface AppHostReads {
   [LIVE_READ.ACCOUNT_PREFERENCES]: AccountPreferencesLive;
   [LIVE_READ.AGENT_ORIGINS]: AgentOrigin | null;
   [LIVE_READ.INBOX_ITEMS]: AppInboxItems;
+  [LIVE_READ.INBOX_OLDER]: AppInboxItems;
+  [LIVE_READ.INBOX_FOUND]: AppInboxFound;
   [LIVE_READ.HOLDER_INBOX]: readonly InboxItem[];
   [LIVE_READ.INSTALLED_SKILLS]: readonly InstalledSkillSummary[];
   [LIVE_READ.INTEGRATIONS]: IntegrationStatusesAnswer;
@@ -812,8 +836,8 @@ export interface AppHostReads {
   [LIVE_READ.HOSTS]: AppHostsHeld;
   [LIVE_READ.MACHINES]: readonly MachineLine[];
   [LIVE_READ.MACHINE_ASKS]: readonly MachineAskLine[];
+  [LIVE_READ.VIEW_CHOICES]: readonly ViewChoiceLiveRow[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
-  [LIVE_READ.WORKSPACE_MACHINES]: readonly WorkspaceMachineLine[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
   [LIVE_READ.WORKSPACE_MEMBERS]: WorkspaceMembersAnswer;
@@ -943,6 +967,22 @@ export interface AppState {
   [LIVE_READ.ACCOUNT_PREFERENCES]: AppAccountPreferences;
   /** Every inbox item the account reaches, held for the signed-in session: what the window's Inbox, its search, and a person's page list. */
   [LIVE_READ.INBOX_ITEMS]: AppInboxRead;
+  /**
+   * The account's settled items older than the feed holds, held for the
+   * signed-in session as an Inbox listing every item read them a page at a
+   * time (`AGENTS_INBOX_OLDER_PAGE`), by the plan each is on and those on no
+   * task by their agent, the member's own writes drawn over them; none the
+   * feed holds. What All lists past the feed, and nothing counts.
+   */
+  [LIVE_READ.INBOX_OLDER]: AppHostRead<AppInboxItems>;
+  /**
+   * The items each place a search is asked from found on the service past
+   * what the host holds (`AGENTS_INBOX_SEARCH`), by the place, held while the
+   * place's words stand, the member's own writes drawn over them. What a
+   * place's search lists beside the items held, under the scope it shows,
+   * and nothing counts.
+   */
+  [LIVE_READ.INBOX_FOUND]: AppInboxFoundPlaces;
   /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */
@@ -993,9 +1033,10 @@ export interface AppState {
   [LIVE_READ.MACHINES]: AppMachines;
   /** The asks the account's machines hold for its answer, held while a window could draw one: what an agent's tab asks over its box, and what a row counts as needing you. */
   [LIVE_READ.MACHINE_ASKS]: AppMachineAsks;
+  /** The account's view choices (a sort, a filter, a fold), held while a window draws a surface that reads one: what each such surface stands in. */
+  [LIVE_READ.VIEW_CHOICES]: AppViewChoices;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
-  [LIVE_READ.WORKSPACE_MACHINES]: AppWorkspaceMachines;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHosts;
   /** Each agent's or worker's transcript the windows' tabs show, held while a tab shows it and a while after, followed only while one does: what an agent's tab and a worker's draw. Never written to disk. */
@@ -1160,6 +1201,13 @@ export const HOST_READ_SLICE = {
     on: KEYS_ON.ROWS,
     rowId: "id" satisfies keyof InboxItem,
   },
+  [LIVE_READ.INBOX_OLDER]: {
+    keys: READ_KEYS.TWO,
+    on: KEYS_ON.ROWS,
+    rowId: "id" satisfies keyof InboxItem,
+  },
+  // Note that a place's found items cross whole, since each answer replaces them.
+  [LIVE_READ.INBOX_FOUND]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOLDER_INBOX]: {
     keys: READ_KEYS.TWO,
     on: KEYS_ON.SLICE,
@@ -1211,12 +1259,12 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINE_ASKS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.VIEW_CHOICES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.WORKSPACE_INVITATIONS]: {
     keys: READ_KEYS.ONE,
     on: KEYS_ON.SLICE,
     rowId: "id" satisfies keyof WorkspaceInvitation,
   },
-  [LIVE_READ.WORKSPACE_MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.THIS_MAC_HOST]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   // Note that a transcript crosses as the messages that moved, since each step of a turn rewrites one message, its journal, while the rest stand.
   [LIVE_READ.TRANSCRIPT]: {

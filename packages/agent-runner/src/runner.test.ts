@@ -31,6 +31,7 @@ import { RunnerFailed } from "./launch.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
+  type ClaudeCodeConfig,
   CONNECTION_LOST_DETAIL,
   connectionLostFailure,
   EFFORT,
@@ -2175,6 +2176,45 @@ it.effect(
       );
 
       assert.deepEqual([accepted, cli.prompts.length], [[line], 1]);
+    }),
+);
+
+/** A resume of each kind, and whether its store loads the main transcript from the latest compaction. */
+const RESUMES: ReadonlyArray<{
+  readonly resumed: string;
+  readonly config: Pick<ClaudeCodeConfig, "rewindBefore" | "fork">;
+  readonly fromLatestCompaction: true | undefined;
+}> = [
+  { resumed: "a resume", config: {}, fromLatestCompaction: true },
+  {
+    resumed: "a rewind",
+    config: { rewindBefore: "10000000-0000-4000-8000-000000000003" },
+    fromLatestCompaction: undefined,
+  },
+  { resumed: "a fork", config: { fork: true }, fromLatestCompaction: undefined },
+];
+
+it.effect.each(RESUMES)(
+  "hands the CLI a store that loads $resumed's main transcript from its latest compaction only where it neither rewinds nor forks",
+  ({ config, fromLatestCompaction }) =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(SHORT_TURN, service, ENV, REWOUND_CHAIN);
+      yield* write({ ...CONFIG, ...config, transcriptsUrl: "https://app.test/runner/transcripts" });
+      yield* write(FIRST_MESSAGE);
+      yield* Fiber.join(run);
+
+      const loads = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => Response.json({ entries: [], next: null }));
+
+      yield* Effect.promise(async () =>
+        cli.options?.sessionStore?.load({ projectKey: "p", sessionId: CONFIG.resume ?? "" }),
+      );
+      const [, init] = loads.mock.calls[0] ?? [];
+      vi.restoreAllMocks();
+
+      assert.equal(JSON.parse(String(init?.body)).fromLatestCompaction, fromLatestCompaction);
     }),
 );
 

@@ -46,7 +46,12 @@ import { actMutation } from "../act-mutations.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { refusedShown } from "../failure-report.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
-import { appStateQuery, selectAccount, selectCapability } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectAccount,
+  selectCapability,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { useMcpClientRevoke } from "./mcp-clients-section.js";
 import { MenuRow } from "./menu-row.js";
@@ -360,7 +365,7 @@ export function CliSection(): React.JSX.Element {
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.CLI_INSTALL) }).data ===
     true;
 
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const accountId = signedInAccountId(account);
   const read = useQuery(mcpClientsQuery(accountId));
   const retry = useMutation(mcpClientsRetryMutation());

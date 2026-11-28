@@ -1,6 +1,5 @@
 import { useId } from "react";
 import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { BUTTON_VARIANT, type BusyProps, Button } from "../button/button.js";
 import { useSettled } from "../spinner/settle-wait.js";
 import { SpinnerRing } from "../spinner/spinner.js";
@@ -126,7 +125,7 @@ function GateButton({
       disabled={disabled || busy}
       aria-busy={busy ? true : undefined}
       aria-describedby={describedBy}
-      onClick={pulseOnPress(onPress, PRESS_PULSE.QUIET)}
+      onClick={onPress}
     >
       {ringShown ? (
         <span className="ui-provider-button-wait size-ui-16 flex-[0_0_auto]">

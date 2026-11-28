@@ -17,7 +17,7 @@ import {
   latestTurnsOfReached,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
-import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
 import {
@@ -385,7 +385,7 @@ const sandboxLaunch = (
 const macLaunch = (userId: string, deviceId: string, lineId: string) =>
   Effect.gen(function* () {
     const claimed = Option.getOrThrow(
-      yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), lineId).pipe(
+      yield* claimedDeviceAgentLine(userId, deviceId, lineId).pipe(
         Effect.provide(Layer.succeed(HostedEnvironment, ENVIRONMENT)),
       ),
     );
@@ -482,6 +482,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       linesUrl: `${ORIGIN}/api/agents/runner-lines`,
       mcpUrl: `${ORIGIN}/api/agents/mcp`,
       transcriptsUrl: `${ORIGIN}/api/agents/runner-transcripts`,
+      picturesUrl: `${ORIGIN}/api/agents/runner-pictures`,
       integrations: () => Effect.succeed([]),
       instructions: () => Effect.succeed("You are a Vespin coding agent."),
       nextSequence: () => Effect.sync(() => sequence.next),
@@ -518,7 +519,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
 
     const launches = onMac
       ? Effect.gen(function* () {
-          const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
+          const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
           const after: string[][] = claimed.map(() => []);
 
           for (const line of waiting) {
@@ -542,7 +543,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       : Effect.forEach(api.commands, (command) => sandboxLaunch(api, userId, command));
 
     // A Mac beats on while it waits for the agent's next launch; a sandbox has nothing to beat.
-    const beat = onMac ? Effect.asVoid(beatDevice(ownDeviceHost(userId, deviceId))) : Effect.void;
+    const beat = onMac ? Effect.asVoid(beatDevice(userId, deviceId)) : Effect.void;
 
     return { userId, agent, api, sessions, sequence, launches, beat };
   });

@@ -8,6 +8,7 @@ import {
   iosRouteAgent,
   iosRouteHidesTabs,
   iosRouteOnTab,
+  iosRouteStanding,
 } from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
 
@@ -47,6 +48,7 @@ describe("a vespin.dev link", () => {
     ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/agent/agent-1/page/page-1", "/tasks/agent/agent-1/page?page=page-1"],
+    ["/acme/agent/agent-1/message/message-1", "/tasks/agent/agent-1?message=message-1"],
     ["/acme/task/task-1/agent/agent-1/changes", undefined],
     ["/acme/person/user-1", "/tasks/person/user-1"],
     ["/acme/person/user-1#machine-device-1", "/tasks/person/user-1"],
@@ -120,7 +122,6 @@ describe("the tab bar on a route", () => {
     ["/tasks/pull/acme-ws/acme/relay/42", true],
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],
-    ["/tasks/comments/thread-1", true],
     ["/tasks/person/user-1", false],
     ["/search", false],
   ])("on %s hidden is %s", (pathname, hidden) => {
@@ -155,5 +156,15 @@ describe("a route opened from a tab", () => {
     ["/start-task", "inbox", "/start-task"],
   ] as const)("%s from %s opens at %s", (route, standing, opened) => {
     expect(iosRouteOnTab(route, standing)).toBe(opened);
+  });
+});
+
+// Note that the regression this catches is a person's page opened from a thread on an iPad landing on Tasks, whose Back then stands on Tasks' empty detail rather than the thread, while a task keeps opening on Tasks beside its list.
+describe("a route opened from a tab in a regular window", () => {
+  it.each([
+    ["/tasks/person/user-1", "inbox", "/(inbox)/tasks/person/user-1"],
+    ["/tasks/task-1", "inbox", "/(tasks)/tasks/task-1"],
+  ] as const)("%s from %s opens at %s", (route, standing, opened) => {
+    expect(iosRouteOnTab(route, iosRouteStanding(route, standing, false))).toBe(opened);
   });
 });

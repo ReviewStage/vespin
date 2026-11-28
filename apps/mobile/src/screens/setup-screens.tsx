@@ -196,7 +196,9 @@ function StepFrame({
             icon={glyphSymbol(GLYPH.BACK)}
             accessibilityLabel={WORDS.BACK}
             onPress={() => router.replace({ pathname: SETUP_STEP_ROUTE, params: { step: before } })}
-          />
+          >
+            {WORDS.BACK}
+          </Stack.Toolbar.Button>
         </Stack.Toolbar>
       )}
       <Stack.Toolbar placement="right">

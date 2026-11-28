@@ -16,8 +16,8 @@
  *
  * Each option is its glyph, its name, and a count. The name is always
  * given. A bar narrower than its options need keeps them on one row and
- * scrolls sideways, its cut edges fading as a scroll area's do
- * (`scrollFadeMarks`), the chosen option brought into view as it is chosen;
+ * scrolls sideways, as a sideways scroll area does, the chosen option
+ * brought into view as it is chosen;
  * a fill bar shows an option other than the chosen one by its glyph alone
  * too, its name left to a reader who cannot see it, and one standing in a
  * toolbar beside other controls folds once their names no longer fit,
@@ -83,7 +83,6 @@ import {
 import { cn } from "../../cn.js";
 import { ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { type CountPart, CountParts } from "../choice/count-part.js";
 import {
@@ -93,7 +92,7 @@ import {
   rovingItem,
   useRovingKeys,
 } from "../roving-keys/roving-keys.js";
-import { SCROLL_AXIS, SCROLL_FADE, scrollFadeMarks } from "../scroll-area/scroll-area.js";
+import { SCROLL_AXIS } from "../scroll-area/scroll-area.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /** The role a bar's options carry, which decides the keys it steps by: a tab's, or a radio's. */
@@ -206,26 +205,24 @@ const CHOSEN = ':scope > [aria-selected="true"], :scope > [aria-checked="true"]'
 
 /**
  * The bar's box: one row of its options, never wider than its container,
- * scrolling sideways past it with no bar drawn, its cut edges fading
- * (`BAR_FADE`). A fill bar takes its container's width, and is the container
- * its narrow fold measures (`choice-bar.css`); a segmented one hugs its
+ * scrolling sideways past it with no bar drawn, as a sideways scroll area
+ * does (`ui-scroll-area`, keyed on its `data-axis`). A fill bar takes its
+ * container's width, and is the container its narrow fold measures
+ * (`choice-bar.css`); a segmented one hugs its
  * options in a trough, or, stretched, fills its row. Note that a fill bar in
  * a PaneBar's middle grows to the middle's room, because the container it is
  * sizes itself as if it held nothing, so as a flex item that only hugs its
  * options it would stand 0px wide.
  */
 const BAR =
-  "ui-choice-bar relative items-center flex-nowrap min-w-0 max-w-full [scrollbar-width:none]";
-
-/** The scroll area's sideways fade, which eases in only while the row has options past an edge. */
-const BAR_FADE = scrollFadeMarks(SCROLL_FADE.BOTH, SCROLL_AXIS.HORIZONTAL);
+  "ui-choice-bar ui-scroll-area relative items-center flex-nowrap min-w-0 max-w-full [scrollbar-width:none]";
 
 /**
  * A bar a finger works (`words`) stands in a frame of its own, which takes
  * the bar's place in its row, the bar filling it but for a glyph's room at
- * its end, where a mark stands outside the bar's fade: a chevron saying
- * more options wait past the end, which `choice-bar.css` shows only while
- * they do. It is a mark, not a press: a finger swipes the row.
+ * its end, where a mark stands outside the bar: a chevron saying more
+ * options wait past the end, which `choice-bar.css` shows only while they
+ * do. It is a mark, not a press: a finger swipes the row.
  */
 const WORDS_FRAME =
   "ui-choice-bar-frame relative flex min-w-0 max-w-full self-stretch items-center pe-control-icon [.ui-pane-bar-middle>&]:flex-1";
@@ -308,12 +305,12 @@ const OPTION = cn(
  */
 const OPTION_LOOK = {
   fill: {
-    regular: "h-control py-0 px-2 gap-1.5 text-label",
-    compact: "h-choice-fill-compact py-0 px-1.5 gap-1 text-caption",
+    regular: "h-control py-0 px-2 gap-icon-gap-regular text-label",
+    compact: "h-choice-fill-compact py-0 px-1.5 gap-icon-gap-compact text-caption",
   },
   segmented: {
-    regular: "h-choice-segment py-0 px-3 gap-1.5 text-label",
-    compact: "h-choice-segment-compact py-0 px-2 gap-1 text-caption",
+    regular: "h-choice-segment py-0 px-3 gap-icon-gap-regular text-label",
+    compact: "h-choice-segment-compact py-0 px-2 gap-icon-gap-compact text-caption",
   },
 } as const satisfies Record<ChoiceBarLook, Record<ChoiceBarSize, string>>;
 
@@ -447,23 +444,17 @@ function placeThumb(bar: HTMLElement, slide: boolean): void {
 }
 
 /**
- * Scrolls `bar` the least that brings its chosen option clear of the faded
- * edges, where the row is cut past it. Note that it moves the bar's own
- * scroll rather than calling `scrollIntoView`, which would scroll every box
- * around the bar too.
+ * Scrolls `bar` the least that brings its chosen option into view, where
+ * the row is cut past it. Note that it moves the bar's own scroll rather
+ * than calling `scrollIntoView`, which would scroll every box around the
+ * bar too.
  */
 function revealChosen(bar: HTMLElement): void {
   const chosen = bar.querySelector<HTMLElement>(CHOSEN);
 
   if (chosen === null || bar.scrollWidth <= bar.clientWidth) return;
-  const style = getComputedStyle(bar);
-  const start = chosen.offsetLeft - (Number.parseFloat(style.scrollPaddingInlineStart) || 0);
-
-  const end =
-    chosen.offsetLeft +
-    chosen.offsetWidth +
-    (Number.parseFloat(style.scrollPaddingInlineEnd) || 0) -
-    bar.clientWidth;
+  const start = chosen.offsetLeft;
+  const end = chosen.offsetLeft + chosen.offsetWidth - bar.clientWidth;
 
   if (start < bar.scrollLeft) bar.scrollLeft = start;
   else if (end > bar.scrollLeft) bar.scrollLeft = end;
@@ -936,11 +927,9 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
       onFocus={keys.onFocus}
       {...groupAttributes(role, label, disabled || !roving ? undefined : keys.onKeyDown)}
       {...appAttributes}
-      data-axis={BAR_FADE["data-axis"]}
-      data-fade={BAR_FADE["data-fade"]}
+      data-axis={SCROLL_AXIS.HORIZONTAL}
       className={cn(
         BAR,
-        BAR_FADE.className,
         BAR_LOOK[look],
         segmented
           ? [SEGMENTED_WIDTH[stretch ? "stretch" : "hug"], SEGMENTED_REACH[size]]
@@ -970,7 +959,6 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
             className={optionClass}
             disabled={disabled || item.disabled === true}
             onMouseDown={roving ? undefined : keepFocus}
-            onClick={pulseOnPress()}
           >
             {item.icon === undefined || words ? null : (
               <span className={ICON} aria-hidden="true">

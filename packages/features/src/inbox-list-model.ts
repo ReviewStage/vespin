@@ -12,7 +12,11 @@
  * how it ended rather than who said it last. The panel's Inbox
  * (`packages/panel/src/tasks/inbox-model.ts` and the rows that draw it) and
  * the iOS app's both read it here, so the two lists cannot disagree.
- * Nothing here draws.
+ * Every list decision reads an item as its row (`inbox-digest.ts`'s
+ * `InboxRow`), the item without its thread but for the digest of it the
+ * row draws from, and a search reads each row's words through the list's
+ * `InboxSearch`, so a client may keep its rows lean; what draws a thread
+ * itself reads the whole item. Nothing here draws.
  */
 
 import { Predicate } from "effect";
@@ -25,6 +29,15 @@ import {
   inboxAttachmentOf,
   inboxPictureDestination,
 } from "./inbox-attachment-link.js";
+import {
+  type InboxDigest,
+  type InboxFields,
+  type InboxRow,
+  inboxAgentsTurn,
+  inboxRowOf,
+  inboxRowsOf,
+  threadNeedsReader,
+} from "./inbox-digest.js";
 import {
   fieldValueWords,
   INBOX_ASK,
@@ -40,16 +53,15 @@ import {
   type InboxMessage,
   type InboxReadAsk,
   type InboxReplyKind,
-  inboxAgentsTurn,
   inboxWaitsOn,
-  openAskOf,
   optionFileIds,
   optionsCarryMedia,
   recommendedLabels,
-  threadNeedsReader,
 } from "./inbox-wire.js";
+import type { ReadLink } from "./link-grammar.js";
 import type { ManagerFace } from "./manager-face.js";
 import { insideCode } from "./mention-link.js";
+import { namedPlainLinks, type PlainLinkNames, placesSpelledIn } from "./place-chip-model.js";
 import { plainWords } from "./plain-words.js";
 import { matchesTokens } from "./search-tokens.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -68,6 +80,12 @@ export const SEARCH_INBOX = "Search inbox";
 
 /** What the Inbox says while the account's feed of its threads is first read. */
 export const READING_INBOX = "Reading your inbox…";
+
+/** What the placeholder row under All's rows says while the next page of older items is read. */
+export const READING_OLDER_INBOX = "Reading older items…";
+
+/** What the placeholder rows a search has found nothing in yet say while the service is still asked for older items it finds. */
+export const SEARCHING_OLDER_INBOX = "Searching older items…";
 
 /** What the Inbox, the window's or a task's own, says where a read of its items did not answer. */
 export const INBOX_NOT_READ = "The inbox could not be read.";
@@ -97,8 +115,8 @@ export function knownAsk(ask: InboxReadAsk): ask is InboxKnownAsk {
  * thread holding no ask open, so Got it settles it and reaches nobody, and
  * a reply settles it as it reaches the agent.
  */
-export function awaitsNod(item: InboxItem): boolean {
-  return item.status === INBOX_STATUS.OPEN && openAskOf(item.thread ?? []) === undefined;
+export function awaitsNod(row: Pick<InboxRow, "status" | "digest">): boolean {
+  return row.status === INBOX_STATUS.OPEN && row.digest.openAsks.length === 0;
 }
 
 /** What an option the agent recommends is called: the badge it wears, as a choice's or a form's option or as one of two small buttons, and the word after it on its row. */
@@ -238,7 +256,7 @@ export function sentStamp(answers: InboxAnswers, ask: InboxReadAsk | undefined):
  * back by its agent. Note that the agent's close always says why, so a closed
  * item with no reason is a member's, whose account may be gone since.
  */
-function closedByMember(item: InboxItem): boolean {
+function closedByMember(item: InboxFields): boolean {
   return (
     item.status === INBOX_STATUS.CLOSED &&
     (item.closedBy !== undefined || item.closedReason === undefined)
@@ -247,6 +265,11 @@ function closedByMember(item: InboxItem): boolean {
 
 /** A member named on an item, as an answer's or a message's writer. */
 type InboxMember = NonNullable<InboxItem["answeredBy"]>;
+
+/** A preview's plain words with each place of ours spelled bare said by its chip's name (`namedPlainLinks`), where the client hands what it holds; as written where it hands nothing. */
+function linksNamed(words: string, links: PlainLinkNames | undefined): string {
+  return links === undefined ? words : namedPlainLinks(words, links);
+}
 
 /** What parts a preview's words, as a menu's detail parts them. */
 const PREVIEW_PART = " · ";
@@ -278,13 +301,14 @@ function sentenceCased(words: string): string {
  * saying who.
  */
 export function inboxPreview(
-  item: InboxItem,
+  item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.words);
+  return linksNamed(previewOf(line, nameOf, ticked, line.words), links);
 }
 
 /**
@@ -294,13 +318,14 @@ export function inboxPreview(
  * whole.
  */
 export function inboxPreviewHeard(
-  item: InboxItem,
+  item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.heard);
+  return linksNamed(previewOf(line, nameOf, ticked, line.heard), links);
 }
 
 /** What an item's second line leads with, as its glyph says it: the kind of ask that waits, an answer that settled it, a member's resolve, or words alone. */
@@ -316,7 +341,7 @@ export const INBOX_LINE = {
 export type InboxLineKind = (typeof INBOX_LINE)[keyof typeof INBOX_LINE];
 
 /** Which glyph leads an item's second line (`inboxPreview`): its open ask's kind, an answer where its latest message carries one, Resolve's where a member resolved it, or none. */
-export function inboxLineKind(item: InboxItem): InboxLineKind {
+export function inboxLineKind(item: InboxRow): InboxLineKind {
   return itemLine(item).kind;
 }
 
@@ -335,26 +360,16 @@ export const INBOX_SETTLED_STANDING = {
  * calls one ending two names.
  */
 export function inboxSettledStanding(
-  item: InboxItem,
+  item: InboxRow,
 ): (typeof INBOX_SETTLED_STANDING)[keyof typeof INBOX_SETTLED_STANDING] {
   if (item.status === INBOX_STATUS.ANSWERED) {
     // A thread a member started stands settled on their own nod until its agent writes on it.
-    const thread = item.thread ?? [];
-
-    const sent =
-      thread.length > 0 &&
-      thread.every((message) => message.author === INBOX_MESSAGE_AUTHOR.MEMBER);
-
-    return sent ? INBOX_SETTLED_STANDING.STARTED : INBOX_SETTLED_STANDING.ANSWERED;
+    return item.digest.allMember ? INBOX_SETTLED_STANDING.STARTED : INBOX_SETTLED_STANDING.ANSWERED;
   }
 
   if (item.closedBy !== undefined) return INBOX_SETTLED_STANDING.RESOLVED;
 
-  const withdrawn = (item.thread ?? []).some(
-    (each) => each.ask?.status === INBOX_ASK_STATUS.WITHDRAWN,
-  );
-
-  return !withdrawn && closedByMember(item)
+  return !item.digest.withdrawn && closedByMember(item)
     ? INBOX_SETTLED_STANDING.RESOLVED
     : INBOX_SETTLED_STANDING.WITHDRAWN;
 }
@@ -427,7 +442,7 @@ const CHIP_PLACED = /\uE000(\d+)\uE001/gu;
 const CHIP_PLACE_CHARACTERS = /[\uE000\uE001]/gu;
 
 /** Each item's line as `itemLine` last read it, kept for as long as the item stands. */
-const itemLines = new WeakMap<InboxItem, ItemLine>();
+const itemLines = new WeakMap<InboxRow, ItemLine>();
 
 /**
  * What an item's row says of its thread, as the item alone says it: the
@@ -443,13 +458,13 @@ const itemLines = new WeakMap<InboxItem, ItemLine>();
  * the ask still open, because it waits on no reader and no count holds it, and
  * a row saying the ask would read as one more waiting than the Inbox counts.
  */
-function itemLine(item: InboxItem): ItemLine {
+function itemLine(item: InboxRow): ItemLine {
   const held = itemLines.get(item);
 
   if (held !== undefined) return held;
-  const thread = item.thread ?? [];
-  const asking = openAskOf(thread);
-  const last = thread.at(-1);
+  const { digest } = item;
+  const asking = digest.openAsks.at(-1)?.ask;
+  const last = digest.tail.at(-1);
 
   // Note that a member's resolve says so in its own word, rather than the agent's last words, which would read as still waiting.
   const resolved =
@@ -466,22 +481,22 @@ function itemLine(item: InboxItem): ItemLine {
         member: undefined,
         pieces: [INBOX_SETTLED_STANDING.RESOLVED],
       }
-    : asking !== undefined && knownAsk(asking.ask) && !inboxAgentsTurn(item)
+    : asking !== undefined && knownAsk(asking) && !inboxAgentsTurn(item)
       ? {
-          kind: ASK_LINE[asking.ask.type],
-          ask: asking.ask,
-          words: askLine(asking.ask, []),
-          heard: askLine(asking.ask, []),
+          kind: ASK_LINE[asking.type],
+          ask: asking,
+          words: askLine(asking, []),
+          heard: askLine(asking, []),
           byAgent: true,
           member: undefined,
-          pieces: [askLine(asking.ask, [])],
+          pieces: [askLine(asking, [])],
         }
       : {
           kind: last?.answers === undefined ? INBOX_LINE.SAID : INBOX_LINE.SETTLED,
           ask: undefined,
-          ...(last === undefined ? { words: "", pieces: [""] } : placedLine(thread, last)),
+          ...(last === undefined ? { words: "", pieces: [""] } : placedLine(digest, last)),
           // Note that a reader hears each file the words name by its name, where the eye sees its chip.
-          heard: last === undefined ? "" : lastWords(thread, last, heardWords),
+          heard: last === undefined ? "" : lastWords(digest, last, heardWords),
           byAgent: last === undefined || last.author === INBOX_MESSAGE_AUTHOR.AGENT,
           member: last?.member,
         };
@@ -492,7 +507,7 @@ function itemLine(item: InboxItem): ItemLine {
 }
 
 /** The open ask an item's row says, where one waits that this build knows; none for a thread its line reads as said, settled, or resolved. */
-export function inboxLineAsk(item: InboxItem): InboxKnownAsk | undefined {
+export function inboxLineAsk(item: InboxRow): InboxKnownAsk | undefined {
   return itemLine(item).ask;
 }
 
@@ -505,19 +520,35 @@ export function inboxLineAsk(item: InboxItem): InboxKnownAsk | undefined {
  * is named outside it, since plain words keep no code to tell it apart by.
  */
 export function inboxPreviewPieces(
-  item: InboxItem,
+  item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): readonly InboxLinePiece[] {
   const line = itemLine(item);
 
-  if (line.ask !== undefined) return [previewOf(line, nameOf, ticked, line.words)];
+  if (line.ask !== undefined) {
+    return [linksNamed(previewOf(line, nameOf, ticked, line.words), links)];
+  }
 
-  return line.byAgent ? line.pieces : [`${nameOf(line.member)}: `, ...line.pieces];
+  const pieces = line.pieces.map((piece) =>
+    Predicate.isString(piece) ? linksNamed(piece, links) : piece,
+  );
+
+  return line.byAgent ? pieces : [`${nameOf(line.member)}: `, ...pieces];
+}
+
+/**
+ * Every place of ours an item's line spells bare (`placesSpelledIn`), which
+ * a client reads the names of before it says the line, by `inboxPreview`'s
+ * reading with no links named.
+ */
+export function inboxPreviewPlaces(item: InboxRow): readonly ReadLink[] {
+  return placesSpelledIn(itemLine(item).words);
 }
 
 /** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
-export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
+export function inboxLineFiles(item: InboxRow): readonly InboxMessageFile[] {
   const files = itemLine(item).pieces.filter(
     (piece): piece is InboxMessageFile => !Predicate.isString(piece),
   );
@@ -533,16 +564,16 @@ type PlacedLineResult = { readonly words: string; readonly pieces: readonly Inbo
  * Note that the place is written into the words before they are read as
  * plain words, because reading them drops the code a marker stood in.
  */
-function placedLine(thread: readonly InboxMessage[], last: InboxMessage): PlacedLineResult {
+function placedLine(digest: InboxDigest, last: InboxMessage): PlacedLineResult {
   const files = last.author === INBOX_MESSAGE_AUTHOR.AGENT ? [] : (last.files ?? []);
 
   if (files.length === 0) {
-    const words = lastWords(thread, last, plainWords);
+    const words = lastWords(digest, last, plainWords);
 
     return { words, pieces: [words] };
   }
 
-  const placed = lastWords(thread, last, (text) => plainWords(chipMarked(text, files)));
+  const placed = lastWords(digest, last, (text) => plainWords(chipMarked(text, files)));
   const pieces: InboxLinePiece[] = [];
   let at = 0;
 
@@ -619,10 +650,12 @@ function firstWords(text: string): string {
 /**
  * A thread's latest message as its row says it, before who said it: an
  * answer by its stamp's words first, "Chose 7 days · and say it in the
- * docs", a message's words, and its files where it said nothing.
+ * docs", read against the ask it answers wherever the thread asked it
+ * (`InboxDigest`'s `answeredAsk`), a message's words, and its files where
+ * it said nothing.
  */
 function lastWords(
-  thread: readonly InboxMessage[],
+  digest: InboxDigest,
   last: InboxMessage,
   read: (text: string) => string,
 ): string {
@@ -630,7 +663,7 @@ function lastWords(
   const answers = last.answers;
 
   if (answers === undefined) return words === "" ? (filesWords(last.files) ?? "") : words;
-  const stamp = sentStamp(answers, thread.find((each) => each.id === answers.ask)?.ask).words;
+  const stamp = sentStamp(answers, digest.answeredAsk).words;
 
   return words === "" ? stamp : `${stamp}${PREVIEW_PART}${words}`;
 }
@@ -774,15 +807,47 @@ export function inboxItemWords(item: InboxItem): readonly string[] {
   return words;
 }
 
-/** Whether an item answers a list's search: every word of it somewhere in the item's words (`inboxItemWords`) or its task's name; any item answers none. */
-function searchedItem(holder: InboxAnyHolder, item: InboxItem, search: readonly string[]): boolean {
+/**
+ * A list's search: the words typed (`searchTokens`), and every line of
+ * words each row says (`wordsOf`), which a client holding whole items reads
+ * through `inboxSearchWordsOf`, as a search of them always read them
+ * (`inboxItemWords`).
+ */
+export interface InboxSearch {
+  readonly tokens: readonly string[];
+  readonly wordsOf: (row: InboxRow) => readonly string[];
+}
+
+/**
+ * Every line of words a row says, as a search reads it, from the whole
+ * item the client holds under the row's id (`inboxItemWords`): the row's
+ * title alone where it holds none.
+ */
+export function inboxSearchWordsOf(
+  itemOf: (itemId: string) => InboxItem | undefined,
+): (row: InboxRow) => readonly string[] {
+  return (row) => {
+    const item = itemOf(row.id);
+
+    return item === undefined ? [row.title] : inboxItemWords(item);
+  };
+}
+
+/** Whether an item answers a list's search: every word of it somewhere in the row's words (`InboxSearch`'s `wordsOf`) or its task's name; any item answers none. */
+function searchedItem(
+  holder: InboxAnyHolder,
+  item: InboxRow,
+  search: InboxSearch | undefined,
+): boolean {
   return (
-    search.length === 0 || matchesTokens([holderName(holder), ...inboxItemWords(item)], search)
+    search === undefined ||
+    search.tokens.length === 0 ||
+    matchesTokens([holderName(holder), ...search.wordsOf(item)], search.tokens)
   );
 }
 
-/** Every task's items as a read holds them, by the task's id. */
-export type InboxReads = ReadonlyMap<string, readonly InboxItem[]>;
+/** Every task's items as a read holds them, each as its row unless a client groups its whole items first, by the task's id. */
+export type InboxReads<Item extends InboxFields = InboxRow> = ReadonlyMap<string, readonly Item[]>;
 
 /**
  * Every task as the Inbox groups it, with its items as `read` holds them:
@@ -793,13 +858,13 @@ export type InboxReads = ReadonlyMap<string, readonly InboxItem[]>;
  * items are (`inboxGroup`), so the page drawn again regroups nothing that
  * did not move.
  */
-export function inboxGroups(
-  read: InboxReads,
+export function inboxGroups<Item extends InboxFields = InboxRow>(
+  read: InboxReads<Item>,
   holders: {
     readonly tasks: readonly { readonly taskId: string }[];
     readonly listed: readonly TaskSummary[];
   },
-): readonly InboxGroup[] {
+): readonly InboxGroup<InboxHolder, Item>[] {
   const listed = new Map(holders.listed.map((task) => [task.id, task]));
 
   return holders.tasks.flatMap(({ taskId }) => {
@@ -846,6 +911,14 @@ export type InboxWhose =
   | { readonly kind: typeof INBOX_WHOSE.MINE }
   | { readonly kind: typeof INBOX_WHOSE.PERSON; readonly userId: string; readonly name: string };
 
+/** What the Inbox's view menu calls its choices beside its scopes: whom the items are addressed to, its people, and the switch that stands the pinned tasks' items first, on every client. */
+export const INBOX_VIEW_WORDS = {
+  WHOSE: "Addressed to",
+  ANYONE: "Anyone",
+  ME: "Me",
+  PINNED_FIRST: "Pinned tasks first",
+} as const;
+
 /** Anyone's items, as a task's own Inbox lists them. */
 export const EVERYONES: InboxWhose = { kind: INBOX_WHOSE.EVERYONE };
 
@@ -860,38 +933,50 @@ export interface InboxCounts {
   readonly [INBOX_SHOW.REMINDERS]: number;
 }
 
-/** One holder and every item it holds, as the list is handed them: a task's, unless the list takes agents on no task too. */
-export interface InboxGroup<Holder extends InboxAnyHolder = InboxHolder> {
+/**
+ * One holder and every item it holds, as the list is handed them: a task's,
+ * unless the list takes agents on no task too. The list reads rows
+ * (`InboxRow`); a client grouping whole items first, as the iPhone draws its
+ * sends on them before they are rows, holds them as `Item` until
+ * `inboxRowGroups` reads them as rows.
+ */
+export interface InboxGroup<
+  Holder extends InboxAnyHolder = InboxHolder,
+  Item extends InboxFields = InboxRow,
+> {
   readonly holder: Holder;
-  readonly items: readonly InboxItem[];
+  readonly items: readonly Item[];
 }
 
-/** One item the list draws, with what holds it. */
+/** One item the list draws, as its row, with what holds it. */
 export interface InboxListed<Holder extends InboxAnyHolder = InboxHolder> {
   readonly holder: Holder;
-  readonly item: InboxItem;
+  readonly item: InboxRow;
 }
 
-/** A holder holding nothing, the one empty list every such group holds. */
-export const NO_ITEMS: readonly InboxItem[] = [];
+/** A holder holding nothing, of any kind of item: the one empty list every such group holds. */
+const NO_ITEMS: readonly never[] = [];
 
 /** Each holder's group as last made, kept while it holds the same items (`inboxGroup`). */
-const keptGroups = new WeakMap<InboxAnyHolder, InboxGroup<InboxAnyHolder>>();
+const keptGroups = new WeakMap<InboxAnyHolder, InboxGroup<InboxAnyHolder, InboxFields>>();
+
+/** Each group of whole items as its rows' group, kept while the group stands (`inboxRowGroups`). */
+const rowGroups = new WeakMap<InboxGroup<InboxAnyHolder, InboxItem>, InboxGroup<InboxAnyHolder>>();
 
 /**
  * A holder and every item it holds as one group: the one made last for the
  * holder while its items are the same list, so a list read again from items
  * that did not move groups them in the objects it grouped them in before.
  */
-export function inboxGroup<Holder extends InboxAnyHolder>(
+export function inboxGroup<Holder extends InboxAnyHolder, Item extends InboxFields = InboxRow>(
   holder: Holder,
-  items: readonly InboxItem[],
-): InboxGroup<Holder> {
+  items: readonly Item[],
+): InboxGroup<Holder, Item> {
   const kept = keptGroups.get(holder);
 
   if (kept?.items === items) {
-    // SAFETY: a holder's kept group holds that very holder, so it is of the holder's own kind.
-    return kept as InboxGroup<Holder>;
+    // SAFETY: a holder's kept group holds that very holder and these very items, so it is of their own kinds.
+    return kept as InboxGroup<Holder, Item>;
   }
 
   const group = { holder, items };
@@ -900,8 +985,31 @@ export function inboxGroup<Holder extends InboxAnyHolder>(
   return group;
 }
 
+/**
+ * Groups of whole items as the list reads them, each item as its row
+ * (`inboxRowsOf`): the row group made last for the very group, so a list
+ * drawn again from groups that did not move reads the rows it read before.
+ */
+export function inboxRowGroups<Holder extends InboxAnyHolder>(
+  groups: readonly InboxGroup<Holder, InboxItem>[],
+): readonly InboxGroup<Holder>[] {
+  return groups.map((group) => {
+    const kept = rowGroups.get(group);
+
+    if (kept !== undefined) {
+      // SAFETY: a group's kept rows hold that very group's holder, so they are of the holder's own kind.
+      return kept as InboxGroup<Holder>;
+    }
+
+    const rows = { holder: group.holder, items: inboxRowsOf(group.items) };
+    rowGroups.set(group, rows);
+
+    return rows;
+  });
+}
+
 /** Each item as last listed, kept while the same holder holds it (`inboxListed`). */
-const keptListed = new WeakMap<InboxItem, InboxListed<InboxAnyHolder>>();
+const keptListed = new WeakMap<InboxRow, InboxListed<InboxAnyHolder>>();
 
 /**
  * An item listed under what holds it: the one listed last while its holder
@@ -911,7 +1019,7 @@ const keptListed = new WeakMap<InboxItem, InboxListed<InboxAnyHolder>>();
  */
 function inboxListed<Holder extends InboxAnyHolder>(
   holder: Holder,
-  item: InboxItem,
+  item: InboxRow,
 ): InboxListed<Holder> {
   const kept = keptListed.get(item);
 
@@ -949,6 +1057,12 @@ export type InboxRun = (typeof INBOX_RUN)[keyof typeof INBOX_RUN];
 /** Every run, in the order a list stands them. */
 export const INBOX_RUNS: readonly InboxRun[] = [INBOX_RUN.PINNED, INBOX_RUN.REST];
 
+/** What each run's heading is called, Pinned as the sidebar calls the pinned. */
+export const INBOX_RUN_LABEL = {
+  [INBOX_RUN.PINNED]: "Pinned",
+  [INBOX_RUN.REST]: "Everything else",
+} as const satisfies Record<InboxRun, string>;
+
 /** A list's runs as it drew them: how many items each holds, folded or not, and which the reader folded. */
 export interface InboxRunsView {
   readonly counts: Readonly<Record<InboxRun, number>>;
@@ -963,14 +1077,14 @@ const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
  * nobody the service names, or is read before the reader's own id is known,
  * as main counts what waits on the account and as every item read before.
  */
-export function readersItem(item: InboxItem, readerId: string | undefined): boolean {
+export function readersItem(item: InboxFields, readerId: string | undefined): boolean {
   const waitsOn = inboxWaitsOn(item)?.userId;
 
   return waitsOn === undefined || readerId === undefined || waitsOn === readerId;
 }
 
 /** Whether an item needs the reader: open, theirs (`readersItem`), and not its agent's turn (`inboxAgentsTurn`); a teammate's open item waits on the teammate. */
-function needsReader(item: InboxItem, readerId: string | undefined): boolean {
+function needsReader(item: InboxRow, readerId: string | undefined): boolean {
   return item.status === INBOX_STATUS.OPEN && readersItem(item, readerId) && !inboxAgentsTurn(item);
 }
 
@@ -981,11 +1095,136 @@ function needsReader(item: InboxItem, readerId: string | undefined): boolean {
  * them (`places-waiting.ts`'s `waitingThreads`).
  */
 export function waitsOnReaderNow(
-  item: InboxItem,
+  item: InboxRow,
   readerId: string | undefined,
   now: number,
 ): boolean {
   return needsReader(item, readerId) && !remindsLater(item, now);
+}
+
+/** How many of the reader's threads wait on them in one workspace, by the task holding them, by the agent that posted them, and in all. */
+export interface InboxWaiting {
+  readonly byTask: ReadonlyMap<string, number>;
+  readonly byAgent: ReadonlyMap<string, number>;
+  readonly total: number;
+}
+
+/** No thread waits. */
+export const NO_INBOX_WAITING: InboxWaiting = { byTask: new Map(), byAgent: new Map(), total: 0 };
+
+/** What waits on the reader at one moment, in each workspace and across them, and when that next changes with no write to say so. */
+export interface InboxWaitingAt {
+  readonly waiting: ReadonlyMap<string | undefined, InboxWaiting>;
+  /** The soonest reminder still ahead of that moment, when an item it put away comes back; none where no reminder stands ahead. */
+  readonly nextReminderDue: number | undefined;
+}
+
+/**
+ * How many of the reader's threads wait on them at `now` (`waitsOnReaderNow`)
+ * in each workspace their holders stand in, by task, by agent, and in all;
+ * and, under no workspace (`undefined`), across every workspace. A
+ * Manager's thread, on no task, counts toward its agent and the total alone.
+ */
+function inboxWaitingIn(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  const counts = new Map<
+    string | undefined,
+    { byTask: Map<string, number>; byAgent: Map<string, number>; total: number }
+  >();
+
+  const countIn = (workspaceId: string | undefined) => {
+    const held = counts.get(workspaceId) ?? { byTask: new Map(), byAgent: new Map(), total: 0 };
+    counts.set(workspaceId, held);
+
+    return held;
+  };
+
+  for (const { holder, items } of groups) {
+    const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
+
+    if (waiting.length === 0) continue;
+    const task = holderTask(holder);
+
+    for (const held of [countIn(holderWorkspaceId(holder)), countIn(undefined)]) {
+      held.total += waiting.length;
+
+      if (task !== undefined) held.byTask.set(task.id, waiting.length);
+
+      for (const item of waiting)
+        held.byAgent.set(item.agentId, (held.byAgent.get(item.agentId) ?? 0) + 1);
+    }
+  }
+
+  return counts;
+}
+
+/** The soonest reminder among `groups` still ahead at `now`, when what waits must be counted again since an item comes back; none where no reminder stands ahead. */
+function inboxNextReminderDue(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  now: number,
+): number | undefined {
+  let next: number | undefined;
+
+  for (const { items } of groups) {
+    for (const { remindAt } of items) {
+      if (remindAt !== undefined && remindAt > now && (next === undefined || remindAt < next)) {
+        next = remindAt;
+      }
+    }
+  }
+
+  return next;
+}
+
+/**
+ * What waits on the reader at `now` (`inboxWaitingIn`), and the next
+ * reminder due after that same moment (`inboxNextReminderDue`). Note that
+ * both are read at the one `now`, because a reminder that came due between
+ * a count and a later look for the next would be passed over, its item left
+ * uncounted until some write.
+ */
+export function inboxWaitingAt(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): InboxWaitingAt {
+  return {
+    waiting: inboxWaitingIn(groups, readerId, now),
+    nextReminderDue: inboxNextReminderDue(groups, now),
+  };
+}
+
+/** Whether two counts of what waits say the same. */
+function sameWaiting(one: InboxWaiting, other: InboxWaiting): boolean {
+  const sameCounts = (a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>) =>
+    a.size === b.size && [...a].every(([key, count]) => b.get(key) === count);
+
+  return (
+    one.total === other.total &&
+    sameCounts(one.byTask, other.byTask) &&
+    sameCounts(one.byAgent, other.byAgent)
+  );
+}
+
+/**
+ * `next`'s counts of what waits in each workspace, each the very object
+ * `previous` held where it says the same, so a reader of one workspace's
+ * counts draws again only where they moved.
+ */
+export function inboxWaitingKept(
+  previous: ReadonlyMap<string | undefined, InboxWaiting>,
+  next: ReadonlyMap<string | undefined, InboxWaiting>,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  return new Map(
+    [...next].map(([workspaceId, counts]) => {
+      const held = previous.get(workspaceId);
+
+      return [workspaceId, held !== undefined && sameWaiting(held, counts) ? held : counts];
+    }),
+  );
 }
 
 /** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */
@@ -1000,7 +1239,26 @@ export const AGENT_THREADS_WAITING_WORDS = "Inbox";
 export interface AgentThreadsLine {
   readonly words: string;
   readonly waiting: number;
-  readonly opens: InboxItem;
+  readonly opens: InboxRow;
+}
+
+/** Whether the agent `agentId` posted the thread, the one rule an agent's own Inbox, its Inbox tab and the line over its box count its threads by. */
+export function postedBy(agentId: string): (item: Pick<InboxFields, "agentId">) => boolean {
+  return (item) => item.agentId === agentId;
+}
+
+/** The groups narrowed to the threads the agent `agentId` posted, as an agent's own Inbox lists them, a group left with none let go. */
+export function agentInboxGroups<Holder extends InboxAnyHolder, Item extends InboxFields>(
+  groups: readonly InboxGroup<Holder, Item>[],
+  agentId: string,
+): InboxGroup<Holder, Item>[] {
+  const posts = postedBy(agentId);
+
+  return groups.flatMap((group) => {
+    const items = group.items.filter(posts);
+
+    return items.length === 0 ? [] : [{ holder: group.holder, items }];
+  });
 }
 
 /**
@@ -1010,12 +1268,12 @@ export interface AgentThreadsLine {
  * threads it posted, opening the latest changed; none while it posted none.
  */
 export function agentThreadsLine(
-  items: readonly InboxItem[],
+  items: readonly InboxRow[],
   agentId: string,
   readerId: string | undefined,
   now: number,
 ): AgentThreadsLine | undefined {
-  const posted = items.filter((item) => item.agentId === agentId);
+  const posted = items.filter(postedBy(agentId));
 
   const waiting = posted
     .filter((item) => waitsOnReaderNow(item, readerId, now))
@@ -1042,7 +1300,7 @@ export function agentThreadsLine(
  * that asks to be heard back would reach its agent on a mere open. A box
  * holding no words or files for it offers no Got it.
  */
-export function acknowledgedOnOpen(item: InboxItem, readerId: string | undefined): boolean {
+export function acknowledgedOnOpen(item: InboxRow, readerId: string | undefined): boolean {
   return (
     readerId !== undefined && needsReader(item, readerId) && awaitsNod(item) && !item.needsReply
   );
@@ -1054,7 +1312,7 @@ export function acknowledgedOnOpen(item: InboxItem, readerId: string | undefined
  * nothing, and no reminder on it still ahead (`remindsLater`), since one put
  * away until later keeps it; one whose reminder came due is settled.
  */
-export function settledOnRead(item: InboxItem, readerId: string | undefined, now: number): boolean {
+export function settledOnRead(item: InboxRow, readerId: string | undefined, now: number): boolean {
   return acknowledgedOnOpen(item, readerId) && !remindsLater(item, now);
 }
 
@@ -1088,7 +1346,7 @@ export function openItems<Holder extends InboxAnyHolder>(
 }
 
 /** The latest change first. */
-function newestFirst(a: InboxItem, b: InboxItem): number {
+function newestFirst(a: InboxFields, b: InboxFields): number {
   return b.updatedAt - a.updatedAt;
 }
 
@@ -1105,11 +1363,8 @@ export interface InboxPlace {
 /** No item's place held: every item stands where it is now. */
 export const NO_PLACES: ReadonlyMap<string, InboxPlace> = new Map();
 
-/** No search: every item answers it. */
-const NO_SEARCH: readonly string[] = [];
-
 /** Whether an item is one Addressed to lists: anyone's, the reader's own (`readersItem`), or one that waits on the teammate (`inboxWaitsOn`). */
-function whoseItem(whose: InboxWhose, item: InboxItem, readerId: string | undefined): boolean {
+function whoseItem(whose: InboxWhose, item: InboxFields, readerId: string | undefined): boolean {
   switch (whose.kind) {
     case INBOX_WHOSE.EVERYONE:
       return true;
@@ -1129,7 +1384,7 @@ export function narrowedByWhose(show: InboxShow): boolean {
 function scopedItem(
   show: InboxShow,
   whose: InboxWhose,
-  item: InboxItem,
+  item: InboxRow,
   readerId: string | undefined,
 ): boolean {
   return (
@@ -1165,8 +1420,8 @@ export function inboxList<Holder extends InboxAnyHolder>(
     readonly readerId: string | undefined;
     /** Whom the items listed are addressed to; anyone where none is given. */
     readonly whose?: InboxWhose | undefined;
-    /** The words of the list's search (`searchTokens`), each somewhere in every item listed; none narrows nothing. */
-    readonly search?: readonly string[] | undefined;
+    /** The list's search (`InboxSearch`): the words typed, each somewhere in every item listed, and what each row says; none narrows nothing. */
+    readonly search?: InboxSearch | undefined;
     /** Where the items held still stand (`inboxPlaces`), each other item where it is now; none holds every item where it is now. */
     readonly places?: ReadonlyMap<string, InboxPlace> | undefined;
     /** Whether the pinned tasks' items stand first (`inboxPinnedRuns`); none lists every item in one run. */
@@ -1175,9 +1430,9 @@ export function inboxList<Holder extends InboxAnyHolder>(
     readonly folded?: ReadonlySet<InboxRun> | undefined;
   },
 ): InboxListView<Holder> {
-  const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
+  const { readerId, whose = EVERYONES, search, places = NO_PLACES } = view;
   const pinnedFirst = view.pinnedFirst === true;
-  const at = (item: InboxItem): number => places.get(item.id)?.at ?? item.updatedAt;
+  const at = (item: InboxRow): number => places.get(item.id)?.at ?? item.updatedAt;
 
   // Note that a pinned task's item outranks any other where the pinned stand first, the latest first within each.
   const rank = ({ holder }: InboxListed<Holder>): number =>
@@ -1200,7 +1455,7 @@ export function inboxList<Holder extends InboxAnyHolder>(
   // Note that a reader with nothing pinned listed sees the one run they would see without it, and no fold.
   if (pinned === 0) return { items, readerId };
 
-  const folded = search.length > 0 ? NO_FOLDS : (view.folded ?? NO_FOLDS);
+  const folded = (search?.tokens.length ?? 0) > 0 ? NO_FOLDS : (view.folded ?? NO_FOLDS);
 
   return {
     items,
@@ -1299,12 +1554,12 @@ export function inboxPlaces(
 }
 
 /** Whether an item is unread for the reader: changed since they last read it, or marked unread; an item from a service before read state reads as read. */
-export function isUnread(item: InboxItem): boolean {
+export function isUnread(item: InboxFields): boolean {
   return item.unread === true;
 }
 
 /** Whether the reader set a reminder on the item and it has not come back, as `inboxAtNow` leaves its reminder on it. */
-export function hasReminder(item: InboxItem): boolean {
+export function hasReminder(item: InboxFields): boolean {
   return item.remindAt !== undefined;
 }
 
@@ -1319,23 +1574,25 @@ function remindsLater(item: Pick<InboxItem, "remindAt">, now: number): boolean {
  * then, so it lists at the top, read or unread as it was. A change ends a
  * reminder early by the service answering none. Only an item with a reminder keeps
  * `remindAt` (`hasReminder`), and an item it leaves as it was is the very
- * one handed in.
+ * one handed in. A row and a whole item stand alike, so a pane drawing the
+ * whole item a list drew as its row draws it as the list stood it.
  */
-function itemAtNow(item: InboxItem, now: number): InboxItem {
+export function inboxItemAtNow<Item extends InboxFields>(item: Item, now: number): Item {
   const { remindAt, ...rest } = item;
 
   if (remindAt === undefined || remindAt > now) return item;
 
-  return { ...rest, updatedAt: Math.max(item.updatedAt, remindAt) };
+  // SAFETY: every item's reminder is optional, so the item without it, changed later, is of the item's own kind.
+  return { ...rest, updatedAt: Math.max(item.updatedAt, remindAt) } as Item;
 }
 
-/** Every holder's items as they stand for the reader at `now` (`itemAtNow`), each group handed in kept where none of its items moved. */
+/** Every holder's items as they stand for the reader at `now` (`inboxItemAtNow`), each group handed in kept where none of its items moved. */
 export function inboxAtNow<Holder extends InboxAnyHolder>(
   groups: readonly InboxGroup<Holder>[],
   now: number,
 ): readonly InboxGroup<Holder>[] {
   return groups.map((group) => {
-    const items = group.items.map((item) => itemAtNow(item, now));
+    const items = group.items.map((item) => inboxItemAtNow(item, now));
 
     return items.every((item, index) => item === group.items[index]) ? group : { ...group, items };
   });
@@ -1348,7 +1605,7 @@ export function inboxAtNow<Holder extends InboxAnyHolder>(
  * since it closed. Note that an item from a service before `settledAt` was
  * kept reads its last change as its close, as the service does.
  */
-function closedQuietly(item: InboxItem): boolean {
+function closedQuietly(item: InboxFields): boolean {
   if (item.status !== INBOX_STATUS.CLOSED || item.markedUnread === true) return false;
 
   return item.updatedAt <= (item.settledAt ?? item.updatedAt);
@@ -1360,7 +1617,7 @@ function closedQuietly(item: InboxItem): boolean {
  * and saying nothing new (`closedQuietly`), since a withdrawn ask asks
  * nothing of them however unread it stands.
  */
-export function isDone(item: InboxItem): boolean {
+export function isDone(item: InboxFields): boolean {
   return item.status !== INBOX_STATUS.OPEN && (!isUnread(item) || closedQuietly(item));
 }
 
@@ -1379,7 +1636,7 @@ export function isDone(item: InboxItem): boolean {
  * thread marked unread comes back to Open whatever settled it, and a row
  * drawn gray is one Open has let go.
  */
-function showsItem(show: InboxShow, item: InboxItem, readerId: string | undefined): boolean {
+function showsItem(show: InboxShow, item: InboxRow, readerId: string | undefined): boolean {
   switch (show) {
     case INBOX_SHOW.NEEDS_ME:
       return threadNeedsReader(item, readerId) && !hasReminder(item);
@@ -1798,10 +2055,10 @@ export function threadsWaitingWords(waiting: number): string {
 }
 
 /** The items given that wait on the developer, by the agent that posted each, in their order. */
-export function waitingByAgent(
-  waiting: readonly InboxItem[],
-): ReadonlyMap<string, readonly InboxItem[]> {
-  const byAgent = new Map<string, InboxItem[]>();
+export function waitingByAgent<Item extends Pick<InboxItem, "agentId">>(
+  waiting: readonly Item[],
+): ReadonlyMap<string, readonly Item[]> {
+  const byAgent = new Map<string, Item[]>();
 
   for (const item of waiting)
     byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
@@ -1815,7 +2072,7 @@ export function waitingByAgent(
  * thread says in a line of its own among its messages (`ThreadEvent`).
  */
 function resolvedByMember(item: InboxItem): boolean {
-  return inboxSettledStanding(item) === INBOX_SETTLED_STANDING.RESOLVED;
+  return inboxSettledStanding(inboxRowOf(item)) === INBOX_SETTLED_STANDING.RESOLVED;
 }
 
 /** What a line of what happened to the thread says: a member resolved it, or the agent withdrew or replaced one of its asks. */

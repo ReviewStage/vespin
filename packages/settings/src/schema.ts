@@ -708,7 +708,7 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: accountDrawn,
   }),
-  lineNumbers: toggleSetting({
+  lineNumbers: accountToggleSetting({
     field: "lineNumbers",
     id: APP_SETTING_ID.LINE_NUMBERS,
     label: "Line numbers",
@@ -720,7 +720,7 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: the panel draws code from every settings snapshot.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
-  wordWrap: toggleSetting({
+  wordWrap: accountToggleSetting({
     field: "wordWrap",
     id: APP_SETTING_ID.WORD_WRAP,
     label: "Word wrap",
@@ -776,7 +776,7 @@ export const APP_SETTING_SCHEMA = {
     resetScope: SETTINGS_RESET_SCOPE.APPEARANCE,
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
-  diffBackgrounds: toggleSetting({
+  diffBackgrounds: accountToggleSetting({
     field: "diffBackgrounds",
     id: APP_SETTING_ID.DIFF_BACKGROUNDS,
     label: "Backgrounds",
@@ -864,7 +864,7 @@ export const APP_SETTING_SCHEMA = {
     resetScope: SETTINGS_RESET_SCOPE.APPEARANCE,
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
-  diffLigatures: toggleSetting({
+  diffLigatures: accountToggleSetting({
     field: "diffLigatures",
     id: APP_SETTING_ID.DIFF_LIGATURES,
     label: "Ligatures",
@@ -875,7 +875,7 @@ export const APP_SETTING_SCHEMA = {
     resetScope: SETTINGS_RESET_SCOPE.APPEARANCE,
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
-  diffMinimizeComments: toggleSetting({
+  diffMinimizeComments: accountToggleSetting({
     field: "diffMinimizeComments",
     id: APP_SETTING_ID.DIFF_MINIMIZE_COMMENTS,
     label: "Minimize inline comments",

@@ -2,6 +2,7 @@ import {
   type CommandPrefix,
   HTTP_METHOD,
   HTTP_STATUS,
+  literalsReadingUnknown,
   type UnparsedWireValue,
   unparsedWire,
 } from "@repo/wire";
@@ -83,6 +84,8 @@ import {
   type MachineAllowedAppsAnswerView,
   type MachineAskAnsweredView,
   type MachineChangeParams,
+  type ManagerChatEditAnswerView,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -113,6 +116,8 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
+  type ViewChoiceWriteParams,
+  type ViewChoiceWrittenView,
   type VoiceSessionAnswerView,
   type VoiceSessionParams,
 } from "./agent-view.js";
@@ -167,7 +172,6 @@ import {
   type HostPairingDenyView,
   type HostPairingView,
 } from "./host-pairing-view.js";
-import type { HostPairingTarget } from "./host-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
 import {
@@ -199,6 +203,12 @@ import {
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
+import {
+  type ManagerChatEditRequest,
+  type ManagerChatReactRequest,
+  managerChatEditRequestSchema,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import { type ManagerCreateRequest, managerCreateRequestSchema } from "./manager-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
@@ -370,8 +380,14 @@ function rowWritten<Answer extends object>(answer: Answer) {
   return unansweredBare(writtenAlreadyKept(answer));
 }
 
-/** The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as. */
-const inboxFileTypeSchema = Schema.Literals([...Object.values(INBOX_FILE_TYPE), MP4_TYPE]);
+/**
+ * The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as.
+ * Note that a type this build does not know reads as a file of any other kind, whose chip saves its bytes, so a type a later build serves is never a failed read.
+ */
+const inboxFileTypeSchema = literalsReadingUnknown(
+  [...Object.values(INBOX_FILE_TYPE), MP4_TYPE],
+  INBOX_FILE_TYPE.OTHER,
+);
 
 /** The headers a byte read asks for the video it plays by: `video/mp4` for MP4, and none for the WebM a read answers by default. */
 function playableHeaders(playable: PlayableVideoType): Record<string, string> | undefined {
@@ -380,8 +396,8 @@ function playableHeaders(playable: PlayableVideoType): Record<string, string> | 
 
 /**
  * A served file written to a file of the device by the client that carried
- * it, as the type it was served as: unanswered under any other type, since
- * its bytes cannot be drawn. Note that the bytes are never read here; the
+ * it, as the type it was served as, a type this build does not know as a
+ * file of any other kind (`inboxFileTypeSchema`). Note that the bytes are never read here; the
  * client wrote them where it was told and answers the status and headers
  * alone.
  */
@@ -393,7 +409,7 @@ function writtenFileOf(response: Response): AgentPictureFileView {
   return contentType === undefined ? UNANSWERED : { contentType };
 }
 
-/** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds; unanswered under any other type. */
+/** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds, one of a type this build does not know as a file of any other kind. */
 function readInboxFile(response: Response): Effect.Effect<AgentInboxAttachmentView> {
   return Effect.map(imageBodyOf(response, inboxFileTypeSchema), imageAnswerOf);
 }
@@ -544,16 +560,11 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.hosts.readPairing, { code }, { as: HOST_PAIRING_RENAMES });
   }
 
-  /** A box's pending pairing approved by its code, which makes its host at once, the account's own or, where the target names one, a workspace's; its box collects its secret on its next poll. */
+  /** A box's pending pairing approved by its code, which makes the account's host at once; its box collects its secret on its next poll. */
   approveHostPairing(
     code: string,
-    target?: HostPairingTarget,
   ): Effect.Effect<HostPairingApproveView, never, HttpClient.HttpClient> {
-    return hostedCall(
-      this.#hosted.hosts.approvePairing,
-      { code, ...(target === undefined ? undefined : { target }) },
-      { as: HOST_PAIRING_RENAMES },
-    );
+    return hostedCall(this.#hosted.hosts.approvePairing, { code }, { as: HOST_PAIRING_RENAMES });
   }
 
   /** A box's pending pairing denied by its code, so its box is answered denied. */
@@ -691,6 +702,13 @@ export class HostedAgentClient {
     params: SoundChoiceParams,
   ): Effect.Effect<SoundChoiceAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.account.chooseSound, params);
+  }
+
+  /** One of the account's view choices kept, or forgotten with a null value. */
+  writeViewChoice(
+    params: ViewChoiceWriteParams,
+  ): Effect.Effect<ViewChoiceWrittenView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.writeViewChoice, params);
   }
 
   /** The account's own provider keys, as hints and statuses. */
@@ -1212,6 +1230,50 @@ export class HostedAgentClient {
     );
   }
 
+  /**
+   * Gives a message of a Manager's chat the account's reaction, or takes it
+   * off, as `reacted` asks, answering whether it changed what stood; a
+   * reaction the service would refuse by shape is refused here without
+   * traveling.
+   */
+  chatReact(
+    agentId: string,
+    messageId: string,
+    request: ManagerChatReactRequest,
+  ): Effect.Effect<ManagerChatReactAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerChatReactRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatReact,
+      { params: { id: agentId, message: messageId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
+  /**
+   * Edits one of the account's own messages of a Manager's chat in place,
+   * telling the Manager where the words changed, answering whether they
+   * did; an edit the service would refuse by shape is refused here without
+   * traveling.
+   */
+  chatEdit(
+    agentId: string,
+    messageId: string,
+    request: ManagerChatEditRequest,
+  ): Effect.Effect<ManagerChatEditAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerChatEditRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatEdit,
+      { params: { id: agentId, message: messageId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
   /** Changes one agent's queue of messages waiting behind its turn, answering the queue as it then stands; a change the service would refuse by shape is refused here without traveling. */
   changeQueue(
     agentId: string,
@@ -1379,16 +1441,19 @@ export class HostedAgentClient {
     );
   }
 
-  /** Moves the account's own read mark of a Manager's chat, under the idempotency key given where one is, answering the agent as it then stands. */
+  /** Moves the account's own read mark of a Manager's chat, back to just before the message `unreadFrom` names where it names one, under the idempotency key given where one is, answering the agent as it then stands. */
   markRead(
     agentId: string,
     readMark: ReadMark,
     key?: string,
+    unreadFrom?: string,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const body = unreadFrom === undefined ? { readMark } : { readMark, unreadFrom };
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
-        { params: { id: agentId }, body: { readMark } },
+        { params: { id: agentId }, body },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,
