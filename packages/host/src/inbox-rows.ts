@@ -23,9 +23,10 @@
  * write layer of another's over a live query, which is why this is ours.
  */
 
-import type { InboxRow } from "@repo/features/inbox-digest";
+import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import { inboxInOrder } from "@repo/features/inbox-live";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
   type ROW_GONE,
   type RowCollection,
@@ -34,7 +35,12 @@ import {
   type StandingRows,
 } from "@repo/sync";
 import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
-import type { InboxHoldings } from "./app-state-reads.js";
+import type { AppInboxItems } from "./app-state.js";
+import {
+  type InboxHoldings,
+  type InboxItemsOf,
+  inboxHoldingsWithOlder,
+} from "./app-state-reads.js";
 import { INBOX_THREAD, type PlacedInboxRow, threadRowOf } from "./inbox-collections.js";
 import { INBOX_MESSAGE, type ThreadMessage } from "./inbox-messages.js";
 import type { HeardWords } from "./kept-words.js";
@@ -69,6 +75,72 @@ export const INBOX_ATTENTION: InboxReach = { kind: INBOX_REACH.ATTENTION };
 
 /** Every item kept, as All and search list them. */
 export const INBOX_WHOLE: InboxReach = { kind: INBOX_REACH.WHOLE };
+
+/** The holdings a screen counts and those it lists, as far as its reach reads. */
+export interface InboxReachHoldings<Item extends InboxFields> {
+  /** What every count, scope, badge, and widget reads: the feed's alone, at every reach. */
+  readonly counted: InboxHoldings<Item>;
+  /** What the screen draws: under All, the older items it read past the feed beside the feed's; for a thread opened by its id, its own older copy where the feed holds none; the very `counted` at any other reach. */
+  readonly listed: InboxHoldings<Item>;
+}
+
+/** Each holder's items of `lists` that `kept` keeps, each as `asItem` makes it, the holders left with none dropped. */
+function itemsKept<Item>(
+  lists: Readonly<Record<string, readonly InboxItem[]>> | undefined,
+  kept: (item: InboxItem) => boolean,
+  asItem: (item: InboxItem) => Item,
+): Record<string, readonly Item[]> {
+  return Object.fromEntries(
+    Object.entries(lists ?? {}).flatMap(([holder, items]) => {
+      const left = items.filter(kept).map(asItem);
+
+      return left.length === 0 ? [] : [[holder, left] as const];
+    }),
+  );
+}
+
+/** The older items a screen reading `reach` draws, each as `asItem` makes it: every one under All, the one thread a screen opens by its id, and none at any other reach. */
+function olderAt<Item>(
+  reach: InboxReach,
+  older: AppInboxItems,
+  asItem: (item: InboxItem) => Item,
+): InboxItemsOf<Item> | undefined {
+  const opened = reach.kind === INBOX_REACH.ATTENTION ? reach.thread : undefined;
+
+  if (reach.kind !== INBOX_REACH.WHOLE && opened === undefined) return undefined;
+  const kept = (item: InboxItem) => opened === undefined || item.id === opened;
+
+  return {
+    [INBOX_SCOPE_KIND.TASK]: itemsKept(older[INBOX_SCOPE_KIND.TASK], kept, asItem),
+    agents: itemsKept(older.agents, kept, asItem),
+  };
+}
+
+/**
+ * The holdings a screen reading `reach` counts and lists, `live` the
+ * feed's, the document's whole items or the phone's kept rows alike, and
+ * `older` the items All read past the feed (`selectInboxOlder`), each laid
+ * in as `asItem` makes it, so it stands as the feed's own do. Note that only
+ * a read of every item, as All lists them, lists the older ones, but for the
+ * one thread a screen opens by its id, which draws its own older copy, so a
+ * thread on no task, a Manager's, that no task's inbox holds opens from All
+ * as it is listed there; and none is ever counted, since an older item may
+ * stand unread, and a count, a scope's pill, the badge, or the widget that
+ * took one would ask for the reader's attention on a thread long settled.
+ */
+export function inboxHoldingsAt<
+  Item extends InboxFields & Pick<InboxItem, "id" | "status" | "updatedAt">,
+>(
+  live: InboxHoldings<Item>,
+  reach: InboxReach,
+  older: AppInboxItems,
+  asItem: (item: InboxItem) => Item,
+): InboxReachHoldings<Item> {
+  const drawn = olderAt(reach, older, asItem);
+  const listed = drawn === undefined ? live : inboxHoldingsWithOlder(live, drawn);
+
+  return { counted: live, listed };
+}
 
 /** The Inbox kind's rows as the screens read them where they are kept on disk, and the moving of them. */
 export interface InboxRowsSource {
