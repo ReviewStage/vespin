@@ -1477,9 +1477,11 @@ export function StatusRing({
   return (
     <Menu
       label={
+        // Note that the ring stands centered in its own column, the target's reach padded round it, so it lines up with a Manager's face, a header's icon, and every other row's lead rather than centering on the whole target.
         <HStack
           modifiers={[
-            frame({ width: lead + reach.leading + reach.trailing, height: target }),
+            frame({ width: lead, height: target }),
+            padding({ leading: reach.leading, trailing: reach.trailing }),
             SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
           ]}
         >

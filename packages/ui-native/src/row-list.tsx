@@ -546,7 +546,33 @@ function GroupHeader({
   const dark = useColorScheme() === "dark";
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
+
+  const lead =
+    owner !== undefined ? (
+      // Note that the picture is hidden, since the title beside it names the owner already.
+      <HStack modifiers={[accessibilityHidden()]}>
+        {"workspace" in owner ? (
+          <WorkspaceTile workspace={owner.workspace} size={glyphSize} />
+        ) : (
+          <Avatar name={owner.person.name} picture={owner.person.picture} size={glyphSize} />
+        )}
+      </HStack>
+    ) : repository !== undefined ? (
+      <RepositoryPicture repository={repository} size={glyphSize} />
+    ) : emoji !== undefined ? (
+      <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
+        {emoji}
+      </Text>
+    ) : glyph === undefined ? null : (
+      <Image
+        {...glyphImage(glyph)}
+        size={glyphSize}
+        color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
+        modifiers={[accessibilityHidden()]}
+      />
+    );
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -559,37 +585,18 @@ function GroupHeader({
         accessibilityAddTraits(["isHeader"]),
       ]}
     >
-      {owner !== undefined ? (
-        // Note that the picture is hidden, since the title beside it names the owner already.
-        <HStack modifiers={[accessibilityHidden()]}>
-          {"workspace" in owner ? (
-            <WorkspaceTile workspace={owner.workspace} size={glyphSize} />
-          ) : (
-            <Avatar name={owner.person.name} picture={owner.person.picture} size={glyphSize} />
-          )}
-        </HStack>
-      ) : repository !== undefined ? (
-        <RepositoryPicture repository={repository} size={glyphSize} />
-      ) : emoji !== undefined ? (
-        <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
-          {emoji}
+      {/* Note that what leads the title stands centered in the column a row's leading mark stands in, and the title past it where a row's title starts, so a header's icon and words line up with its rows' marks and titles at every text size. */}
+      <HStack spacing={SPACE.ROW}>
+        {lead === null ? null : <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>}
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {title}
         </Text>
-      ) : glyph === undefined ? null : (
-        <Image
-          {...glyphImage(glyph)}
-          size={glyphSize}
-          color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
-          modifiers={[accessibilityHidden()]}
-        />
-      )}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
-        ]}
-      >
-        {title}
-      </Text>
+      </HStack>
       {mark === undefined ? null : (
         <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.GROUP_HEADER} hidden />
       )}
