@@ -84,7 +84,6 @@ import {
   GLYPH,
   type Glyph,
   githubFace,
-  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -102,6 +101,7 @@ import {
   RowList,
   Screen,
   STATUS_TONE,
+  StackBarMenu,
   ThreadRow,
   useColors,
   useFailureNotices,
@@ -445,22 +445,32 @@ const DESCRIPTION_WORDS = "Description";
 function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
   return (
     <Stack.Toolbar placement="right">
-      <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-        <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
-        {url === undefined ? null : (
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={() => copyLink(url)}>
-              {MENU_WORDS.COPY_GITHUB_LINK}
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction
-              icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-              onPress={() => openInSafari(url)}
-            >
-              {MENU_WORDS.OPEN_ON_GITHUB}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
-        )}
-      </Stack.Toolbar.Menu>
+      {/* Note that ⋯ is SwiftUI's own menu, as every other bar's ⋯ stands (`StackBarMenu`), dimmed until the pull request's address is read. */}
+      <Stack.Toolbar.View>
+        <StackBarMenu
+          menu={{
+            label: MENU_WORDS.MORE,
+            symbol: GLYPH.MORE,
+            choices: [],
+            disabled: url === undefined,
+            actions:
+              url === undefined
+                ? []
+                : [
+                    {
+                      label: MENU_WORDS.COPY_GITHUB_LINK,
+                      symbol: GLYPH.LINK,
+                      onPress: () => copyLink(url),
+                    },
+                    {
+                      label: MENU_WORDS.OPEN_ON_GITHUB,
+                      symbol: GLYPH.OPEN_EXTERNALLY,
+                      onPress: () => openInSafari(url),
+                    },
+                  ],
+          }}
+        />
+      </Stack.Toolbar.View>
     </Stack.Toolbar>
   );
 }
