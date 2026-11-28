@@ -7,12 +7,10 @@
  * first time a block is asked for, talked to over its parent port, and killed
  * with the scope the launch builds it in.
  */
-import path from "node:path";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { type ColorCode, taskCodeProcessColoring } from "@repo/host/task-code-remote";
-import type { WireBoundaryInput } from "@repo/wire";
 import type { Effect, Scope } from "effect";
-import { utilityProcess } from "electron";
+import { utilityProcessSpawn } from "./utility-process-spawn";
 
 /** The coloring process's bundle, beside main's own in the build's directory. */
 const ENTRY = "task-code.js";
@@ -24,19 +22,5 @@ const SERVICE_NAME = `${PRODUCT_NAME} Code Coloring`;
 export function colorCodeInUtilityProcess(
   resourceDirectory: string,
 ): Effect.Effect<ColorCode, never, Scope.Scope> {
-  return taskCodeProcessColoring((listeners) => {
-    const child = utilityProcess.fork(path.join(resourceDirectory, ENTRY), [], {
-      serviceName: SERVICE_NAME,
-    });
-
-    child.on("message", (message: WireBoundaryInput) => listeners.onMessage(message));
-    child.on("exit", () => listeners.onExit());
-
-    return {
-      send: (message) => child.postMessage(message),
-      kill: () => {
-        child.kill();
-      },
-    };
-  });
+  return taskCodeProcessColoring(utilityProcessSpawn(resourceDirectory, ENTRY, SERVICE_NAME));
 }
