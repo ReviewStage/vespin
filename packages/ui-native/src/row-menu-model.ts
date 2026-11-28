@@ -110,7 +110,7 @@ export type ChoiceMark =
   | { readonly kind: typeof CHOICE_MARK.INTEGRATION; readonly provider: IntegrationProvider }
   | {
       readonly kind: typeof CHOICE_MARK.MANAGER;
-      /** Its face, drawn at rest from the asset catalog in its own colors (`managerFaceAsset`), as its rows wear it. */
+      /** Its face, drawn at rest from the asset catalog in its own colors (`managerFaceAsset`), as its rows wear it, or its emoji alone where it wears one. */
       readonly face: ManagerFace;
     }
   | { readonly kind: typeof CHOICE_MARK.HARNESS; readonly provider: ModelProvider }
@@ -244,8 +244,11 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
             corner: REPOSITORY_CORNER,
             fallback: GLYPH.REPOSITORY,
           };
+    // Note that a menu holds one image to an item, so an emoji face leads as its emoji alone, as a section's emoji does, with no disc under it.
     case CHOICE_MARK.MANAGER:
-      return { kind: MENU_ICON.MARK, asset: managerFaceAsset(mark.face, false), sized: false };
+      return mark.face.emoji === undefined
+        ? { kind: MENU_ICON.MARK, asset: managerFaceAsset(mark.face, false), sized: false }
+        : { kind: MENU_ICON.EMOJI, emoji: mark.face.emoji };
     case CHOICE_MARK.SECTION_GLYPH:
       return { kind: MENU_ICON.GLYPH, glyph: mark.glyph, section: mark.color };
   }

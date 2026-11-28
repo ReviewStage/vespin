@@ -14,9 +14,13 @@ import { useTaskListCollections } from "../host/host-provider.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
 
-/** Whether a Manager's face is the same, character and color, whatever object carries it. */
+/** Whether a Manager's face is the same, character, color and emoji, whatever object carries it. */
 function sameFace(one: ManagerFace | undefined, other: ManagerFace | undefined): boolean {
-  return one?.character === other?.character && one?.color === other?.color;
+  return (
+    one?.character === other?.character &&
+    one?.color === other?.color &&
+    one?.emoji === other?.emoji
+  );
 }
 
 /** Whether an agent's status says the same of whether it works, all a Manager's face shows of it. */

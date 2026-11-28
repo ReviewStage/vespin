@@ -4,13 +4,19 @@ import { requireNativeView } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ColorValue, NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
-/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, what VoiceOver hears, and, for a held picture's, the file its thumbnail is drawn from in the glyph's place. */
+/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, what VoiceOver hears, for a held picture's, the file its thumbnail is drawn from in the glyph's place, and for a Manager's emoji face, its emoji and disc. */
 export interface NativePill {
   readonly markdown: string;
   readonly words: string;
   readonly glyph: string;
   readonly heard: string;
   readonly thumbnail?: string | undefined;
+  /** A Manager's emoji, drawn on its disc in the glyph's place, the disc in `emojiFill`, or `emojiFillDark` in the dark. */
+  readonly emoji?: string | undefined;
+  readonly emojiFill?: string | undefined;
+  readonly emojiFillDark?: string | undefined;
+  /** The hairline the disc stands inside in the light alone. */
+  readonly emojiEdge?: string | undefined;
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */

@@ -12,7 +12,13 @@ import {
   INTEGRATION_MARK_TEMPLATE,
   LINK_SITE_MARK_ASSET,
 } from "./integration-marks.js";
-import { managerFaceAsset } from "./manager-face-look.js";
+import {
+  MANAGER_FACE_EDGE_WIDTH,
+  MANAGER_FACE_EMOJI_SCALE,
+  managerFaceAsset,
+  managerFaceEdge,
+  managerFaceFill,
+} from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./mark-look.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -72,6 +78,7 @@ function PictureOverLetters({
   ink,
   letters,
   letterScale,
+  edge,
 }: {
   readonly address: string | undefined;
   readonly size: number;
@@ -80,6 +87,8 @@ function PictureOverLetters({
   readonly ink: string;
   readonly letters: string;
   readonly letterScale: number;
+  /** The hairline its ground stands inside, such as an emoji face's in the light; none where none is given. */
+  readonly edge?: string | undefined;
 }) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = address !== undefined && address !== failed;
@@ -94,7 +103,15 @@ function PictureOverLetters({
     >
       {shown ? null : (
         <>
-          <View style={[box, { position: "absolute", backgroundColor: ground }]} />
+          <View
+            style={[
+              box,
+              { position: "absolute", backgroundColor: ground },
+              edge === undefined
+                ? undefined
+                : { borderWidth: MANAGER_FACE_EDGE_WIDTH, borderColor: edge },
+            ]}
+          />
           <Text
             allowFontScaling={false}
             style={{ fontSize: size * letterScale, fontWeight: "600", color: ink }}
@@ -179,7 +196,21 @@ export function ChipMarkView({
         />
       );
     case CHIP_MARK.MANAGER:
-      // Note that among words a face is too small to hold the working disc, so its mood alone says it works, as the panel's face among words does.
+      // Note that among words a face is too small to hold the typing bubble, so its mood alone says it works, as the panel's face among words does.
+      if (mark.face.emoji !== undefined)
+        return (
+          <PictureOverLetters
+            address={undefined}
+            size={size}
+            corner={size / 2}
+            ground={managerFaceFill(mark.face, dark)}
+            ink={colors.TEXT}
+            letters={mark.face.emoji}
+            letterScale={MANAGER_FACE_EMOJI_SCALE}
+            edge={managerFaceEdge(dark)}
+          />
+        );
+
       return (
         <Photo
           source={{ uri: managerFaceAsset(mark.face, mark.working) }}

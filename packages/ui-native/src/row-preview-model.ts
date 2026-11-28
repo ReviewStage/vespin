@@ -15,7 +15,12 @@ import { CALL_KIND, madeCallLine } from "@repo/features/turn-rows";
 import { identityLetter } from "@repo/features/workspace-tile";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { managerFaceAsset } from "./manager-face-look.js";
+import {
+  MANAGER_FACE_EMOJI_SCALE,
+  managerFaceAsset,
+  managerFaceEdge,
+  managerFaceFill,
+} from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
   LETTER_SCALE,
@@ -317,6 +322,8 @@ type PreviewNode =
       readonly letterInk: string;
       /** The photo's address, asked for at the size it is drawn; their letter alone where none is given, or where it cannot be read. */
       readonly picture?: string | undefined;
+      /** The hairline its letter's ground stands inside, such as an emoji face's in the light; none where none is given. */
+      readonly edge?: string | undefined;
     }
   | { readonly kind: typeof PREVIEW_NODE.RULE; readonly ink: string };
 
@@ -420,13 +427,26 @@ function agentStateMark(status: AgentStatus, look: PreviewLook): PreviewNode | u
 /** A tile with no well, so a Manager's face, which draws its own body, stands on the preview's ground alone. */
 const NO_WELL = "#00000000";
 
-/** An agent's tile, its harness's mark on the brand's well, or the hard hat where the harness is not known, as `AgentTile` draws it; a Manager's face in its place, at rest, as its row wears it (`managerFaceAsset`). */
+/** An agent's tile, its harness's mark on the brand's well, or the hard hat where the harness is not known, as `AgentTile` draws it; a Manager's face in its place, at rest, as its row wears it: its character's picture (`managerFaceAsset`) or its emoji on its disc. */
 function agentTile(
   harness: ModelProvider | undefined,
   size: number,
   look: PreviewLook,
   face?: ManagerFace | undefined,
 ): PreviewNode {
+  // Note that an emoji face stands on its disc as a person's letter stands on their hue, so it is drawn as a face's letter.
+  if (face?.emoji !== undefined)
+    return {
+      kind: PREVIEW_NODE.FACE,
+      size,
+      corner: size / 2,
+      hue: managerFaceFill(face, look.dark),
+      letter: face.emoji,
+      letterSize: size * MANAGER_FACE_EMOJI_SCALE,
+      letterInk: look.colors.TEXT,
+      edge: managerFaceEdge(look.dark),
+    };
+
   if (face !== undefined)
     return {
       kind: PREVIEW_NODE.TILE,

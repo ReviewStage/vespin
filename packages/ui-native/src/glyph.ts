@@ -342,6 +342,8 @@ export const GLYPH = {
   ROUND_BOX_TICKED: system("checkmark.circle.fill"),
   CHECK_RUNNING: system("circle.dotted"),
   FACE: system("person.crop.circle"),
+  /** A Manager at work, the typing bubble its face wears at its top end corner, as the panel's face wears its three dots. */
+  MANAGER_TYPING: system("ellipsis.bubble.fill"),
   /** No one, as the panel's `UnassignedAvatar` draws it: its ring of eight dashes, over its seat drawn faint (`UNASSIGNED_UNDER`). */
   UNASSIGNED: unassignedMark(UNASSIGNED_SYMBOL.RING),
   APP: system("app"),

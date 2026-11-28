@@ -54,11 +54,27 @@ export function barSubtitle(
     leading,
     title: titleMark?.title ?? "",
     titleMark: titleMark?.asset ?? "",
+    titleEmoji: titleMark?.emoji?.emoji ?? "",
+    titleEmojiFill: titleMark?.emoji?.fill ?? "",
+    titleEmojiFillDark: titleMark?.emoji?.fillDark ?? "",
+    titleEmojiEdge: titleMark?.emoji?.edge ?? "",
   });
 }
 
-/** A picture of the asset catalog a stack's bar leads its title with, such as a Manager's face, and the title it leads. */
-export type BarTitleMark = { readonly title: string; readonly asset: string };
+/** A picture of the asset catalog a stack's bar leads its title with, such as a Manager's face, and the title it leads; an emoji on its disc in the picture's place where one is given, such as a Manager's emoji face, its disc in `fill`, or `fillDark` in the dark. */
+export type BarTitleMark = {
+  readonly title: string;
+  readonly asset: string;
+  readonly emoji?:
+    | {
+        readonly emoji: string;
+        readonly fill: string;
+        readonly fillDark: string;
+        /** The hairline the disc stands inside in the light alone. */
+        readonly edge: string;
+      }
+    | undefined;
+};
 
 /**
  * A list the native stack's bar follows as it scrolls, so a tab root's large

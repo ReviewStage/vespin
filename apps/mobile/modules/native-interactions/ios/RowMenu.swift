@@ -559,6 +559,7 @@ private struct PreviewNodeData: Decodable {
   let letterSize: Double?
   let letterInk: String?
   let picture: String?
+  let edge: String?
 
   struct WorkingDot: Decodable {
     let restsOn: Int
@@ -744,6 +745,11 @@ private struct PreviewFace: View {
     ZStack {
       RoundedRectangle(cornerRadius: CGFloat(node.corner ?? 0))
         .foregroundStyle(Color(vespinHex: node.hue ?? ""))
+      // Note that a ground given an edge, such as an emoji face's in the light, stands inside its hairline, as `ManagerFace` draws it.
+      if let edge = node.edge {
+        RoundedRectangle(cornerRadius: CGFloat(node.corner ?? 0))
+          .strokeBorder(Color(vespinHex: edge), lineWidth: 0.5)
+      }
       Text(node.letter ?? "")
         .font(.system(size: CGFloat(node.letterSize ?? 0), weight: .semibold, design: .rounded))
         .foregroundStyle(Color(vespinHex: node.letterInk ?? ""))
