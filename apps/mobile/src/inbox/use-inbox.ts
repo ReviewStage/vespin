@@ -20,6 +20,7 @@ import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
+  agentInboxGroups,
   INBOX_MEDIA,
   INBOX_SHOW,
   type InboxAnyHolder,
@@ -196,19 +197,31 @@ export function useInboxListing(view: {
   readonly pinnedFirst?: boolean | undefined;
   /** Whom the items listed are addressed to; the reader's own where none is named. */
   readonly whose?: InboxWhose | undefined;
+  /** The agent whose threads alone are listed, as the panel's agent's Inbox tab lists them; every agent's where none is given. */
+  readonly agent?: string | undefined;
 }): InboxListing {
-  // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read.
+  // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read. An agent's Inbox reads every thread that agent posted, which the scope then narrows as it narrows the whole Inbox.
   const reach = useMemo(
     (): InboxReach =>
-      view.show === INBOX_SHOW.ALL
-        ? INBOX_WHOLE
-        : view.chosen === undefined
-          ? INBOX_ATTENTION
-          : { kind: INBOX_REACH.ATTENTION, thread: view.chosen },
-    [view.show, view.chosen],
+      view.agent !== undefined
+        ? { kind: INBOX_REACH.AGENT, agentId: view.agent }
+        : view.show === INBOX_SHOW.ALL
+          ? INBOX_WHOLE
+          : view.chosen === undefined
+            ? INBOX_ATTENTION
+            : { kind: INBOX_REACH.ATTENTION, thread: view.chosen },
+    [view.agent, view.show, view.chosen],
   );
 
-  const { groups, whole, read } = useChosenInbox(reach);
+  const { groups: reached, whole, read } = useChosenInbox(reach);
+  const { agent } = view;
+
+  // Note that an agent's Inbox narrows what the read answered to the threads that agent posted, by the rule its line and the panel's tab count them by, since a read is not bound to hold its reach alone.
+  const groups = useMemo(
+    () => (agent === undefined ? reached : agentInboxGroups(reached, agent)),
+    [reached, agent],
+  );
+
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
