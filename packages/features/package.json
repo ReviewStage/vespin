@@ -28,6 +28,7 @@
     "./automation-view": "./src/automation-view.js",
     "./automation-words": "./src/automation-words.js",
     "./cli-words": "./src/cli-words.js",
+    "./code-fence": "./src/code-fence.js",
     "./credential-redaction": "./src/credential-redaction.js",
     "./device-platform": "./src/device-platform.js",
     "./drawn-pictures": "./src/drawn-pictures.js",

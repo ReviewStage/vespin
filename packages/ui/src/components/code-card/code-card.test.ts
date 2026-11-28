@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
+import { CODE_ROW, type CodeRow } from "@repo/features/code-fence";
 import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
-import { CODE_ROW, CodeCard, CodeCardHeader, type CodeRow } from "./code-card.js";
+import { CodeCard, CodeCardHeader } from "./code-card.js";
 
 /**
  * code-card.test.ts -- a code card names its lines in its header with a

@@ -1,5 +1,6 @@
 // markdown-model.ts -- a message's Markdown read into what the iOS app draws: blocks, and runs of words, links, and chips, each link read as the panel reads it.
 
+import { type FenceRow, fenceRows, fenceTitle } from "@repo/features/code-fence";
 import { dateChipText } from "@repo/features/date-mention";
 import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
@@ -190,7 +191,14 @@ export type MarkdownBlock =
       /** The header row first, then the body's, each cell its runs, every row as wide as the header. */
       readonly rows: readonly (readonly (readonly MarkdownRun[])[])[];
     }
-  | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
+  | {
+      readonly kind: typeof MARKDOWN_BLOCK.CODE;
+      readonly text: string;
+      /** What its heading calls it, its language as a reader says it or "Suggested change" (`fenceTitle`); none for a fence that names no language. */
+      readonly title?: string | undefined;
+      /** Its lines as rows tinted by what each does, a suggestion's and a diff's (`fenceRows`); none for plain lines. */
+      readonly rows?: readonly FenceRow[] | undefined;
+    }
   /** Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or ```draft, read as the panel's draft card reads them. */
   | { readonly kind: typeof MARKDOWN_BLOCK.DRAFT; readonly draft: Draft }
   /** A Mermaid fence, drawn as its diagram where the words are read for diagrams (`MarkdownReading`'s `diagrams`). */
@@ -660,15 +668,23 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
-/** A fence: a diagram where it names Mermaid and the words are read for diagrams, a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
+/** A fence: a diagram where it names Mermaid and the words are read for diagrams, a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise, headed by its language and, a suggestion's or a diff's, its lines tinted by what each does, as the panel's code card heads and tints one. */
 function codeBlock(node: Code, reading: MarkdownReading): MarkdownBlock {
   if (reading.diagrams === true && node.lang === DIAGRAM_LANGUAGE) {
     return { kind: MARKDOWN_BLOCK.DIAGRAM, code: node.value };
   }
 
-  const kind = draftKindOf(node.lang ?? "");
+  const language = node.lang ?? "";
+  const kind = draftKindOf(language);
 
-  if (kind === undefined) return { kind: MARKDOWN_BLOCK.CODE, text: node.value };
+  if (kind === undefined) {
+    return {
+      kind: MARKDOWN_BLOCK.CODE,
+      text: node.value,
+      title: language === "" ? undefined : fenceTitle(language),
+      rows: fenceRows(language, node.value),
+    };
+  }
 
   return { kind: MARKDOWN_BLOCK.DRAFT, draft: readDraft(kind, node.value) };
 }

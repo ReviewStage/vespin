@@ -1,4 +1,11 @@
 import {
+  CODE_LANGUAGE_CHOICES,
+  codeLanguage,
+  codeLanguageChoice,
+  fenceTitle,
+  suggests,
+} from "@repo/features/code-fence";
+import {
   CODE_CARD_TITLE,
   CodeCardHeader,
   type CodeCardTitle,
@@ -8,15 +15,8 @@ import {
   POPOVER_WIDTH,
   SearchableMenu,
 } from "@repo/ui";
-import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { type ReactNode, useId, useRef, useState } from "react";
-import {
-  CODE_LANGUAGE_CHOICES,
-  codeLanguage,
-  codeLanguageChoice,
-  codeTitle,
-} from "../code-language.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import type { EditorCodeBlock } from "../description-editor/contract.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -26,7 +26,7 @@ import { FileTypeIcon } from "./file-type-icon.js";
  *
  * A block is headed by its language's file icon and the name a reader says
  * it by ("TypeScript"), its id in mono where this window has no name for
- * it, and "text" for a fence that names none (`../code-language.ts`); a
+ * it, and "text" for a fence that names none (`@repo/features/code-fence`); a
  * change suggested to a review comment's lines is headed as GitHub heads
  * one, "Suggested change". The
  * drawn text's card (`transcript-markdown.tsx`) and the editor's block
@@ -34,10 +34,6 @@ import { FileTypeIcon } from "./file-type-icon.js";
  * one code card header, so a block reads the same edited as drawn, and a
  * text opened to be edited moves no block.
  */
-
-/** The language a suggestion is written in, and what a suggestion's block's header calls it, as GitHub heads one. */
-export const SUGGESTION_LANGUAGE = "suggestion";
-const SUGGESTION_LABEL = "Suggested change";
 
 /** What the language menu is, for a reader, and what its search says. */
 const LANGUAGE_MENU = {
@@ -53,22 +49,17 @@ export interface FenceHeading {
   readonly titleIs: CodeCardTitle;
 }
 
-/** Whether a block fenced in `language` is a change suggested to a review comment's lines: one written ```suggestion, or one GitHub rendered. */
-export function suggests(language: string): boolean {
-  return language === SUGGESTION_LANGUAGE || language === SUGGESTED_CHANGE_LANGUAGE;
-}
-
 /** The heading of a block fenced in `language`; a suggestion's under its name, which names no language of its own. */
 export function fenceHeading(language: string): FenceHeading {
   if (suggests(language)) {
-    return { glyph: undefined, title: SUGGESTION_LABEL, titleIs: CODE_CARD_TITLE.WORDS };
+    return { glyph: undefined, title: fenceTitle(language), titleIs: CODE_CARD_TITLE.WORDS };
   }
 
   const { extension, name } = codeLanguage(language);
 
   return {
     glyph: name === undefined ? undefined : <FileTypeIcon name={`code.${extension}`} />,
-    title: codeTitle(language),
+    title: fenceTitle(language),
     titleIs: name === undefined ? CODE_CARD_TITLE.NAME : CODE_CARD_TITLE.WORDS,
   };
 }

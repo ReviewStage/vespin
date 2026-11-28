@@ -1,3 +1,4 @@
+import { CODE_ROW, type CodeRow } from "@repo/features/code-fence";
 import type { CodeLines, CodeToken } from "@repo/features/tasks-view";
 import { Fragment, type ReactNode, useId, useState } from "react";
 import { CODE_BODY_CLASS, CODE_CARD_CLASS, CODE_LINES_CLASS } from "../../code-face.js";
@@ -68,15 +69,6 @@ const CUT_LABEL = {
 
 /** What a block's Copy copies, as "Copy code". */
 const COPY_WHAT = "code";
-
-/** What a line of a block drawn as rows does, which tints it: a line added, one removed, or one standing as it was. */
-export const CODE_ROW = {
-  ADDED: "added",
-  REMOVED: "removed",
-  CONTEXT: "context",
-} as const;
-
-export type CodeRow = (typeof CODE_ROW)[keyof typeof CODE_ROW];
 
 /** Each row's tint, by what it does. */
 const ROW_CLASS = {

@@ -1,3 +1,4 @@
+import { CODE_ROW, type CodeRow } from "@repo/features/code-fence";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import {
   BLOCK_TITLE,
@@ -17,9 +18,7 @@ import {
   CARD_PADDING,
   Card,
   CODE_CARD_TITLE,
-  CODE_ROW,
   CodeCard,
-  type CodeRow,
   cn,
   DISCLOSURE_BODY,
   DisclosureBody,

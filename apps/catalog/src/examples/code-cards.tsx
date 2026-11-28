@@ -1,6 +1,6 @@
+import { CODE_ROW } from "@repo/features/code-fence";
 import {
   CODE_CARD_TITLE,
-  CODE_ROW,
   CodeCard,
   CodeCardHeader,
   CodeEditor,

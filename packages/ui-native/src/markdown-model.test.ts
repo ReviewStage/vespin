@@ -218,7 +218,48 @@ describe("markdownBlocks", () => {
           ],
         },
       },
-      { kind: MARKDOWN_BLOCK.CODE, text: "const a = 1;" },
+      { kind: MARKDOWN_BLOCK.CODE, text: "const a = 1;", title: "TypeScript" },
+    ]);
+  });
+
+  // A review comment's suggestion stood as a bare block of code on iOS, where the panel heads it "Suggested change" over its new lines on the added lines' tint.
+  it("heads a fence by its language, and draws a suggestion's and a diff's lines as tinted rows", () => {
+    const words = [
+      "```suggestion",
+      "const now = request.at;",
+      "```",
+      "",
+      "```diff",
+      "--- a/expiry.ts",
+      "-const now = Date.now();",
+      "+const now = request.at;",
+      " return now;",
+      "```",
+      "",
+      "```",
+      "plain",
+      "```",
+    ].join("\n");
+
+    expect(markdownBlocks(words, READING)).toEqual([
+      {
+        kind: MARKDOWN_BLOCK.CODE,
+        text: "const now = request.at;",
+        title: "Suggested change",
+        rows: [{ kind: "added", text: "const now = request.at;" }],
+      },
+      {
+        kind: MARKDOWN_BLOCK.CODE,
+        text: "--- a/expiry.ts\n-const now = Date.now();\n+const now = request.at;\n return now;",
+        title: "Diff",
+        rows: [
+          { kind: "context", text: "--- a/expiry.ts" },
+          { kind: "removed", text: "-const now = Date.now();" },
+          { kind: "added", text: "+const now = request.at;" },
+          { kind: "context", text: " return now;" },
+        ],
+      },
+      { kind: MARKDOWN_BLOCK.CODE, text: "plain" },
     ]);
   });
 
@@ -230,7 +271,7 @@ describe("markdownBlocks", () => {
       { kind: MARKDOWN_BLOCK.DIAGRAM, code: "flowchart LR\n  A --> B" },
     ]);
     expect(markdownBlocks(words, READING)).toEqual([
-      { kind: MARKDOWN_BLOCK.CODE, text: "flowchart LR\n  A --> B" },
+      { kind: MARKDOWN_BLOCK.CODE, text: "flowchart LR\n  A --> B", title: "mermaid" },
     ]);
   });
 
