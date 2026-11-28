@@ -15,7 +15,7 @@ import { openURL } from "expo-linking";
 import { openDatabaseAsync, openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { keepHostLine } from "../crash-reports.js";
-import { foregroundClock, launchBeganAway } from "../launch-state.js";
+import { launchBeganAway } from "../launch-state.js";
 import { liveActivityModule } from "../live-activity/live-activity-module.js";
 import { openSheetUntilClosed, openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
@@ -93,7 +93,7 @@ export function deviceSeams(): DeviceSeams {
     openSocket: openRelaySocket,
     launchedIn: launchBeganAway() ? PRODUCT_LAUNCHED_IN.BACKGROUND : PRODUCT_LAUNCHED_IN.FRONT,
     onAppActiveChanged,
-    foregroundClock,
+    // Note that this probe (vjopen1's before lane) hands the host no foreground clock, so its deadlines run on the runtime's monotonic time, which counts the minutes iOS holds the app suspended, as before #11143.
     onNetworkChanged,
     tokenVault: keychainTokens,
     authSession: webAuthSession,
