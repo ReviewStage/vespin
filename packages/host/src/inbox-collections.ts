@@ -27,9 +27,11 @@
  * the service's word.
  */
 
+import { type InboxRow, inboxRowDrawn, inboxRowOf } from "@repo/features/inbox-digest";
 import { INBOX_STATUS, type InboxItem, inboxItemSchema } from "@repo/features/inbox-wire";
 import type { Refused, RowKind, Written } from "@repo/sync";
 import { Effect, Schema, type Scope } from "effect";
+import { INBOX_KEPT_VERSION } from "./inbox-messages.js";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 
 /** What a member's write does to the items it names. */
@@ -183,8 +185,6 @@ export function itemOf(row: PlacedInboxItem): InboxItem {
 /** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it, on the task it stood on. */
 export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
   key: (item) => item.id,
-  // Note that the version moves with the row's shape, so a build that changes it reads its items again.
-  stored: { name: "inboxItem", version: 1 },
   drawn: (change, item) => {
     const changed = item === undefined ? undefined : changedItem(change, item);
 
@@ -196,17 +196,88 @@ export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
 };
 
 /**
- * An inbox item a plan's inbox read holds, as `INBOX_ITEM` holds it but in
- * memory alone, for a platform that keeps the Inbox kind on disk: the kept
- * collection is the account's feed's alone, which the Inbox list reads, so
- * a thread a plan's read answers from outside that feed, as one opened from
- * a link, is never drawn in the reader's own list or kept past the read.
- * Note that a member's write is drawn over the feed's kind, so a write on
- * such a thread lands once the plan's read next answers it.
+ * An inbox thread as the pool keeps it where the account's database keeps
+ * the Inbox: the item without its thread, the digest its list draws from
+ * (`InboxDigest`), and the task it stands on. Its messages are a kind of
+ * their own (`inbox-messages.ts`), read only as a thread opens, so a launch
+ * reads the threads a list draws and never their messages.
  */
-export const INBOX_SCOPED_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
-  key: INBOX_ITEM.key,
-  drawn: INBOX_ITEM.drawn,
+export type PlacedInboxRow = InboxRow & { readonly taskId: string | null };
+
+/** `item`'s row placed on the task `taskId` names, its digest taken from its thread whole. */
+export function placedRow(item: InboxItem, taskId: string | null): PlacedInboxRow {
+  return { ...inboxRowOf(item), taskId };
+}
+
+/**
+ * The row as the change leaves it, from the row as a read holds it; none
+ * where it leaves it alone. A change is drawn over the thread the digest
+ * still carries (`inboxRowDrawn`), so a reply or a settle draws at once,
+ * and the service's own item, which a write stands as once answered,
+ * carries the thread whole, so its digest is taken from all of it.
+ */
+function drawnRow(change: InboxChange, row: PlacedInboxRow): PlacedInboxRow | undefined {
+  if (change.kind === INBOX_CHANGE.ANSWERED) {
+    return row.id === change.item.id && row.updatedAt <= change.item.updatedAt
+      ? placedRow(change.item, row.taskId)
+      : undefined;
+  }
+
+  const drawn = inboxRowDrawn(threadRowOf(row), (item) => changedItem(change, item));
+
+  return drawn === undefined ? undefined : { ...drawn, taskId: row.taskId };
+}
+
+/** Each item as `threadItemOf` last read it out, by the row it read, so a row that did not move reads out as the very item. */
+const threadItems = new WeakMap<PlacedInboxRow, InboxItem>();
+
+/**
+ * The item a lean row holds, without its digest or the task it stands on,
+ * and with no thread, which the row never carries: the item a write's own
+ * answer names where it is answered from the pool, whose readers read where
+ * it stands, never its messages.
+ */
+export function threadItemOf(row: PlacedInboxRow): InboxItem {
+  const read = threadItems.get(row);
+
+  if (read !== undefined) return read;
+  const { digest: _digest, taskId: _placed, thread: _none, ...item } = row;
+  threadItems.set(row, item);
+
+  return item;
+}
+
+/** Each row as `threadRowOf` last read it out, by the placed row it read. */
+const threadRows = new WeakMap<PlacedInboxRow, InboxRow>();
+
+/** The row a lean row holds without the task it stands on, as the list draws it; a row read again reads out as the very row. */
+export function threadRowOf(row: PlacedInboxRow): InboxRow {
+  const read = threadRows.get(row);
+
+  if (read !== undefined) return read;
+  const { taskId: _placed, ...listed } = row;
+  threadRows.set(row, listed);
+
+  return listed;
+}
+
+/** How a platform keeps the Inbox's items in the pool: whole, as the desktop's and the web's document tells them, or as lean rows kept on disk beside their messages, as the iPhone's screens read them. */
+export const INBOX_KEEPING = {
+  WHOLE: "whole",
+  LEAN: "lean",
+} as const;
+
+export type InboxKeeping = (typeof INBOX_KEEPING)[keyof typeof INBOX_KEEPING];
+
+/** What every Inbox row the pool keeps carries, whole or lean: the item's own fields, and the task it stands on. */
+export type PlacedInboxFields = Omit<InboxItem, "thread"> & { readonly taskId: string | null };
+
+/** An inbox thread as the pool keeps it where the account's database keeps the Inbox, by its id, every write to it drawn over its digest. */
+export const INBOX_THREAD: RowKind<PlacedInboxRow, InboxChange> = {
+  key: (row) => row.id,
+  // Note that the version moves with the row's shape or the message's, so a build that changes either reads its threads, their messages, and their words again (`INBOX_KEPT_VERSION`).
+  stored: { name: "inboxThread", version: INBOX_KEPT_VERSION },
+  drawn: (change, row) => (row === undefined ? undefined : drawnRow(change, row)),
 };
 
 /**

@@ -34,7 +34,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections } from "../host/host-provider.js";
-import { useInboxRowGroupsIn } from "../inbox/inbox-groups.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { openInSafari } from "../open-link.js";
 import { useSplashReleased } from "../splash.js";
 import { useOnTab } from "../tab-route.js";
@@ -151,7 +151,7 @@ function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
   const collections = useTaskListCollections();
   const drawn = useSplashReleased();
-  const groups = useInboxRowGroupsIn(workspace?.id);
+  const groups = useInboxGroupsIn(workspace?.id);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const latest = useRef<SpotlightLists | undefined>(undefined);

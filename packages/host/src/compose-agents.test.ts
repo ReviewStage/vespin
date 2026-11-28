@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { CALL_FAULT, ServiceReach } from "@repo/features";
@@ -60,9 +61,10 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
-import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD } from "./inbox-collections.js";
+import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { LIVE_RESTART } from "./live-follow.js";
-import { localCopy } from "./local-copy.js";
+import { type LocalCopy, localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { sqliteBackend } from "./local-sqlite.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -2521,6 +2523,25 @@ it.effect(
     }).pipe(Effect.provide(localPlatform)),
 );
 
+/** The database the kept messages' words stand in at `file`, on Node's own SQLite, each statement answered as the iPhone's async API answers it. */
+function nodeWordsDatabase(file: string) {
+  const database = new DatabaseSync(file);
+  // SAFETY: the words bind text and numbers alone, each of which `node:sqlite` takes.
+  const bound = (params: readonly unknown[]) => params as SQLInputValue[];
+
+  return {
+    exec: async (sql: string) => {
+      database.exec(sql);
+    },
+    run: async (sql: string, params: readonly unknown[]) => {
+      database.prepare(sql).run(...bound(params));
+    },
+    all: async (sql: string, params: readonly unknown[]) =>
+      database.prepare(sql).all(...bound(params)),
+    close: async () => database.close(),
+  };
+}
+
 /** The platform a local database stands on with its collections kept on disk whole, as the iPhone's are: Node's SQLite under both. */
 const keptPlatform = Layer.mergeAll(
   NodeFileSystem.layer,
@@ -2530,14 +2551,36 @@ const keptPlatform = Layer.mergeAll(
     Effect.gen(function* () {
       const driver = yield* LocalDatabaseDriver;
 
-      return { ...driver, collections: async (file: string) => nodeKeptCollections(file) };
+      return {
+        ...driver,
+        collections: async (file: string) => nodeKeptCollections(file),
+        words: async (file: string) => nodeWordsDatabase(file),
+      };
+    }),
+  ).pipe(Layer.provide(nodeSqliteDriverLayer)),
+);
+
+/** The platform `keptPlatform` is, but that the words' database will not open, as a file the platform refuses would. */
+const unopenedWordsPlatform = Layer.mergeAll(
+  NodeFileSystem.layer,
+  NodePath.layer,
+  Layer.effect(
+    LocalDatabaseDriver,
+    Effect.gen(function* () {
+      const driver = yield* LocalDatabaseDriver;
+
+      return {
+        ...driver,
+        collections: async (file: string) => nodeKeptCollections(file),
+        words: () => Promise.reject(new Error("the words' database would not open")),
+      };
     }),
   ).pipe(Layer.provide(nodeSqliteDriverLayer)),
 );
 
 /** The ids of every item the Inbox kind's collection keeps now, as a live query loads them from the account's database. */
 function keptItemIds(pool: EntityPool) {
-  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
     Effect.promise(async () => {
       const query = createLiveQueryCollection({
         query: (q) => q.from({ item: collection }),
@@ -2565,7 +2608,12 @@ function keptLaunch(root: string, account = "user-dana") {
       store: local.store,
     });
 
-    const launch = yield* subject({ pool, keepsInbox: true });
+    const launch = yield* subject({
+      pool,
+      inboxKeeping: INBOX_KEEPING.LEAN,
+      keptWords: local.words,
+    });
+
     yield* local.open(account, {
       kept: () => [],
       moves: Stream.empty,
@@ -2601,6 +2649,170 @@ it.effect(
         next.asked.filter((each) => each.startsWith("account-items-")),
         [],
         "the next launch reads past the sync id kept, never whole",
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** The ids of every message the message kind keeps now, as a live query loads them from the account's database. */
+function keptMessageIds(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ message: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const ids = query.toArray.map((message) => message.id).sort();
+      await query.cleanup();
+
+      return ids;
+    }),
+  );
+}
+
+/** The thread `id` names as the lean Inbox kind keeps it in the account's database, as a live query loads it: whether it carries its thread, and its digest's latest messages. */
+function keptThreadOf(pool: EntityPool, id: string) {
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ thread: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const row = query.toArray.find((each) => each.id === id);
+      await query.cleanup();
+
+      return row === undefined
+        ? undefined
+        : { carriesThread: "thread" in row, tail: row.digest.tail.map((each) => each.id) };
+    }),
+  );
+}
+
+/** The threads whose kept messages a search for `tokens` finds, as a screen's search asks the account's kept words. */
+function searchedThreads(launch: { readonly local: LocalCopy }, tokens: readonly string[]) {
+  return Effect.promise(async () =>
+    [...(await launch.local.words.threadsSaying(tokens)).keys()].sort(),
+  );
+}
+
+/** A message on `item`'s thread as its row carries it, the agent's, at `createdAt`. */
+function messageRowOf(item: InboxItem, id: string, createdAt: number) {
+  return {
+    id,
+    itemId: item.id,
+    author: INBOX_MESSAGE_AUTHOR.AGENT,
+    userId: null,
+    name: null,
+    text: `Said at ${createdAt}`,
+    ask: null,
+    answers: null,
+    createdAt,
+  };
+}
+
+it.effect(
+  "where the account's database keeps the Inbox kind, each item's messages are kept there beside it, and an answer that moves the item keeps only the messages it carries",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-messages-");
+      const first = "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a";
+      const second = "1e2f3a4b-5c6d-4e7f-8a8b-9c0d1e2f3a4b";
+      const third = "2f3a4b5c-6d7e-4f8a-9b9c-0d1e2f3a4b5c";
+      const quit = yield* Scope.make();
+      const launch = yield* Scope.provide(quit)(keptLaunch(root));
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+
+      launch.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, first, 1), messageRowOf(HELD_ITEM, second, 2)],
+        files: [],
+      });
+
+      yield* toldTimes(launch.accountItems, 1);
+      const kept = yield* keptMessageIds(launch.pool);
+
+      // Note that a word row is left for a message the thread no longer holds, as a write the collection took and the words missed would leave it, and another for a thread no collection holds.
+      yield* Effect.promise(() =>
+        launch.local.words.rewritten(
+          [],
+          [
+            { messageId: "missed", threadId: HELD_ITEM.id, words: "stale" },
+            { messageId: "orphan", threadId: "gone-thread", words: "stale" },
+          ],
+        ),
+      );
+
+      // Note that the item moves as a message lands on it, since the read's poll answers only once a stamp moves.
+      const moved = { ...HELD_ITEM, updatedAt: HELD_ITEM.updatedAt + 1 };
+
+      launch.live.items.set({
+        stamps: [stampOf(moved, TASK_ID, { messages: 2 })],
+        items: [{ ...ITEM_ROW, ...moved }],
+        messages: [messageRowOf(moved, second, 2), messageRowOf(moved, third, 3)],
+        files: [],
+      });
+
+      // Note that the follow polls again on its clock, and the delta is written through the database, which answers on its own time, so the case moves the clock and reads the kept messages until they move.
+      yield* TestClock.adjust(Duration.seconds(30));
+      yield* Effect.repeat(keptMessageIds(launch.pool), {
+        until: (ids) => !ids.includes(first),
+        times: 200,
+      });
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* keptLaunch(root);
+
+      assert.deepEqual(kept, [first, second].sort());
+      assert.deepEqual(yield* keptMessageIds(next.pool), [second, third].sort());
+      assert.deepEqual(
+        {
+          kept: yield* searchedThreads(next, ["at 3"]),
+          dropped: yield* searchedThreads(next, ["at 1"]),
+          stale: yield* searchedThreads(next, ["stale"]),
+        },
+        { kept: [HELD_ITEM.id], dropped: [], stale: ["gone-thread"] },
+        "a search finds a thread by the words its kept messages say, in SQLite, and the thread's words are rewritten whole as its next answer lands, so neither a message the delta took away nor one the words missed is found; a thread no answer names keeps its words, which no row the list draws reads",
+      );
+      assert.deepEqual(
+        yield* keptThreadOf(next.pool, HELD_ITEM.id),
+        { carriesThread: false, tail: [second, third] },
+        "the thread is kept lean, its digest taken from the messages its answer carried",
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the platform keeps the Inbox lean, a close stands over the kept thread as the service answered it, the task the thread stands on kept",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-close-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      deliverItems(launch.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(launch.accountItems, 1);
+
+      const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
+        itemId: HELD_ITEM.id,
+        revision: HELD_ITEM.revision,
+        clientKey: "close-1",
+      });
+
+      const drawn = launch.pool.row(INBOX_THREAD, HELD_ITEM.id);
+
+      assert.ok("item" in answer && answer.taken);
+      assert.deepEqual(
+        { status: drawn?.status, taskId: drawn?.taskId },
+        { status: INBOX_STATUS.CLOSED, taskId: TASK_ID },
       );
     }).pipe(Effect.provide(keptPlatform)),
 );
@@ -2713,7 +2925,7 @@ it.effect(
       yield* settled;
       launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
       yield* toldTimes(launch.told, 1);
-      launch.leaveClosesUnanswered(true);
+      launch.leaveWritesUnanswered(true);
 
       const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
         itemId: ITEM.id,
@@ -2723,6 +2935,29 @@ it.effect(
 
       assert.ok("item" in answer, "a close that waits is answered as taken, not unanswered");
       assert.deepEqual({ id: answer.item.id, taken: answer.taken }, { id: ITEM.id, taken: true });
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a reminder on an unread thread a plan's read alone holds, sent while the service answers nothing, is answered unread as that read draws it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-remind-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [{ ...ITEM_ROW, unread: true }] });
+      yield* toldTimes(launch.told, 1);
+      launch.leaveWritesUnanswered(true);
+
+      assert.deepEqual(yield* launch.acts.AGENTS_INBOX_REMIND({ itemId: ITEM.id, until: 5_000 }), {
+        id: ITEM.id,
+        unread: true,
+      });
     }).pipe(Effect.provide(keptPlatform)),
 );
 
@@ -2792,7 +3027,7 @@ it.effect(
       yield* Effect.forkChild(
         next.pool.write(
           {
-            kind: INBOX_ITEM,
+            kind: INBOX_THREAD,
             keys: () => [settledItem.id],
             change: () => ({
               kind: INBOX_CHANGE.REOPENED,
@@ -2814,6 +3049,32 @@ it.effect(
 );
 
 it.effect(
+  "where the words' database will not open, the kept Inbox still stands and a search finds a thread by its messages' words, kept in memory for the launch",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-words-unopened-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+
+      launch.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a", 1)],
+        files: [],
+      });
+
+      yield* toldTimes(launch.accountItems, 1);
+
+      assert.deepEqual(
+        { kept: yield* keptItemIds(launch.pool), said: yield* searchedThreads(launch, ["said"]) },
+        { kept: [HELD_ITEM.id], said: [HELD_ITEM.id] },
+      );
+    }).pipe(Effect.provide(unopenedWordsPlatform)),
+);
+
+it.effect(
   "a sign-out deletes the account's kept Inbox with its folder, and the next account signed in on the same host reads none of the first's items",
   () =>
     Effect.gen(function* () {
@@ -2822,8 +3083,16 @@ it.effect(
       first.sealItems(LIVE_ANSWERED);
       yield* first.open;
       yield* settled;
-      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+
+      first.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a", 1)],
+        files: [],
+      });
+
       yield* toldTimes(first.accountItems, 1);
+      const said = yield* searchedThreads(first, ["said"]);
       yield* first.local.forget;
 
       yield* first.local.open("user-sam", {
@@ -2834,6 +3103,11 @@ it.effect(
 
       assert.equal(existsSync(join(root, "accounts", "user-dana")), false);
       assert.deepEqual(yield* keptItemIds(first.pool), []);
+      assert.deepEqual(
+        { before: said, after: yield* searchedThreads(first, ["said"]) },
+        { before: [HELD_ITEM.id], after: [] },
+        "the next account's search finds none of the first's messages' words",
+      );
     }).pipe(Effect.provide(keptPlatform)),
 );
 

@@ -91,8 +91,10 @@ import {
   NOT_ON_THIS_PLATFORM,
   unavailableConcern,
 } from "./host-concerns.js";
+import { INBOX_KEEPING } from "./inbox-collections.js";
 import { inboxRowsSource } from "./inbox-rows.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
+import { heardWords, keptWordsInMemory } from "./kept-words.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
 import { LocalStoreBackend, localCopy } from "./local-copy.js";
@@ -404,6 +406,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         ? yield* localCopy(backend)
         : undefined;
 
+    /** The words the kept Inbox messages say, as the follow writes them and a search reads them: the local copy's, or one held in memory where none stands, the same store for both. */
+    const memoryWords = keptWordsInMemory();
+    const keptWords = local?.words ?? heardWords(() => memoryWords);
+
     /**
      * Every row the composers' reads hold, once, and the writes drawn over
      * them (`@repo/sync`). Where the run needs an account, a row write
@@ -551,7 +557,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const agents = yield* served(
       composeAgents({
         kernel,
-        keepsInbox: local?.keepsCollections === true,
+        // Note that a platform keeping collections on disk keeps the Inbox lean beside its messages, whether or not the account's database opened, so its screens read one path.
+        inboxKeeping: local?.keepsCollections === true ? INBOX_KEEPING.LEAN : INBOX_KEEPING.WHOLE,
+        keptWords,
         fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
@@ -954,7 +962,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
       startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
-      inboxRows: inboxRowsSource(pool),
+      inboxRows: inboxRowsSource(pool, keptWords),
       /**
        * The launch's own arming: where the account's capabilities already
        * stand open, the launch opens the gate exactly as a sign-in does; and
