@@ -207,8 +207,9 @@ export function ChannelMessage({
 
 /**
  * A thread's summary under the message it hangs on: up to three of its
- * repliers' faces and how many replies it holds, in the ink a link stands
- * in, which opens the thread (`onOpen`); none where no one answered it.
+ * repliers' faces and how many replies it holds, in the accent's ink, as
+ * the panel's summary stands, which opens the thread (`onOpen`); none where
+ * no one answered it.
  */
 export function ThreadReplies({
   thread,
@@ -243,7 +244,7 @@ export function ThreadReplies({
           />
         ))}
       </View>
-      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.TEXT }}>
+      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.ACCENT_TEXT }}>
         {thread.words}
       </Text>
     </Press>
