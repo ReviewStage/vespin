@@ -88,6 +88,7 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
+  drawnTaskIds,
   NO_REPOSITORY_KEY,
   TASK_ROW_FACE,
   TASK_TREE_GROUP,
@@ -4053,6 +4054,9 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
   const managers = useWorkspaceManagers(workspaceId);
   const managersListed = useManagersListed(workspaceId);
   const shared = useMemo(() => ({ screen, hold }), [screen, hold]);
+  const { tree } = screen.listing;
+  const { folded, opened } = hold;
+  const drawn = useMemo(() => drawnTaskIds(tree, { folded, opened }), [tree, folded, opened]);
 
   const tasks = {
     sections: (
@@ -4070,6 +4074,7 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
 
       return true;
     },
+    draws: (taskId: string) => drawn.has(taskId),
   };
 
   return (

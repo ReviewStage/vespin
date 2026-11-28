@@ -163,10 +163,12 @@ type RowListProps = {
  * characters with a separator between ids, so it changes when a row comes,
  * goes, or moves, and holds while the same rows only redraw.
  */
-function orderOf(keys: readonly string[]): number {
+function orderOf<Item>(data: readonly Item[], keyOf: (item: Item) => string): number {
   let hash: number = FNV.OFFSET;
 
-  for (const key of keys) {
+  for (const item of data) {
+    const key = keyOf(item);
+
     for (let index = 0; index < key.length; index++) {
       hash = Math.imul(hash ^ key.charCodeAt(index), FNV.PRIME);
     }
@@ -175,25 +177,6 @@ function orderOf(keys: readonly string[]): number {
   }
 
   return hash;
-}
-
-/**
- * A keeper of a run of rows' ids: the run it last handed back while the ids
- * stand the same and in the same order, and the new run once a row comes,
- * goes, or moves. Note that it holds its run in its own closure, for a hook
- * to keep in state, as `answerKeeper` does, rather than in a ref written
- * during render.
- */
-function rowKeysKeeper(): (next: readonly string[]) => readonly string[] {
-  let held: readonly string[] = [];
-
-  return (next) => {
-    const same = next.length === held.length && next.every((key, at) => key === held[at]);
-
-    if (!same) held = next;
-
-    return held;
-  };
 }
 
 /**
@@ -407,7 +390,7 @@ export function RowList({
 }
 
 type RowForEachProps<Item> = {
-  /** The rows' items, in the order they stand. */
+  /** The rows' items, in the order they stand: the same array until they change, since a new one resets every row the list holds. */
   readonly data: readonly Item[];
   /** Each item's row id, the one its row is picked by and tagged with, unique in the list. */
   readonly keyOf: (item: Item) => string;
@@ -424,37 +407,18 @@ type RowForEachProps<Item> = {
  * watchdog on a long Inbox: each Expo view pays its own reflection as it is
  * made. A recycled row keeps a `useState` of the item it drew before, so a
  * row drawn here holds no state of its own; its caller holds it by id.
- *
- * Note too that `List.ForEach` is handed the rows' ids, the same run of them
- * until a row comes, goes, or moves, and each row draws its item from this
- * render's `data`, so new items under the same ids redraw their rows in
- * place. Handed a new array, `List.ForEach` resets every row it holds,
- * standing each as an empty placeholder and then as a row anew, and a reset
- * landing while SwiftUI applies a change of the list's selection crashed the
- * app inside SwiftUI's own `List` (an AttributeGraph precondition as UIKit
- * asked a row's separator): a tap on a Tasks search's result opens its
- * task, whose read mark hands the search a new array at once.
  */
 export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
   const reduceMotion = useReduceMotion();
-  const [keepKeys] = useState(rowKeysKeeper);
-  const keys = keepKeys(data.map(keyOf));
-  const byKey = new Map(data.map((item) => [keyOf(item), item]));
 
   // Note that a row that comes, goes, or moves slides the rows around it into place, as Mail's list does when a message is archived, rather than the list redrawing in its new order at once; with Reduce Motion on the rows stand in their new places at once, as the system's own lists do.
   return (
     <List.ForEach
-      data={keys}
-      keyExtractor={(key) => key}
-      modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(keys))]}
+      data={data}
+      keyExtractor={keyOf}
+      modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(data, keyOf))]}
     >
-      {({ item: key }) => {
-        const item = byKey.get(key);
-
-        if (item === undefined) throw new Error(`RowForEach holds no item for the row "${key}".`);
-
-        return children(item);
-      }}
+      {({ item }) => children(item)}
     </List.ForEach>
   );
 }

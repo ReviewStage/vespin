@@ -6,17 +6,17 @@ appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
-# Launched on the host's Inbox fixture, whose read marks the fixture takes at
-# once, so each open's read hands the search new rows the moment its row is
-# picked, and opened on the rounding agent's page, as `transcript-switch.yaml`
-# opens it; nothing reaches a server. Note that a pick made while an agent's
-# page stands pushed over an iPad's split view goes back to the list's root
-# as it selects, and that pick crashed the iPad inside SwiftUI's own List, as
-# UIKit asked a search result's separator while the selection was applied
-# (iOS simulators runs 46074454724 and 46083002398, the second search of
-# `transcript-switch.yaml`), so each search here is made from the agent page
-# the one before opened, the two taking turns several times over, as a reader
-# going back and forth between two agents does.
+# Launched on the host's Inbox fixture and opened on the rounding agent's
+# page, as `transcript-switch.yaml` opens it; nothing reaches a server. The
+# two searches take turns: "Weekly digest email", pinned, stands in an
+# iPad's sidebar too, and "Ledger rounding", finished, stands nowhere but
+# in a search, so each pick of it moves the sidebar off a task's row. Note
+# that this crashed the iPad inside SwiftUI's own List, as UIKit asked a
+# row's separator (iOS simulators runs 46074454724, 46083002398, and
+# 46092600617), while the sidebar stood the picked task selected though it
+# drew no row of it. Each search is made from the agent page the one before
+# opened, as a reader going back and forth between two agents does, since
+# every crash came from such a pick.
 - launchApp:
     clearState: true
     arguments:

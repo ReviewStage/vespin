@@ -2,8 +2,10 @@ import { expect, test } from "vitest";
 import { ASSIGNED_TO } from "./task-list-model.js";
 import {
   DEFAULT_TASK_TREE_VIEW,
+  drawnTaskIds,
   searchedTasks,
   TASK_ROW_FACE,
+  TASK_TREE_GROUP,
   type TaskBranch,
   type TaskTree,
   taskBranches,
@@ -20,6 +22,7 @@ import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-mode
  * rest under their repository, and a teammate's task they follow under
  * Following; a search finds a settled task by its key;
  * a row nests under the nearest shallower row above it, however deep;
+ * a tree draws no row of a folded group or under a shut parent;
  * the view the reader chose stands their tasks as the Tasks page would;
  * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
@@ -269,6 +272,43 @@ test("each row stands under the nearest shallower row above it, however deep, an
       ]),
     ),
   ).toEqual([["Invites", [["Invite copy", ["Invite links"]], "Invite email"]], "Digest"]);
+});
+
+test("a tree draws every group's top rows and an open parent's sub-tasks, none of a folded group or under a shut parent", () => {
+  const row = (name: string, depth: number) => ({
+    task: task(name, TASK_STATUS.TODO, "ada/relay", 0),
+    depth,
+    open: undefined,
+  });
+
+  const tree: TaskTree = {
+    pinned: {
+      kind: TASK_TREE_GROUP.PINNED,
+      key: "pinned",
+      title: "Pinned",
+      rows: [row("Digest", 0)],
+    },
+    following: undefined,
+    sections: [
+      { kind: TASK_TREE_GROUP.SECTION, key: "ideas", title: "Ideas", rows: [row("Spike", 0)] },
+    ],
+    tasksHead: "My tasks",
+    tasks: [
+      {
+        kind: TASK_TREE_GROUP.REPOSITORY,
+        key: "ada/relay",
+        title: "ada/relay",
+        rows: [row("Invites", 0), row("Invite copy", 1), row("Invite links", 2)],
+      },
+    ],
+  };
+
+  const folded = new Set(["ideas"]);
+
+  expect([...drawnTaskIds(tree, { folded, opened: new Map() })]).toEqual(["Digest", "Invites"]);
+  expect([
+    ...drawnTaskIds(tree, { folded, opened: new Map([["ada/relay", new Set(["Invites"])]]) }),
+  ]).toEqual(["Digest", "Invites", "Invite copy"]);
 });
 
 test("a row wears a teammate's face, the unassigned mark where no one is on it, and none for the reader's own", () => {
