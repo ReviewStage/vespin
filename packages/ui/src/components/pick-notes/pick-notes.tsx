@@ -49,7 +49,7 @@ const LABEL_ROOM = 20;
 export function PickNoteNumber({ number }: { number: number }): React.JSX.Element {
   return (
     <span
-      className="ui-pick-note-number inline-flex size-avatar-inline flex-none items-center justify-center rounded-ui-full bg-accent-fill text-caption text-accent-ink tabular-nums"
+      className="ui-pick-note-number inline-flex size-avatar-inline flex-none items-center justify-center rounded-ui-full bg-accent-fill text-caption text-on-accent tabular-nums"
       aria-hidden="true"
     >
       {number}
@@ -68,7 +68,7 @@ export function PickOutline({ box, label }: { box: PickBox; label: string }): Re
     >
       {label === "" ? null : (
         <span
-          className="ui-pick-outline-label absolute left-0 max-w-popover-narrow flex rounded-ui-6 bg-accent-fill px-ui-4 font-mono text-caption text-accent-ink data-[inside=false]:bottom-full data-[inside=false]:mb-ui-4 data-[inside=true]:top-ui-2"
+          className="ui-pick-outline-label absolute left-0 max-w-popover-narrow flex rounded-ui-6 bg-accent-fill px-ui-4 font-mono text-caption text-on-accent data-[inside=false]:bottom-full data-[inside=false]:mb-ui-4 data-[inside=true]:top-ui-2"
           data-inside={inside}
         >
           <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
