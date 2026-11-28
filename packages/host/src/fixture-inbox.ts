@@ -218,6 +218,7 @@ import {
 import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_PLAN_PDF,
+  FIXTURE_SCREENSHOT_PNG,
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
@@ -409,10 +410,11 @@ const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 /** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
 const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
 
-/** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
+/** The recorded thread's files: a still and a screenshot its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
   ITEM: fixtureId(10),
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
+  SCREENSHOT: "c5169e82-a1d3-4efb-96b3-4d5e6f708193",
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
   PLAN: "b4058d71-90c2-4dea-85a2-3c4d5e6f7182",
 } as const;
@@ -493,6 +495,13 @@ const REFUSED_ITEM = fixtureId(2);
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
   { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
+  FIXTURE_WORKSPACE_SLUG,
+);
+
+/** Where the recorded thread's words draw its screenshot from, as they draw its still. */
+const RECORDED_SCREENSHOT_ADDRESS = inboxAttachmentAddress(
+  { kind: LINK_DESTINATION.INBOX_ITEM, taskId: TASK.INVITES, itemId: RECORDED.ITEM },
+  RECORDED.SCREENSHOT,
   FIXTURE_WORKSPACE_SLUG,
 );
 
@@ -682,6 +691,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             "",
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
+            // Note that a second picture, a screenshot with words, stands right under the first, so the viewer swipes between the two and Live Text has words to read, and nothing below it moves for the flows that tap the first.
+            `![The invite settings](${RECORDED_SCREENSHOT_ADDRESS})`,
+            "",
             "The recording is under this. The expired page is still the placeholder.",
             "",
             // Note that each person's chip leads its own line, so `person.yaml` taps it near the line's start, since a chip mid-line has no element of its own.
@@ -701,6 +713,11 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           {
             attachmentId: RECORDED.PICTURE,
             name: "invite-page.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+          {
+            attachmentId: RECORDED.SCREENSHOT,
+            name: "invite-settings.png",
             mediaType: AGENT_ATTACHMENT_TYPE.PNG,
           },
         ],
@@ -3922,6 +3939,10 @@ const ANSWERS: StagedAnswers = {
 
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+
+    if (attachmentId === RECORDED.SCREENSHOT) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_SCREENSHOT_PNG };
     }
 
     if (attachmentId === RECORDED.PLAN) {
