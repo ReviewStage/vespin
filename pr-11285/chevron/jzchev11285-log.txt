@@ -1,0 +1,25 @@
+pinned to fdd208852c
+== bundle PJjzchev11285 base fdd208852c
+  built fdd208852c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+Z-M-1: fails 0 shots 2 
+  Z-M-1 shots: automations-finished-open.png automations-list.png 
+Z-M-2: fails 0 shots 2 
+  Z-M-2 shots: automations-finished-open.png automations-list.png 
+Z-M-3: fails 0 shots 2 
+  Z-M-3 shots: automations-finished-open.png automations-list.png 
+== bundle PJzchevP base 56b75e8ecd
+  built 56b75e8ecd base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  native guard: Vmain-current.app refused (head 56b75e8ecd changes native files since Vmain19.app (built from 11b558b398): apps/mobile/live-activity/AgentsLiveActivity.swift ); built over kept base Vmain18.app (natsrc f495478520), whose natives HEAD matches exactly
+  export 0 (simulator-bundle.sh)
+  signed 0
+== P bundle f8c5163489 + main 3ab3084252 (56b75e8ecd) over the base natfallback picks
+Z-P-1: fails 0 shots 2 
+  Z-P-1 shots: automations-finished-open.png automations-list.png 
+Z-P-2: fails 0 shots 2 
+  Z-P-2 shots: automations-finished-open.png automations-list.png 
