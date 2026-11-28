@@ -1,0 +1,97 @@
+# transcript-switch.yaml -- a long transcript opens at its newest row, and opens there again after the reader scrolled back up it, went to another agent's transcript, and came back to it.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture and opened on the rounding agent's
+# page, whose transcript is ten finished turns long
+# (`@repo/host/fixture-agent-transcript`'s `fixtureLongTranscript`); nothing
+# reaches a server. It opens at its last words, its first ask far above.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 30000
+- assertNotVisible: "Where do totals round today\\?"
+- takeScreenshot: transcript-switch-opened
+# The reader scrolls back up a few turns, to the table's ask, which lets the
+# transcript go of its end.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Show me the cases the tests cover, side by side."
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- assertNotVisible: "Rounding is settled: every total now rounds half-cents to even.*"
+# Then goes to the digest agent, through the Tasks tab's search as a reader
+# does (`transcript-open.yaml`), whose transcript stands at its newest row.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- tapOn: "Search tasks"
+- eraseText
+- inputText: "digest"
+- assertVisible: "Weekly digest email"
+- tapOn: "Weekly digest email"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Send the weekly digest"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- tapOn: "Send the weekly digest"
+- extendedWaitUntil:
+    visible: "Reading this week's merged pull requests before I write the digest."
+    timeout: 10000
+- takeScreenshot: transcript-switch-other
+# And comes back to the rounding agent the same way: its transcript opens at
+# its newest row again, not where the reader left it.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- tapOn: "Search tasks"
+- eraseText
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
+- tapOn: "Ledger rounding"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Fix ledger rounding"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- tapOn: "Fix ledger rounding"
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 10000
+- assertNotVisible: "Where do totals round today\\?"
+- takeScreenshot: transcript-switch-back
