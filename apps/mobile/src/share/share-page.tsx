@@ -12,9 +12,9 @@
  * (`COMPOSER_LOOK.BOX`), so its row holds the "To" capsule: the one place
  * ticked, or how many, in the ink, whose menu unticks one. What was shared
  * stands inside the field as its pills, a link as its chip and a picture as
- * its thumbnail's (`ComposerPills`), never in a block of its own. Send goes
- * once a place is ticked and the field holds something, handing the places
- * ticked and the words to `onSend`.
+ * its thumbnail's (`ComposerPills`), never in a block of its own. Send stands
+ * held until a place is ticked, then goes once the field holds something,
+ * handing the places ticked and the words to `onSend`.
  */
 
 import {
@@ -237,7 +237,8 @@ export function SharePage(props: SharePageProps) {
       : [{ id, name: shareDestinationName(row), glyph: KIND_GLYPH[row.kind] }];
   });
 
-  const sendable = ticked.length > 0 && (words.trim() !== "" || holdsPictures);
+  // Note that Send is held, dimmed, until a place is ticked, as Messages holds it until a recipient is named, and lit with no words where a picture goes alone.
+  const held = ticked.length === 0;
 
   const nothingFound = searching && sections.kinds.length === 0;
 
@@ -252,8 +253,9 @@ export function SharePage(props: SharePageProps) {
             words={words}
             onWords={onWords}
             pills={pills}
-            sendable={sendable}
-            onSend={sendable ? (sent) => onSend(chosen, sent) : undefined}
+            sendable={!held && holdsPictures}
+            sendHeld={held}
+            onSend={(sent) => onSend(chosen, sent)}
             tools={
               <ToChip
                 ticked={ticked}

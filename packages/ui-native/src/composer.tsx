@@ -20,6 +20,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
+  disabled,
   fixedSize,
   font,
   foregroundStyle,
@@ -230,6 +231,8 @@ type ComposerProps = {
   readonly sendable?: boolean | undefined;
   /** Called with the words Send took out of the field; where none is given, the system's spinner stands in Send's place under words, as while a start is out, and nothing while the field is empty. */
   readonly onSend?: ComposerSend | undefined;
+  /** Whether Send stands dimmed under words and takes no press, as Messages holds Send until a recipient is named, such as the share page's before a place is ticked; `onSend` is not asked while it is. */
+  readonly sendHeld?: boolean | undefined;
   /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
   readonly sendAs?: ComposerSendAs | undefined;
   /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
@@ -517,6 +520,7 @@ function SaveButton({
 function SendButton({
   empty,
   typed,
+  held,
   onSend,
   sendAs,
   onStop,
@@ -526,6 +530,8 @@ function SendButton({
   readonly empty: boolean;
   /** Whether the field holds words, which make the round Send whatever it stood for while empty. */
   readonly typed: boolean;
+  /** Whether Send stands dimmed and takes no press, its message having nowhere to go yet. */
+  readonly held: boolean;
   readonly onSend: (() => void) | undefined;
   readonly sendAs: ComposerSendAs | undefined;
   readonly onStop: (() => void) | undefined;
@@ -565,6 +571,17 @@ function SendButton({
 
   // Note that an empty field with nothing for Send to stand for draws no Send, as Messages draws none before a word is typed, rather than a dimmed round that reads as a broken button; Dictate, where the composer offers it, then ends the row.
   if (empty) return null;
+
+  // Note that a held Send stands as the system's disabled round, as Messages' does before a recipient, rather than the spinner, which says something is under way.
+  if (held) {
+    return (
+      <Button
+        modifiers={[...roundModifiers(colors, round), disabled(true), accessibilityLabel("Send")]}
+      >
+        <Image {...glyphImage(GLYPH.SEND)} size={sendSize} modifiers={roundMark(round)} />
+      </Button>
+    );
+  }
 
   if (onSend === undefined) return <RoundSpinner label={SPINNER_WORDS.WAITING} />;
 
@@ -820,6 +837,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
         <SendButton
           empty={empty}
           typed={words.trim() !== ""}
+          held={props.sendHeld === true}
           onSend={send}
           sendAs={sendAs}
           onStop={onStop}
