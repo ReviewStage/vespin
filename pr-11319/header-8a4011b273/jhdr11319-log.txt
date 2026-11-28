@@ -1,0 +1,38 @@
+pinned to 8a4011b273
+== bundle PJjhdr11319 base 8a4011b273
+  built 8a4011b273 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after/iphone-light-agent: fails 0 shots 1 
+after/iphone-light-managers: fails 0 shots 5 
+after/iphone-light-inbox: fails 0 shots 3 
+after/iphone-dark-agent: fails 0 shots 1 
+after/iphone-dark-managers: fails 0 shots 5 
+after/iphone-dark-inbox: fails 0 shots 3 
+after/ipad-light-agent: fails 0 shots 1 
+after/ipad-light-managers: fails 0 shots 5 
+after/ipad-light-inbox: fails 0 shots 3 
+after/ipad-dark-agent: fails 0 shots 1 
+after/ipad-dark-managers: fails 0 shots 5 
+after/ipad-dark-inbox: fails 0 shots 3 
+== bundle PJhdr11319b base 3111571f79
+  built 3111571f79 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== before bundle 3111571f79 over Vmain-current.app
+before/iphone-light-agent: fails 0 shots 1 
+before/iphone-light-managers: fails 0 shots 5 
+before/iphone-light-inbox: fails 0 shots 3 
+before/iphone-dark-agent: fails 0 shots 1 
+before/iphone-dark-managers: fails 0 shots 5 
+before/iphone-dark-inbox: fails 0 shots 3 
+before/ipad-light-agent: fails 0 shots 1 
+before/ipad-light-managers: fails 0 shots 5 
+before/ipad-light-inbox: fails 0 shots 3 
+before/ipad-dark-agent: fails 0 shots 1 
+before/ipad-dark-managers: fails 0 shots 5 
+before/ipad-dark-inbox: fails 0 shots 3 
