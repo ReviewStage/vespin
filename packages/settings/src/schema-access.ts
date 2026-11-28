@@ -125,27 +125,13 @@ const ACCOUNT_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(ACCOUNT_PREFER
 
 const SHARED_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(SHARED_PREFERENCE_FIELDS);
 
-/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, which intros it has seen, which GitHub activity no longer wakes its agents, which MCP servers its new agents start switched off, whether its Inbox is on, and each of the diff display's choices. */
-const OWN_PART_FIELDS = [
-  APP_SETTING_SCHEMA.linkOpen.field,
-  APP_SETTING_SCHEMA.pullRequestOpen.field,
-  APP_SETTING_SCHEMA.agentEnter.field,
-  APP_SETTING_SCHEMA.commitAuthor.field,
-  APP_SETTING_SCHEMA.agentPermissionMode.field,
-  APP_SETTING_SCHEMA.setupFinished.field,
-  APP_SETTING_SCHEMA.setupPlace.field,
-  APP_SETTING_SCHEMA.soundWhen.field,
-  APP_SETTING_SCHEMA.completionSound.field,
-  APP_SETTING_SCHEMA.askSound.field,
-  APP_SETTING_SCHEMA.voice.field,
-  APP_SETTING_SCHEMA.turnNotifications.field,
-  APP_SETTING_SCHEMA.onboardingSurvey.field,
-  APP_SETTING_SCHEMA.introsSeen.field,
-  APP_SETTING_SCHEMA.githubWakesOff.field,
-  APP_SETTING_SCHEMA.newAgentServersOff.field,
-  APP_SETTING_SCHEMA.inbox.field,
-  ...DIFF_DISPLAY_FIELDS,
-] as const satisfies readonly AccountPreferenceField[];
+/**
+ * The preferences each riding a part of the snapshot of its own, named as
+ * the preference is: every account preference, since the shared part holds
+ * none (`SHARED_PREFERENCE_FIELDS`). A preference moved into the shared part
+ * leaves this list as it joins that one.
+ */
+const OWN_PART_FIELDS = ACCOUNT_PREFERENCE_FIELDS;
 
 type OwnPartField = (typeof OWN_PART_FIELDS)[number];
 
