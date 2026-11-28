@@ -264,6 +264,8 @@ env:
     file: subflows/dismiss.yaml
     env:
       POINT: 50%, 30%
+- assertNotVisible: "Stop"
+- assertVisible: "Created by .*"
 - runFlow:
     when:
       notVisible: "No task selected"
@@ -338,8 +340,15 @@ env:
 - tapOn: "More"
 - assertVisible: "Open in browser"
 - takeScreenshot: task-page-menu
+# Note that a menu or popover is put away by a tap off it at a point, through
+# `dismiss.yaml`, because iOS takes everything under it out of the
+# accessibility tree, so no named control behind it can be pressed (#10757's
+# rig run); the flow then asserts it gone and the page as it stood, so a tap
+# that ever lands on a live control fails here.
 - runFlow:
     file: subflows/dismiss.yaml
+- assertNotVisible: "Open in browser"
+- assertVisible: "Invites sent in the staging workspace.*"
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
@@ -383,15 +392,17 @@ env:
 - tapOn: "Priority, .*"
 - assertVisible: "Urgent"
 - takeScreenshot: task-priority-menu
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/dismiss.yaml
+- assertNotVisible: "Urgent"
+- assertVisible: "Priority, .*"
 - tapOn: "Assignee, .*"
 - assertVisible: "No assignee"
 - takeScreenshot: task-assignee-menu
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/dismiss.yaml
+- assertNotVisible: "No assignee"
+- assertVisible: "Assignee, .*"
 # Its ⋯ holds the panel's acts: Copy, holding Copy description, as the
 # panel's open task's menu leads with it, and Copy link; Open in browser,
 # Rename, New sub-task, and Permanently delete, red and last, which asks
