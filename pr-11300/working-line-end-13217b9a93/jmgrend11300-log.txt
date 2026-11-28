@@ -1,0 +1,15 @@
+pinned to 13217b9a93
+== bundle PJjmgrend11300 base 13217b9a93
+  built 13217b9a93 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+light-managers: fails 0 shots 10 
+  light-managers shots: managers-change-face.png managers-chat.png managers-face-picker.png managers-list-face.png managers-list.png managers-new.png managers-overview.png managers-search.png managers-settings-face.png managers-settings.png 
+light-show-work: fails 0 shots 6 
+  light-show-work shots: managers-change-face.png managers-chat-show-work.png managers-chat.png managers-list-face.png managers-list.png managers-new.png 
+dark-managers: fails 0 shots 10 
+  dark-managers shots: managers-change-face.png managers-chat.png managers-face-picker.png managers-list-face.png managers-list.png managers-new.png managers-overview.png managers-search.png managers-settings-face.png managers-settings.png 
+dark-show-work: fails 0 shots 6 
+  dark-show-work shots: managers-change-face.png managers-chat-show-work.png managers-chat.png managers-list-face.png managers-list.png managers-new.png 
