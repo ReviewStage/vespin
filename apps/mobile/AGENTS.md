@@ -26,7 +26,7 @@ Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
-| `scripts/simulator-bundle.sh <base .app> <output .app>` | Copy a simulator app built before with this checkout's JavaScript as its bundle, signed ad hoc with the base's entitlements, naming the copy on its last line: a JavaScript change seen in a minute rather than a native build, over a base built from the same native sources |
+| `scripts/simulator-bundle.sh <base .app> <output .app>` | Copy a simulator app built before with this checkout's JavaScript as its bundle and its share extension's, signed ad hoc with the base's entitlements, naming the copy on its last line: a JavaScript change seen in a minute rather than a native build, over a base built from the same native sources |
 | `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`notification` for the notification flow), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
@@ -263,31 +263,65 @@ without the module copies through expo-clipboard. Pasting into Messages
 ## The share extension
 
 Vespin stands in the system's share sheet for text, a web link and up to
-four pictures: a share
-extension `app.config.ts` adds beside the other two, whose Swift is under
-`share-extension/`. An extension runs with no React Native and no host, so
-its sheet is plain SwiftUI, drawn from a snapshot the app keeps in their
-App Group (`src/share-sheet.ts`, `@repo/features/ios-share-wire`): the
-workspace the phone works in, each workspace, and the repositories each
-reaches, and where Start is sent. Start sends the task as New task does
-(`share-extension/ShareStart.swift`), under the account's current access
-token, which the app keeps in one Keychain item it and the extension alone
-share (`modules/share-token/`, written through `@repo/host`'s `issued-token-account-source.ts`
-on every sign-in and renewal and deleted on sign-out; the Keychain group is
-each target's `VespinShareKeychainGroup`). The refresh token never leaves the
-app, since it rotates on every use. Once the task is made, the sheet names
-it and posts a local notification (`share-extension/ShareNotice.swift`) whose
-tap the app routes as a push of `PUSH_KIND.SHARE_STARTED`
-(`@repo/features/inbox-push-wire`), to the agent's page or the task, since
-no public API lets an extension open its app. With no token, a stale one, or no answer,
-Start keeps the words and picks as a draft in the group instead, its
-pictures as JPEGs beside it under fixed names
-(`SHARE_DRAFT_PICTURE_FILES`), and the app opens New task on it, prefilled
-and with the pictures attached, the next time it comes forward, since no
-public API lets an extension bring its app forward. Every file the app
-and its extensions share goes through `src/app-group.ts`, flat JSON at the
-group's root but for those pictures, and each Swift target reads the group from its Info.plist's
-`VespinAppGroup`.
+four pictures: a share extension `app.config.ts` adds beside the other two,
+whose sheet is the app's own share page (`src/share/share-page.tsx`), drawn
+by React Native from the extension's own JavaScript entry, `share.ts`. Xcode
+bundles that entry into the extension as `share.jsbundle` (Hermes bytecode,
+named apart from the app's `main.jsbundle`), in Debug too, since a share
+sheet has no Metro to reach. Its Swift, under `share-extension/`, hosts the
+page through Expo's React Native factory under the system's own bar (the
+title, the search field stacked under it, the close button), reads what was
+shared, and is the page's host behind the extension's own module
+(`modules/share-extension/`, which the Podfile links into the extension and
+leaves out of the app). The extension's Podfile target links Expo's modules
+but those the app alone stands on (`EXCLUDED_EXPO_MODULES`: notifications,
+background tasks, the database, the Live Activity, calls, updates and the
+rest) and only the community modules the page's components load
+(`COMMUNITY_MODULES`); a module the page comes to load, which the build
+leaves out, kills the extension as it starts, so a change to what the page
+imports is checked against that list.
+
+The page runs with no host. It reads the snapshot the app keeps in their
+App Group (`src/share-sheet.ts`, written through `src/app-group.ts`,
+decoded by `@repo/features/ios-share-wire`'s `shareSnapshotRead`): the
+account, its workspaces and their repositories, where its calls go, and
+where a share may go in the workspace the phone works in. What was shared
+lands in its field as pills (`@repo/features/ios-share-extension`'s
+`sharedField`): the words, the link as its chip, and each picture, which
+the Swift writes as a JPEG within the service's bounds
+(`share-extension/SharedItems.swift`). Send sends each place ticked the
+write its own composer makes (`@repo/features/ios-share-send`), through the
+hosted clients the app's acts call, named as the app is, under the
+account's current access token. The token is read only there, only as the
+page sends, through `ShareToken.swift`, which reads an expired token as
+none: the app keeps it in one Keychain item it and the extension alone share
+(`modules/share-token/`, written through `@repo/host`'s
+`issued-token-account-source.ts` on every sign-in and renewal and deleted on
+sign-out; the Keychain group is each target's `VespinShareKeychainGroup`),
+and it never enters the snapshot, a draft, a log, or a notification. The
+refresh token never leaves the app, since it rotates on every use. A share
+New task made posts a local notification naming the task and its agent
+(`shareStartedNotice`, posted by `share-extension/ShareNotice.swift`),
+whose tap the app routes as a push of `PUSH_KIND.SHARE_STARTED`
+(`@repo/features/inbox-push-wire`), since no public API lets an extension
+open its app. Where any place did not take it, or no token stood, the page
+keeps the share as a draft in the group naming the places it did not reach,
+its pictures as JPEGs beside it under fixed names
+(`SHARE_DRAFT_PICTURE_FILES`), and the app opens the share page again on it
+(`/share`) the next time it comes forward. Every file the app and its
+extensions share goes through `src/app-group.ts`, flat JSON at the group's
+root but for those pictures, and each Swift target reads the group from its
+Info.plist's `VespinAppGroup`.
+
+The extension logs its own peak memory and cold start (process start to the
+page's first frame) to the subsystem `dev.vespin.ios.share` as public
+numbers and nothing else (`share-extension/ShareGate.swift`); read them with
+`log stream --predicate 'subsystem == "dev.vespin.ios.share"'` beside
+`footprint -p` on its pid. iOS ends a share extension past its memory limit,
+so a change to what the page loads is measured there before it ships.
+`scripts/simulator-bundle.sh` rebundles the extension with the app, so a
+change to its JavaScript needs no native build over a base that already has
+it, and `maestro/share-extension.yaml` shares a page from Safari into it.
 
 ## Tests
 

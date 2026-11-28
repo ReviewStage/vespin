@@ -1,0 +1,58 @@
+# share-extension.yaml -- the share sheet itself: a page shared from Safari into Vespin's share extension, which stands the app's share page under the system's bar, the link as a pill in its field and the places the app left in its snapshot; New task ticked, the "To" capsule naming it; then closed with nothing sent.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as every flow is, so no server is
+# reached; standing, the app writes the share sheet's snapshot of the
+# fixture's places into the App Group (`src/share-sheet.ts`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+# Safari opens a page, as a person would share one; its first page load is
+# the simulator's own cold start, so it is waited on.
+- openLink:
+    link: "https://example.com"
+    browser: true
+- extendedWaitUntil:
+    visible: "Example Domain"
+    timeout: 30000
+# Note that an iPad's Safari stands Share in its bar, and an iPhone's under its ⋯.
+- runFlow:
+    when:
+      notVisible: "Share"
+    commands:
+      - tapOn: "More"
+- tapOn: "Share"
+# The share sheet's row of apps holds Vespin, past the first few on a phone.
+- scrollUntilVisible:
+    element: "Vespin"
+    direction: RIGHT
+    timeout: 20000
+- tapOn: "Vespin"
+# The extension's cold start runs React Native's first frame; the gate holds it under a second, but a loaded runner's is slower.
+- extendedWaitUntil:
+    visible:
+      id: "share-field"
+    timeout: 30000
+- assertVisible: "Send to"
+- assertVisible: "New task"
+- waitForAnimationToEnd
+- takeScreenshot: share-extension
+# A tap ticks New task, and the "To" capsule names it.
+- tapOn: "New task"
+- assertVisible:
+    id: "share-to"
+- takeScreenshot: share-extension-new-task
+# The bar's close ends the sheet with nothing sent.
+- tapOn: "Cancel"
+- assertNotVisible:
+    id: "share-field"

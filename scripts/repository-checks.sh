@@ -642,6 +642,38 @@ if [[ -n "$provider_shaped_literals" ]]; then
     exit 1
 fi
 
+# The iOS share extension holds the account's access token only while its
+# page sends a share (apps/mobile/AGENTS.md, "The share extension"): the
+# extension's Swift reads it in one place, the host's `accessToken`, the
+# page's JavaScript asks for it in one place, as it sends, and nothing in
+# either logs but the extension's measure of itself, which logs numbers. So
+# a second read, or a log line beside one, fails here rather than in a
+# review. `ShareToken.swift` itself is where the read is defined, and the
+# Live Activity's module reads the same item for its own calls.
+share_extension="$APP_REPO_ROOT/apps/mobile/share-extension"
+share_token_reads=$(grep -rn --include='*.swift' 'ShareToken\.read()' "$share_extension" \
+    "$APP_REPO_ROOT/apps/mobile/modules/share-extension" | sed "s|^$APP_REPO_ROOT/||" || true)
+if [[ "$(grep -c . <<<"$share_token_reads")" != 1 || "$share_token_reads" != apps/mobile/share-extension/ShareViewController.swift:* ]]; then
+    printf 'error: the share extension reads its token once, in ShareViewController.swift'"'"'s accessToken; found:\n%s\n' \
+        "$share_token_reads" >&2
+    exit 1
+fi
+share_token_asks=$(grep -rln 'accessToken()' "$APP_REPO_ROOT/apps/mobile/src/share" "$APP_REPO_ROOT/apps/mobile/share.ts" |
+    sed "s|^$APP_REPO_ROOT/||" | grep -v '^apps/mobile/src/share/share-extension-module.ts$' || true)
+if [[ "$share_token_asks" != apps/mobile/src/share/share-extension-page.tsx ]]; then
+    printf 'error: the share page asks for the token only as it sends, in share-extension-page.tsx; found:\n%s\n' \
+        "$share_token_asks" >&2
+    exit 1
+fi
+share_logs=$( (grep -rnE '\b(Logger|os_log|NSLog|print)\(' "$share_extension" "$APP_REPO_ROOT/apps/mobile/modules/share-extension" |
+    grep -v '^[^:]*/ShareGate\.swift:' || true; grep -nE '\bconsole\.' "$APP_REPO_ROOT"/apps/mobile/src/share/share-extension-*.ts* \
+    "$APP_REPO_ROOT/apps/mobile/share.ts" || true) | sed "s|^$APP_REPO_ROOT/||")
+if [[ -n "$share_logs" ]]; then
+    printf 'error: the share extension logs nothing but its own measure (ShareGate.swift), since what it holds may be the token:\n%s\n' \
+        "$share_logs" >&2
+    exit 1
+fi
+
 # The service deploys from `main` on merge, while a client ships only when its
 # tag is pushed, so a `HOSTED_API_FLOOR` above what a released client sends
 # refuses that client before any build it could update to exists. So the floor

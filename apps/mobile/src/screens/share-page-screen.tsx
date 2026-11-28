@@ -1,6 +1,7 @@
 // share-page-screen.tsx -- the share page's scratch page, which a launch opens on (`-sharePage true`) so a flow shoots the page on synthetic places and a synthetic share.
 
 import { useState } from "react";
+import { StackShareBar } from "../share/share-bar.js";
 import { SharePage } from "../share/share-page.js";
 import {
   FIXTURE_DESTINATIONS,
@@ -21,6 +22,7 @@ export function SharePageScreen() {
 
   return (
     <SharePage
+      Bar={StackShareBar}
       destinations={FIXTURE_DESTINATIONS}
       words={words}
       onWords={setWords}

@@ -5,6 +5,7 @@ import { shareSendsOf } from "@repo/features/ios-share-send";
 import { randomUUID } from "expo-crypto";
 import { useNavigation, useRouter } from "expo-router";
 import { useRef, useState } from "react";
+import { StackShareBar } from "../share/share-bar.js";
 import { SharePage } from "../share/share-page.js";
 import { useShareSend } from "../share/use-share-send.js";
 import { useShareDestinations } from "../share-sheet.js";
@@ -83,6 +84,7 @@ export function ShareDraftScreen({ draft }: { readonly draft: ShareDraftOpened }
 
   return (
     <SharePage
+      Bar={StackShareBar}
       destinations={destinations}
       words={words}
       onWords={setWords}

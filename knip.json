@@ -38,6 +38,7 @@
     "apps/mobile": {
       "entry": [
         "index.ts",
+        "share.ts",
         "src/app/**/*.tsx",
         "app.config.ts",
         "babel.config.js",
