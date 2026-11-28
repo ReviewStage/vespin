@@ -68,6 +68,11 @@ export function missingWords(missing: InboxMissing): string {
   }
 }
 
+/** What a `do` ask's step of a fence alone is named by, by its place from the first at 0, since it says nothing of its own. */
+export function unnamedStep(at: number): string {
+  return `Step ${at + 1}`;
+}
+
 /** What the presses closing an open `do` ask say, the one going ahead first. */
 export const ASK_PRESS = {
   DONE: "Mark done",

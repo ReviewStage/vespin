@@ -1,5 +1,10 @@
 import { draftKindOf } from "@repo/features/draft-text";
-import { ASK_PRESS, INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
+import {
+  ASK_PRESS,
+  INBOX_MISSING,
+  type InboxMissing,
+  unnamedStep,
+} from "@repo/features/inbox-ask-words";
 import {
   answeredDraft,
   doDecision,
@@ -697,7 +702,7 @@ function StepBox({
       detail={detail}
     >
       {say === "" ? (
-        `Step ${at + 1}`
+        unnamedStep(at)
       ) : (
         <MarkdownMessage words={say} inline link={link} openLink={openLink} />
       )}

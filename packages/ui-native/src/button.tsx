@@ -11,6 +11,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityIdentifier,
@@ -92,6 +93,8 @@ type ButtonProps = {
   /** Whether the act deletes or undoes something, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly disabled?: boolean | undefined;
+  /** Whether it stands pressed, as a toggle's press does once it holds its answer, which VoiceOver hears as selected. */
+  readonly selected?: boolean | undefined;
   readonly onPress: () => void;
 };
 
@@ -134,6 +137,7 @@ export function Button(props: ButtonProps) {
         ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
+        ...(props.selected === true ? [accessibilityAddTraits(["isSelected"])] : []),
       ]}
     />
   );

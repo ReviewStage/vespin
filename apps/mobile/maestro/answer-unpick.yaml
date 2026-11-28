@@ -1,0 +1,152 @@
+# answer-unpick.yaml -- an ask's pick taken back by pressing it again, as the panel's controls clear: a decide's one option, a pick of several, a yes or no's press, and a do's Mark done, each pressed, then pressed again, which leaves nothing attached and Send unlit.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `answer.yaml` is, so no server is
+# reached; nothing is sent. Each thread is opened from a fresh launch, so a
+# compact window's pushed thread and a regular window's split view are
+# reached the same way.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+# A decide of one pick: the option pressed is checked and lights Send;
+# pressed again, it lets go and Send is unlit again.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Who can withdraw an invite\\?"
+- tapOn: "Both, Recommended.*"
+- assertVisible:
+    text: "Both, Recommended.*"
+    selected: true
+- assertVisible:
+    text: "Send"
+    enabled: true
+- takeScreenshot: unpick-decide-picked
+- tapOn: "Both, Recommended.*"
+- assertVisible:
+    text: "Both, Recommended.*"
+    selected: false
+- assertNotVisible:
+    text: "Send"
+    enabled: true
+- waitForAnimationToEnd
+- takeScreenshot: unpick-decide-cleared
+
+# A pick of several, its options carrying media, with None of these after
+# them: an option pressed twice lets go, and None of these pressed twice
+# lets go too.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "How should a finished turn end\\?"
+# Note that the options' tiles load into the box's head and grow it, which
+# moves its rows, so the head is let settle before an option is pressed.
+- extendedWaitUntil:
+    visible: "A done card, Recommended.*"
+    timeout: 5000
+- waitForAnimationToEnd
+- tapOn: "A done card, Recommended.*"
+- assertVisible:
+    text: "A done card, Recommended.*"
+    selected: true
+- tapOn: "A done card, Recommended.*"
+- assertVisible:
+    text: "A done card, Recommended.*"
+    selected: false
+# Note that the options run past the box's head, which scrolls in place, so
+# the head is dragged from an option until None of these shows; a swipe at
+# the window's middle would scroll the thread instead.
+- repeat:
+    times: 4
+    while:
+      notVisible: "None of these"
+    commands:
+      - swipe:
+          from:
+            text: "A done card.*|Two states of the dock.*|Leave it as it is.*"
+          direction: UP
+- tapOn: "None of these"
+- assertVisible:
+    text: "None of these"
+    selected: true
+- tapOn: "None of these"
+- assertVisible:
+    text: "None of these"
+    selected: false
+- assertNotVisible:
+    text: "Send"
+    enabled: true
+
+# A yes or no, drawn as its two presses: Approve pressed attaches it and
+# lights Send, pressed again takes it off.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Run the memberships migration on preview\\?"
+- tapOn: "Approve"
+- assertVisible:
+    text: "Approve"
+    selected: true
+- assertVisible:
+    text: "Send"
+    enabled: true
+- waitForAnimationToEnd
+- takeScreenshot: unpick-approval-pressed
+- tapOn: "Approve"
+- assertVisible:
+    text: "Approve"
+    selected: false
+- assertNotVisible:
+    text: "Send"
+    enabled: true
+
+# A do: Mark done ticks every step and lights Send without sending; pressed
+# again it lets every step go.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Verify the digest's sender domain"
+- tapOn: "Mark done"
+- assertVisible: ".*your registrar\\., ticked"
+- assertVisible:
+    text: "Mark done"
+    selected: true
+- assertNotVisible: "Done 3/3"
+- waitForAnimationToEnd
+- takeScreenshot: unpick-do-pressed
+- tapOn: "Mark done"
+- assertVisible:
+    text: "Mark done"
+    selected: false
+- assertNotVisible: ".*your registrar\\., ticked"
+- assertNotVisible:
+    text: "Send"
+    enabled: true

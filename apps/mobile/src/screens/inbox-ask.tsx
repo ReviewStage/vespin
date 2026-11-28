@@ -1,19 +1,29 @@
 // inbox-ask.tsx -- the box under a thread, its open ask's controls standing inside it over the field, an answered ask's controls as the answer left them and a withdrawn or replaced ask's stepped back in the thread, and the thread's ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
-import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
+  ASK_PRESS,
+  askHeadWords,
+  INBOX_BOX_WORDS,
+  RESOLVE,
+  unnamedStep,
+} from "@repo/features/inbox-ask-words";
+import {
+  doDecision,
   EMPTY_INBOX_DRAFT,
   fieldValueOf,
   type InboxDraft,
   picksNone,
   shownTicks,
+  stepParts,
+  withDoPress,
   withNoneOfThese,
   withPicks,
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
 import {
+  decideButtons,
   INBOX_READ_MARK,
   type InboxKnownAsk,
   isUnread,
@@ -21,6 +31,7 @@ import {
 } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
+  INBOX_BOUNDS,
   INBOX_FIELD,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
@@ -42,7 +53,9 @@ import {
   type AnswerField,
   type AnswerFieldKind,
   AnswerFields,
+  AskActs,
   AskNote,
+  type AskStep,
   type BarAction,
   type BarFootItem,
   type BarMenu,
@@ -176,6 +189,13 @@ function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
   return { label: option.label, detail: option.detail, media };
 }
 
+/** A do ask's step as the list draws it: its words, named by its place where it is a fence alone, and its fences' code under it, as the panel's box splits it (`stepParts`). */
+function stepOf(step: string, at: number): AskStep {
+  const { say, fences } = stepParts(step);
+
+  return { words: say === "" ? unnamedStep(at) : say, code: fences.map((fence) => fence.code) };
+}
+
 /** An answer ask's fields as the card draws them, each holding what `draft` gives it. */
 function cardFields(fields: readonly InboxField[], draft: InboxDraft): readonly AnswerField[] {
   return fields.map((field) => {
@@ -188,6 +208,7 @@ function cardFields(fields: readonly InboxField[], draft: InboxDraft): readonly 
       value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
       options: field.options,
       recommended: field.recommended,
+      maxLength: INBOX_BOUNDS.MAX_FIELD_VALUE_CHARS,
     };
   });
 }
@@ -250,10 +271,15 @@ function OpenAskControls({
 }
 
 /**
- * The open ask's controls as `OpenAskControls` stands them: a decide's
- * options to pick, the recommended tagged; a do's steps to tick, with Mark
- * done and Couldn't do it, each sending at once with the note typed; or an
- * answer's fields to fill.
+ * The open ask's controls as `OpenAskControls` stands them, as the panel's
+ * box draws them (`inbox-ask-controls.tsx`), each attaching its answer to
+ * the reply rather than sending it, and each press or pick taking it off
+ * again pressed again, the box's Send sending it with the note: a decide's
+ * options to pick, the recommended tagged, or its two presses where it is a
+ * yes or no in other words (`decideButtons`), the first going ahead and the
+ * second holding back; a do's steps to tick, each with its code under it,
+ * then Mark done, which ticks every one, and Couldn't do it; or an answer's
+ * fields to fill, a text field stopping at the panel's most.
  */
 function AskControls({
   item,
@@ -266,7 +292,27 @@ function AskControls({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send } = answer;
+  const { draft, onDraft } = answer;
+
+  if (ask.type === INBOX_ASK.DECIDE && decideButtons(ask)) {
+    const recommended = recommendedLabels(ask);
+
+    return (
+      <AskActs
+        acts={ask.options.map((option, at) => {
+          const picked = draft.choices.includes(option.label);
+
+          return {
+            label: option.label,
+            symbol: at === 0 ? GLYPH.CHECK : GLYPH.UNDO,
+            pressed: picked,
+            recommended: recommended.includes(option.label),
+            onPress: () => onDraft(withPicks(draft, picked ? [] : [option.label])),
+          };
+        })}
+      />
+    );
+  }
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
@@ -296,25 +342,31 @@ function AskControls({
   }
 
   if (ask.type === INBOX_ASK.DO) {
-    // A press sends at once, with the steps ticked and the note typed, as the panel's press and Send do together.
+    // Note that a press attaches its decision to the reply and takes it off pressed again, the box's Send sending it with the note, as the panel's presses do.
     const press = (reply: typeof INBOX_REPLY.DONE | typeof INBOX_REPLY.NOT_DONE) =>
-      send({ ...draft, press: reply });
+      onDraft(withDoPress(ask, draft, reply));
 
-    const ticked = shownTicks(ask, draft);
+    const decision = doDecision(ask, draft);
 
     return (
       <StepList
-        steps={ask.steps.length === 0 ? [item.title] : ask.steps}
-        ticked={ticked}
+        steps={ask.steps.length === 0 ? [{ words: item.title, code: [] }] : ask.steps.map(stepOf)}
+        ticked={shownTicks(ask, draft)}
         onToggle={(at) => onDraft(withStep(ask, draft, at))}
         repository={doors.repository}
         onOpenLink={doors.openLink}
         acts={[
-          { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
+          {
+            label: ASK_PRESS.DONE,
+            symbol: GLYPH.CHECK,
+            pressed: decision === INBOX_REPLY.DONE,
+            onPress: () => press(INBOX_REPLY.DONE),
+          },
           {
             label: ASK_PRESS.NOT_DONE,
             symbol: GLYPH.UNDO,
             quiet: true,
+            pressed: decision === INBOX_REPLY.NOT_DONE,
             onPress: () => press(INBOX_REPLY.NOT_DONE),
           },
         ]}
@@ -382,7 +434,7 @@ export function SettledAskCard({
   if (ask.type === INBOX_ASK.DO) {
     return (
       <StepList
-        steps={ask.steps.length === 0 ? [title] : ask.steps}
+        steps={ask.steps.length === 0 ? [{ words: title, code: [] }] : ask.steps.map(stepOf)}
         ticked={draft.steps ?? []}
         {...linked}
       />

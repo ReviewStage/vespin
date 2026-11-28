@@ -31,6 +31,7 @@ import {
   padding,
   strokeBorder,
   textFieldStyle,
+  textSelection,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { fieldValueWords } from "@repo/features/inbox-wire";
@@ -109,16 +110,31 @@ export type AnswerField = {
   readonly value: string | boolean;
   readonly options?: readonly string[] | undefined;
   readonly recommended?: string | undefined;
+  /** The most characters a text field takes, as the panel's field stops at; none where it takes any. */
+  readonly maxLength?: number | undefined;
 };
 
-/** One act under the card, such as Mark done: its words and its glyph. */
+/** One of an ask's presses, such as Mark done or a yes or no's Approve: its words and its glyph. */
 export type AskAct = {
   readonly label: string;
   readonly symbol: Glyph;
-  /** Whether it is the lesser of the card's acts, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
+  /** Whether it is the lesser of the presses, such as Couldn't do it beside Mark done, which stands quiet, as the panel's does. */
   readonly quiet?: boolean | undefined;
+  /** Whether it stands pressed, its answer attached to the reply until it is pressed again, as the panel's press toggles. */
+  readonly pressed?: boolean | undefined;
+  /** Whether the agent recommends it, which its tag says after it. */
+  readonly recommended?: boolean | undefined;
   readonly onPress: () => void;
 };
+
+/** One step of a do ask: its words, and the code its fences hold, each read under the step, outside its press. */
+export type AskStep = {
+  readonly words: string;
+  readonly code: readonly string[];
+};
+
+/** How thick the recommended tag's edge is drawn. */
+const TAG_EDGE = 1;
 
 /**
  * An ask's rows, a hairline between each from where their words start. An
@@ -185,24 +201,72 @@ export function AskNote({ words }: { readonly words: string }) {
   return <ProblemLine text={words} id={ASK_NOTE_ID} />;
 }
 
+/** The small bordered tag after what the agent recommends, muted, as the panel's stands, so copper is left for what is picked; its one word on one line at every size, never broken inside the tag. */
+export function RecommendedTag() {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
+        foregroundStyle(colors.TEXT_MUTED),
+        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
+        lineLimit(1),
+        fixedSize(),
+        padding({ horizontal: 5, vertical: 1 }),
+        strokeBorder({
+          content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: RADIUS.TAG,
+          style: { lineWidth: TAG_EDGE },
+        }),
+      ]}
+    >
+      {RECOMMENDED}
+    </Text>
+  );
+}
+
 /**
- * The card's acts in a row under it, at the system's regular size so each
- * stands a 44 pt target: the main act, such as Mark done, filled in the
- * accent as a screen's one act is, and a quiet one beside it, such as
- * Couldn't do it, its words alone in the ink, as the panel's quiet button.
+ * An ask's presses in a row, at the system's regular size so each stands a
+ * 44 pt target, each a toggle as the panel's are: outlined in the ink, or
+ * its words alone where it is the quiet one, such as Couldn't do it, and
+ * filled in the accent once pressed, its answer attached to the reply until
+ * it is pressed again, VoiceOver hearing it selected. One the agent
+ * recommends wears the tag after it, as the panel's press wears its badge.
  */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   const stacked = useAccessibilitySize();
 
-  const buttons = acts.map((act) => (
-    <Button
-      key={act.label}
-      label={act.label}
-      symbol={act.symbol}
-      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
-      onPress={act.onPress}
-    />
-  ));
+  const buttons = acts.map((act) => {
+    const look =
+      act.pressed === true
+        ? BUTTON_LOOK.PROMINENT
+        : act.quiet === true
+          ? BUTTON_LOOK.PLAIN
+          : BUTTON_LOOK.BORDERED;
+
+    const button = (
+      <Button
+        key={act.label}
+        label={act.label}
+        symbol={act.symbol}
+        look={look}
+        selected={act.pressed === true}
+        onPress={act.onPress}
+      />
+    );
+
+    return act.recommended === true ? (
+      <HStack key={act.label} spacing={SPACE.TIGHT * 2}>
+        {button}
+        <RecommendedTag />
+      </HStack>
+    ) : (
+      button
+    );
+  });
 
   // Note that past the accessibility sizes the acts stand one under the other, as a row's end does, because two regular buttons side by side run past an iPhone's width there.
   return stacked ? (
@@ -259,29 +323,23 @@ export function ResolvableAsk({
   );
 }
 
-/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
-export function RecommendedTag() {
+/** A step's code, read whole in the monospaced face under its words and past its check, its lines selectable to copy, as the panel's code card holds a step's fence. */
+function StepCode({ code }: { readonly code: string }) {
+  const rowPadding = useAskRowPadding();
+  const wordsInset = useWordsInset();
   const colors = useColors();
 
   return (
     <Text
       modifiers={[
-        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.TEXT_MUTED),
-        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
-        lineLimit(1),
-        fixedSize(),
-        padding({ horizontal: 5, vertical: 1 }),
-        strokeBorder({
-          content: colors.CHIP_EDGE,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: RADIUS.TAG,
-          style: { lineWidth: 1 },
-        }),
+        font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+        foregroundStyle(colors.TEXT_BODY),
+        textSelection(true),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        padding({ leading: wordsInset.MARKED, bottom: rowPadding.vertical }),
       ]}
     >
-      {RECOMMENDED}
+      {code}
     </Text>
   );
 }
@@ -363,7 +421,7 @@ function StepRow({
   );
 }
 
-/** A do ask's steps as checkbox rows, by their place from the first at 0, with its acts under them; with no `onToggle`, standing as an answer left it, ticked as it ticked them, taking no press. */
+/** A do ask's steps as checkbox rows, by their place from the first at 0, each with its code under it, and its presses under them; with no `onToggle`, standing as an answer left it, ticked as it ticked them, taking no press. */
 export function StepList({
   steps,
   ticked,
@@ -372,7 +430,7 @@ export function StepList({
   repository,
   onOpenLink,
 }: {
-  readonly steps: readonly string[];
+  readonly steps: readonly AskStep[];
   readonly ticked: readonly number[];
   /** Called with a step's place once its toggle is pressed; none for an ask no longer waiting. */
   readonly onToggle?: ((index: number) => void) | undefined;
@@ -388,14 +446,20 @@ export function StepList({
       {steps.length === 0 ? null : (
         <AskRows marked carded={onToggle === undefined}>
           {steps.map((step, index) => (
-            <StepRow
-              key={step}
-              step={step}
-              ticked={ticked.includes(index)}
-              onPress={onToggle === undefined ? undefined : () => onToggle(index)}
-              repository={repository}
-              onOpenLink={onOpenLink}
-            />
+            // Note that a step's code stands under its row, outside the press, so selecting a line never ticks the step, as the panel's code card stands outside its checkbox.
+            <VStack key={index} alignment="leading" spacing={0}>
+              <StepRow
+                step={step.words}
+                ticked={ticked.includes(index)}
+                onPress={onToggle === undefined ? undefined : () => onToggle(index)}
+                repository={repository}
+                onOpenLink={onOpenLink}
+              />
+              {step.code.map((code, at) => (
+                // A step's fences have no key of their own, and are never reordered.
+                <StepCode key={at} code={code} />
+              ))}
+            </VStack>
           ))}
         </AskRows>
       )}
@@ -457,6 +521,21 @@ function TypedFieldRow({
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
   const fieldRef = useRef<TextFieldRef>(null);
 
+  // Note that words past the field's most are cut back in the field itself, as the panel's field stops taking them, rather than held until the service refuses the answer.
+  const change = (typed: string) => {
+    const most = field.maxLength;
+
+    if (most === undefined || typed.length <= most) {
+      onChange(typed);
+
+      return;
+    }
+
+    const kept = typed.slice(0, most);
+    text.value = kept;
+    onChange(kept);
+  };
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(rowPadding)]}>
       <FieldWords
@@ -469,7 +548,7 @@ function TypedFieldRow({
         ref={fieldRef}
         text={text}
         placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
-        onTextChange={onChange}
+        onTextChange={change}
         onFocusChange={(focused) => onFocused(fieldRef.current, focused)}
         modifiers={[
           textFieldStyle("plain"),

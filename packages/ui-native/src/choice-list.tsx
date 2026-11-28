@@ -62,15 +62,15 @@ type ChoiceListProps = {
   readonly onOpenLink: (address: string) => void;
 };
 
-/** What pressing `label` leaves picked: it alone for one choice, or it toggled among several. */
+/** What pressing `label` leaves picked: it toggled, alone for one choice or among several, so a pick pressed again lets go, as the panel's options clear. */
 function nextPicked(
   picked: readonly string[],
   label: string,
   multiple: boolean,
 ): readonly string[] {
-  if (!multiple) return [label];
+  if (picked.includes(label)) return picked.filter((each) => each !== label);
 
-  return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
+  return multiple ? [...picked, label] : [label];
 }
 
 /** What a row is heard as: its label, the recommended tag, and its detail, each link said by its label rather than its address, as a step is heard. */
@@ -200,10 +200,11 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
  * each, pressed to pick it, the recommended one tagged, with a hairline
  * between the rows. Each pick is checked at its row's end in copper, as
  * `PickRows` and iOS's own Settings check a choice, with no mark leading an
- * unpicked row, whether one or several may be picked. With no `onChange`,
- * the rows stand as an answered ask left them, in a thread's card, as the
- * panel's held controls do: its picks checked at full strength, and no row
- * taking a press.
+ * unpicked row, whether one or several may be picked, and a pick pressed
+ * again lets go, as the panel's options clear. With no `onChange`, the rows
+ * stand as an answered ask left them, in a thread's card, as the panel's
+ * held controls do: its picks checked at full strength, and no row taking a
+ * press.
  */
 export function ChoiceList(props: ChoiceListProps) {
   const {

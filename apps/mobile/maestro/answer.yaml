@@ -1,4 +1,4 @@
-# answer.yaml -- a thread's ask answered from the phone in the box under it, its controls over the field as the panel's box holds them, each kind once: a decide's pick, an unanswered approval standing Not delivered with Retry, Edit and Delete, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
+# answer.yaml -- a thread's ask answered from the phone in the box under it, its controls over the field as the panel's box holds them, each kind once: a decide's pick, an unanswered approval (a yes or no drawn as its two presses) standing Not delivered with Retry, Edit and Delete, an answer's fields, a do's steps marked done and sent, an answer in words, a reply, and Resolve.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -66,7 +66,7 @@ appId: dev.vespin.ios
     env:
       ROW: "Run the memberships migration on preview\\?"
 - assertVisible: "Decline"
-- tapOn: "Approve, Recommended.*"
+- tapOn: "Approve"
 - tapOn: "Send"
 - extendedWaitUntil:
     visible: "Not delivered.*"
@@ -190,7 +190,8 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-fields-sent
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
-# sends at once with every step ticked.
+# ticks every step and lights Send without sending, as the panel's press
+# attaches its answer, and Send, which sends it.
 - launchApp:
     clearState: true
     arguments:
@@ -208,6 +209,14 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: answer-do
 - tapOn: "Mark done"
+- assertVisible:
+    text: "Mark done"
+    selected: true
+- assertVisible:
+    text: "Send"
+    enabled: true
+- takeScreenshot: answer-do-pressed
+- tapOn: "Send"
 - extendedWaitUntil:
     visible: "Done 3/3"
     timeout: 5000
