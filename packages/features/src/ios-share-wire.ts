@@ -53,6 +53,9 @@ export const SHARE_DESTINATION_KIND = {
   TASK: "task",
 } as const;
 
+export type ShareDestinationKind =
+  (typeof SHARE_DESTINATION_KIND)[keyof typeof SHARE_DESTINATION_KIND];
+
 /** The most of each kind the snapshot holds for a workspace, newest moved first, so the extension reads a bounded file. */
 export const SHARE_DESTINATION_BOUNDS = {
   MANAGERS: 10,

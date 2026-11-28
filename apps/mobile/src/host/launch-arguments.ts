@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-busyRender <ms>`, which has a fixture run's agent page take that long over each render (`rig-busy-render.ts`), `-pillField true`, which opens on the pill field's scratch page, and `-sentryTest <js|native>`, which sends a test crash report.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity (`-liveActivity done` starts it as it stands once none works), `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses, `-busyAccount true`, which has the stub answer as a busy account's service does after a gap (`busy-account-server.ts`), `-busyRender <ms>`, which has a fixture run's agent page take that long over each render (`rig-busy-render.ts`), `-pillField true`, which opens on the pill field's scratch page, `-sharePage true`, which opens on the share page's, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -29,6 +29,7 @@ const LAUNCH_ARGUMENT = {
   BUSY_ACCOUNT: "busyAccount",
   BUSY_RENDER: "busyRender",
   PILL_FIELD: "pillField",
+  SHARE_PAGE: "sharePage",
   SENTRY_TEST: "sentryTest",
   MEDIA_ORIGIN: "mediaOrigin",
 } as const;
@@ -139,6 +140,11 @@ export function launchUpdateNeeded(): boolean {
 /** Whether this launch opens on the pill field's scratch page, as `-pillField true` asks (`maestro/pill-field.yaml`). */
 export function launchPillField(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.PILL_FIELD);
+}
+
+/** Whether this launch opens on the share page's scratch page, as `-sharePage true` asks (`maestro/share-page.yaml`). */
+export function launchSharePage(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.SHARE_PAGE);
 }
 
 /** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`). */

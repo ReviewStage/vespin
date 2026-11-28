@@ -1,0 +1,36 @@
+# share-page.yaml -- the share page on its scratch page: the places to tick over the composer, the shared link and screenshot standing in the field as pills; one place ticked, the "To" capsule naming it; a second, the capsule counting "2 places"; and a search narrowing the list.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as every flow is, so no server is
+# reached, with `-sharePage true`, which opens the scratch page on synthetic
+# places (`src/share/share-page-fixture.ts`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      sharePage: "true"
+- extendedWaitUntil:
+    visible:
+      id: "share-field"
+    timeout: 30000
+- assertVisible: "New task"
+- assertVisible: "Release captain"
+- takeScreenshot: share-page
+# A tap ticks a place, and the "To" capsule names it.
+- tapOn: "iOS engineer"
+- assertVisible:
+    id: "share-to"
+- takeScreenshot: share-page-one
+# A second, and the capsule counts them.
+- tapOn: "Release captain"
+- assertVisible: "2 places"
+- takeScreenshot: share-page-two
+# The system's search field narrows every kind by its rows' words.
+- tapOn: "Managers, tasks, agents, threads"
+- inputText: "refresh"
+- assertVisible: "Refresh fix"
+- assertNotVisible: "Growth"
+- takeScreenshot: share-page-search

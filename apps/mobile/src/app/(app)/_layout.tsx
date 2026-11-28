@@ -267,6 +267,8 @@ export default function GuardedScreens() {
           />
           {/* Note that the pill field's scratch page is reached only by a launch that asks for it (`-pillField true`), which a flow shoots the field on. */}
           <Stack.Screen name="pill-field" options={{ headerShown: true, title: "Pill field" }} />
+          {/* Note that the share page's scratch page is reached only by a launch that asks for it (`-sharePage true`), which a flow shoots the page on; its own bar names it. */}
+          <Stack.Screen name="share-page" />
         </Stack.Protected>
         {/* Note that setup stands with no push, in the tabs' place, as the tabs do, since nothing slides it in. */}
         <Stack.Protected guard={app && gate !== SETUP_GATE.NONE}>

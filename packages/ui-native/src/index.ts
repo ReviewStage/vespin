@@ -85,6 +85,7 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
 export {
+  COMPOSER_LOOK,
   Composer,
   type ComposerDictation,
   ComposerFoot,

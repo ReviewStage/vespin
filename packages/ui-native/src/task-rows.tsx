@@ -241,8 +241,8 @@ type AgentRowProps = {
   /** A Manager's face, which leads the row in its tile's place, livelier while it works, as the panel's sidebar row wears it (`ManagerGlyph`); none for any other agent. */
   readonly face?: ManagerFace | undefined;
   readonly state: AgentRowState;
-  /** Where it runs: "Cloud", or the device's name. */
-  readonly runsOn: string;
+  /** Where it runs: "Cloud", or the device's name; none where the list does not know it, such as the share page's, read from a snapshot. */
+  readonly runsOn?: string | undefined;
   /** The glyph that leads where it runs, as the panel's row draws it: the cloud's, or its device's. */
   readonly runsOnGlyph?: Glyph | undefined;
   /** How many of its threads wait on the reader; none said at none. */
@@ -432,7 +432,7 @@ export function AgentRow(props: AgentRowProps) {
             {props.runsOnGlyph === undefined ? null : (
               <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
             )}
-            <EndWords words={runsOn} />
+            {runsOn === undefined ? null : <EndWords words={runsOn} />}
           </HStack>
         }
       />
