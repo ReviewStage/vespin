@@ -6,14 +6,12 @@
  * Group by and Order by; then Show sub-tasks and Show completed; then Reset
  * view while the view is not the one the list starts as. Status keeps
  * several at once, each toggled where it stands; every other choice is one
- * of its kind. Each choice is kept for the workspace
- * on this device (`tree-view.ts`) and redraws the list at once.
+ * of its kind. Each choice is the Tasks page's own, kept on the account
+ * (`tree-view.ts`), and redraws the list at once.
  */
 
 import { ASSIGNED_TO, ASSIGNED_TO_WORDS, type AssignedTo } from "@repo/features/task-list-model";
 import {
-  DEFAULT_TASK_TREE_VIEW,
-  sameTreeView,
   TASK_TREE_COMPLETED,
   TASK_TREE_GROUPINGS,
   type TaskTreeView,
@@ -35,6 +33,7 @@ import {
   statusChoice,
 } from "@repo/ui-native";
 import type { ListedMember } from "../member-pictures.js";
+import { sameAssignedTo } from "../tasks/tree-view.js";
 
 /** One choice a menu checks. */
 type MenuChoice = BarMenu["choices"][number];
@@ -54,20 +53,15 @@ const STATUSES: readonly TaskStatus[] = [
   TASK_STATUS.CANCELED,
 ];
 
-/** What the menu reads and changes: the view, its setter, whether the workspace is shared, its members, and each one's photo. */
+/** What the menu reads and changes: the view, the presses that change it and put it back, whether it stands apart from the page's own, whether the workspace is shared, its members, and each one's photo. */
 export interface TasksViewMenuInput {
   readonly view: TaskTreeView;
-  readonly setView: (view: TaskTreeView) => void;
+  readonly change: (change: Partial<TaskTreeView>) => void;
+  readonly reset: () => void;
+  readonly changed: boolean;
   readonly shared: boolean;
   readonly members: readonly ListedMember[];
   readonly photoOf: (userId: string) => MenuPhotoFile | undefined;
-}
-
-/** Whether two Assigned to's name the same tasks. */
-function sameAssignedTo(a: AssignedTo, b: AssignedTo): boolean {
-  if (a.kind !== ASSIGNED_TO.MEMBER || b.kind !== ASSIGNED_TO.MEMBER) return a.kind === b.kind;
-
-  return a.userId === b.userId;
 }
 
 /** Assigned to's choices: Me, Following, Anyone, then each other member by face, as the sidebar's View options lists them, the one chosen checked. */
@@ -77,7 +71,7 @@ function assignedToChoices(input: TasksViewMenuInput): readonly MenuChoice[] {
 
   const press = (assignedTo: AssignedTo) => ({
     on: sameAssignedTo(view.assignedTo, assignedTo),
-    onPress: () => input.setView({ ...view, assignedTo }),
+    onPress: () => input.change({ assignedTo }),
   });
 
   const glyphChoice = (
@@ -114,9 +108,7 @@ function toggledStatus(statuses: readonly TaskStatus[], status: TaskStatus): rea
 
 /** The Tasks list's View options menu, for its bar. */
 export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
-  const { view, setView, shared } = input;
-  const change = (part: Partial<TaskTreeView>) => setView({ ...view, ...part });
-  const changed = !sameTreeView(view, DEFAULT_TASK_TREE_VIEW);
+  const { view, change, reset, changed, shared } = input;
 
   const status: BarMenu = {
     label: STATUS,
@@ -195,7 +187,7 @@ export function tasksViewMenu(input: TasksViewMenuInput): BarMenu {
             label: TASKS_VIEW_WORDS.RESET_VIEW,
             symbol: GLYPH.RESTORE,
             disabled: !changed,
-            onPress: () => setView(DEFAULT_TASK_TREE_VIEW),
+            onPress: reset,
           },
         ],
       },

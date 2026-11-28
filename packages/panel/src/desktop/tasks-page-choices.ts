@@ -74,7 +74,7 @@ const storedFilters = Schema.fromJsonString(
 type StoredFilters = typeof storedFilters.Type;
 
 /** The List's folded groups, each kind by the values its groups stand for. */
-export type ListFolds = typeof tasksListFoldsSchema.Type;
+type ListFolds = typeof tasksListFoldsSchema.Type;
 
 /** Where an earlier build kept the page's choices in the renderer's storage, each moved up to the account as the page is drawn. */
 const KEPT = {

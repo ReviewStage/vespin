@@ -380,6 +380,68 @@ export type TasksGroupHead =
   | { readonly kind: typeof TASKS_GROUP.CREATOR; readonly creatorId: string | null }
   | { readonly kind: typeof TASKS_GROUP.ALL };
 
+/** The List's groups folded, each kind by the values its groups stand for; absent where none is. */
+export interface TasksListFolds {
+  readonly pinned?: boolean;
+  readonly sections?: readonly string[];
+  readonly status?: readonly TaskStatus[];
+  readonly priority?: readonly TaskPriority[];
+  readonly repository?: readonly (string | null)[];
+  readonly assignee?: readonly (string | null)[];
+  readonly creator?: readonly (string | null)[];
+}
+
+/** A set of folded values with one folded or opened. */
+function flipped<T>(held: readonly T[] | undefined, value: T): readonly T[] {
+  const kept = held ?? [];
+
+  return kept.includes(value) ? kept.filter((each) => each !== value) : [...kept, value];
+}
+
+/** Whether a group is folded; the run of every task has no head to fold it by. */
+export function foldedIn(folds: TasksListFolds, head: TasksGroupHead): boolean {
+  switch (head.kind) {
+    case TASKS_GROUP.PINNED:
+      return folds.pinned === true;
+    case TASKS_GROUP.SECTION:
+      return folds.sections?.includes(head.sectionId) === true;
+    case TASKS_GROUP.STATUS:
+      return folds.status?.includes(head.status) === true;
+    case TASKS_GROUP.PRIORITY:
+      return folds.priority?.includes(head.priority) === true;
+    case TASKS_GROUP.REPOSITORY:
+      return folds.repository?.includes(head.repository) === true;
+    case TASKS_GROUP.ASSIGNEE:
+      return folds.assignee?.includes(head.assigneeId) === true;
+    case TASKS_GROUP.CREATOR:
+      return folds.creator?.includes(head.creatorId) === true;
+    case TASKS_GROUP.ALL:
+      return false;
+  }
+}
+
+/** The folds with a group folded or opened. */
+export function toggledFold(folds: TasksListFolds, head: TasksGroupHead): TasksListFolds {
+  switch (head.kind) {
+    case TASKS_GROUP.PINNED:
+      return { ...folds, pinned: folds.pinned !== true };
+    case TASKS_GROUP.SECTION:
+      return { ...folds, sections: flipped(folds.sections, head.sectionId) };
+    case TASKS_GROUP.STATUS:
+      return { ...folds, status: flipped(folds.status, head.status) };
+    case TASKS_GROUP.PRIORITY:
+      return { ...folds, priority: flipped(folds.priority, head.priority) };
+    case TASKS_GROUP.REPOSITORY:
+      return { ...folds, repository: flipped(folds.repository, head.repository) };
+    case TASKS_GROUP.ASSIGNEE:
+      return { ...folds, assignee: flipped(folds.assignee, head.assigneeId) };
+    case TASKS_GROUP.CREATOR:
+      return { ...folds, creator: flipped(folds.creator, head.creatorId) };
+    case TASKS_GROUP.ALL:
+      return folds;
+  }
+}
+
 /** One group as drawn: what heads it, and its tasks in order. */
 export interface TasksGroup {
   readonly head: TasksGroupHead;
