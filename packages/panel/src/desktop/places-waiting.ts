@@ -11,6 +11,7 @@ import {
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
 import { useMemo } from "react";
+import { useInboxOn } from "../inbox-on.js";
 import { useTaskListRows } from "../task-list-collections.js";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { useTasklessInboxGroups } from "../tasks/use-taskless-inbox-groups.js";
@@ -104,7 +105,7 @@ function waitingByWorkspace(
   return counted;
 }
 
-/** How many threads wait on the developer in each workspace (`waitingByWorkspace`), a Manager's among them, which the workspace switcher says beside each other workspace; none while signed out. */
+/** How many threads wait on the developer in each workspace (`waitingByWorkspace`), a Manager's among them, which the workspace switcher says beside each other workspace; none while signed out, or while the account keeps no Inbox (`useInboxOn`), since no Inbox stands to open them in. */
 export function useWorkspacesWaiting(tasks: SidebarTasksControl): ReadonlyMap<string, number> {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
@@ -118,6 +119,7 @@ export function useWorkspacesWaiting(tasks: SidebarTasksControl): ReadonlyMap<st
   );
 
   const me = tasks.me;
+  const inboxOn = useInboxOn();
 
   const byWorkspace = useMemo(
     () =>
@@ -130,7 +132,7 @@ export function useWorkspacesWaiting(tasks: SidebarTasksControl): ReadonlyMap<st
     [waiting, rows, taskless, me, now],
   );
 
-  return tasks.signedIn ? byWorkspace : NO_COUNTS;
+  return tasks.signedIn && inboxOn ? byWorkspace : NO_COUNTS;
 }
 
 /** Where a scope's count is drawn in the tone of what needs the reader: what waits on them and what they are not done with; everything, or what they put off, is a tally. */
