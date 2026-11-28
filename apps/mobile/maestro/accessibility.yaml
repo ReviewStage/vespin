@@ -15,28 +15,24 @@ env:
 ---
 # The Inbox, on the host's Inbox fixture as `inbox.yaml` launches it, so no
 # server is reached: each row heard as one element by its title, so a flow
-# still finds it by the words on screen.
+# still finds it by the words on screen. Note that each launch knows the
+# Inbox by its first row, the do ask under Pinned, because the pinned tasks'
+# threads stand first, and at this size they push every other row below the
+# window's foot.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-inbox
 # A thread: its title as the page's heading, each message's writer line, and
-# the composer docked at its foot. Note that the list is drawn up a quarter
-# of the window first, because at this text size the row stands at the
-# window's foot, its middle under the tab bar, though its top stands above
-# it, which `open-row.yaml`'s check reads as clear.
-- swipe:
-    start: "50%, 60%"
-    end: "50%, 35%"
-    duration: 800
-- waitForAnimationToEnd
+# the composer docked at its foot, its row scrolled to below the pinned
+# threads.
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -116,19 +112,32 @@ env:
 - takeScreenshot: accessibility-pull-request
 # A decide's card: its Recommended tag on a line of its own under the
 # option's label, its word whole rather than broken inside the tag. Note
-# that the Inbox's row is scrolled to through `to-row.yaml`, because an
-# iPad's list is a column beside the page it opens, which a scroll at the
-# window's middle never moves; and that the tag is scrolled up to, because
-# a thread opens at its newest end, its decide's options running down past
-# the window at this size, the recommended one first.
+# that on a phone the Inbox's row is scrolled to the window's middle
+# (`scroll-to.yaml`), because at this size it stands most of a window tall
+# five rows under the pinned threads, so a scroll that stops once it shows
+# left its middle, where a tap lands, on the tab bar, whose Inbox tab took
+# the tap and scrolled the list to its top; that an iPad's is scrolled to
+# through `to-row.yaml`, because its list is a column beside the page it
+# opens, which a scroll at the window's middle never moves; and that the tag
+# is scrolled up to, because a thread opens at its newest end, its decide's
+# options running down past the window at this size, the recommended one
+# first.
 - launchApp:
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
 - runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "How should a finished turn end\\?"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
     file: subflows/to-row.yaml
     env:
       ROW: "How should a finished turn end\\?"
@@ -145,7 +154,7 @@ env:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
@@ -158,7 +167,7 @@ env:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
 - runFlow:
     file: subflows/switcher.yaml
@@ -200,7 +209,7 @@ env:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 15000
 - runFlow:
     file: subflows/switcher.yaml
@@ -222,7 +231,7 @@ env:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 15000
 - runFlow:
     file: subflows/switcher.yaml
@@ -242,7 +251,7 @@ env:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 15000
 - runFlow:
     file: subflows/switcher.yaml

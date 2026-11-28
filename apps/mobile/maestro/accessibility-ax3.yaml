@@ -7,14 +7,17 @@ appId: dev.vespin.ios
 # `accessibility.yaml`, and that each wait for the screen to settle is capped
 # at five seconds, since an agent's page draws its turn still running.
 ---
-# The Inbox on the host's Inbox fixture, so no server is reached.
+# The Inbox on the host's Inbox fixture, so no server is reached. Note that
+# the Inbox is known by its first row, the do ask under Pinned, because the
+# pinned tasks' threads stand first, and at this size they push every other
+# row below the window's foot.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 5000
@@ -96,7 +99,7 @@ appId: dev.vespin.ios
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible: "Verify the digest's sender domain"
     timeout: 15000
 - runFlow:
     file: subflows/open-link.yaml
