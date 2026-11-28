@@ -54,6 +54,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import {
+  LIVE_FIRST_PAGE,
   LIVE_POLL_URL,
   LIVE_READ,
   type LIVE_SIGNED_OUT,
@@ -461,6 +462,10 @@ function fakeService() {
     };
   };
 
+  /** Every page's rows of `pages`, part by part, as one whole answer carries them. */
+  const itemsPagesJoined = (pages: NonNullable<typeof itemsPages>) =>
+    Object.fromEntries(ITEMS_PARTS.map((part) => [part, pages.flatMap((one) => one[part] ?? [])]));
+
   /** The account's items as their live read answers them, by the sync id the follow asks past, or by the page of a whole answer it names. */
   const accountItemsLive = (
     userId: string | undefined,
@@ -480,11 +485,17 @@ function fakeService() {
 
       // Note that a read in pages is asked whole, or past an id the fake never answered, as the service pages one too far behind, and each page after by the page the last named; a read past the pages' id is held, as nothing moved since.
       if (itemsPages !== undefined) {
-        if (page !== undefined) asked.push(`account-items-page:${page}`);
+        // Note that a reader that names no page is answered every page's rows in one whole answer, as the service answers one, so only a reader that follows pages is answered them.
+        if (page === undefined) return Effect.succeed(itemsPage([itemsPagesJoined(itemsPages)], 0));
 
-        if (sync === ITEMS_PAGED_AT && page === undefined) return Effect.never;
+        // Note that a reader that follows pages names the first as the empty page beside its sync id, so only a page past it names one the fake answered.
+        const named = page === LIVE_FIRST_PAGE ? undefined : page;
 
-        const n = page === undefined ? 0 : Number(page);
+        if (named !== undefined) asked.push(`account-items-page:${named}`);
+
+        if (sync === ITEMS_PAGED_AT && named === undefined) return Effect.never;
+
+        const n = named === undefined ? 0 : Number(named);
         const answered = Effect.succeed(itemsPage(itemsPages, n));
 
         return n === itemsPages.length - 1 ? Effect.andThen(itemsLastPageGate, answered) : answered;

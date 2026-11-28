@@ -41,9 +41,10 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * build from 11 on never asks for the machines a workspace owns
  * (`workspaceMachines.*`, `LIVE_READ.WORKSPACE_MACHINES`) or approves a host
  * for a workspace, so a service may stop serving those once the floor
- * reaches 11. A build from 12 on reads a delta read's whole answer in pages
- * (`LIVE_POLL.PAGE`), so a service answers one so to it alone
- * (`live-pages.ts`'s `PAGED_API_VERSION`) until the floor passes 11.
+ * reaches 11. A build from 12 on reads a delta read's whole answer in pages,
+ * asking for them itself (`LIVE_FIRST_PAGE`), so a service may stop answering
+ * one whole once the floor reaches 12; until then it pages only a read that
+ * asks.
  */
 export const HOSTED_API_VERSION = 12;
 

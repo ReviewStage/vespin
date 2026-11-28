@@ -75,7 +75,7 @@ import {
 } from "@repo/features/inbox-writes";
 import { WRITE_UNTAKEN, writeUntakenOf } from "@repo/features/keyed-write";
 import { commitShaSchema } from "@repo/features/link-grammar";
-import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
+import { LIVE_READ, type LiveRead, pagedSyncParams } from "@repo/features/live-wire";
 import { MANAGER_CHAT_READ } from "@repo/features/manager-chat-live";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
@@ -705,8 +705,7 @@ export function composeAgents(
                 INBOX_ITEMS_READ,
                 {
                   userId: account,
-                  ...(sync === undefined ? undefined : { sync }),
-                  ...(page === undefined ? undefined : { page }),
+                  ...pagedSyncParams(sync, page),
                 },
                 {},
               ),

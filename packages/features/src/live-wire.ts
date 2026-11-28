@@ -56,6 +56,20 @@ export const LIVE_POLL = {
 export const LIVE_FIRST_PAGE = "";
 
 /**
+ * The sync id and page a delta read is asked past: the page named where one
+ * is, or else the first (`LIVE_FIRST_PAGE`) beside a sync id, so a reader
+ * that follows pages is answered any whole answer in them. A read asked with
+ * neither, as one asked around a stalled id is, names no page and is read
+ * whole as a snapshot.
+ */
+export function pagedSyncParams(sync: string | undefined, page: string | undefined) {
+  return {
+    ...(sync === undefined ? undefined : { sync }),
+    ...(page === undefined && sync === undefined ? undefined : { page: page ?? LIVE_FIRST_PAGE }),
+  };
+}
+
+/**
  * The query every live read names the account it was started for under, as
  * Neon's guide says a page sends its user ("When the session changes"): the
  * service answers a session of anyone else, or a read naming none, as
