@@ -1,0 +1,27 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow share-mockups
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, shareMockup=a})... COMPLETED
+Assert that id: share-field is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-mockup-a... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, shareMockup=a-menu})... COMPLETED
+Assert that id: share-to is visible... COMPLETED
+Tap on id: share-to... COMPLETED
+Wait for animation to end... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-mockup-a-menu... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, shareMockup=b})... COMPLETED
+Assert that "Release captain" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-mockup-b... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, shareMockup=b-compose})... COMPLETED
+Assert that id: share-field is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-mockup-b-compose... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, shareMockup=c})... COMPLETED
+Assert that id: share-field is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-mockup-c... COMPLETED
