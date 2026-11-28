@@ -1,4 +1,4 @@
-# answer-resolve.yaml -- an open ask resolved without an answer from the × at its controls' top end in the box, as the panel's question wears it: the thread settles as resolved, its options gone from the box, and nothing sent as an answer.
+# answer-resolve.yaml -- an open ask resolved without an answer from the × at its controls' top end in the box, as the panel's question wears it: the thread settles as resolved, its controls gone from the box and its options stepped back on their message, and nothing sent as an answer.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -29,7 +29,8 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "You resolved this without an answer.*"
     timeout: 5000
-- assertNotVisible: "The member who sent it.*"
+# Note that the options stay on their own message, stepped back, as the
+# panel's held ask stands, so the box's controls are known gone by the ×.
 - assertNotVisible:
     id: "resolve-ask"
 - waitForAnimationToEnd

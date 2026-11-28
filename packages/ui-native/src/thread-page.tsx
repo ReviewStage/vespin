@@ -159,6 +159,12 @@ export type ThreadMessage = {
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
   /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
   readonly after?: readonly ThreadEvent[] | undefined;
+  /** The ask the answer it carries answered, as the answer left it, such as its options with the picks checked, standing at the head of its words, as the panel's answered card stands in the reply; none where it answered none, or one of words alone. */
+  readonly answered?: ReactNode | undefined;
+  /** The ask it carried, withdrawn or asked again since, stepped back with nothing picked after its words, as the panel's held ask stands; none otherwise. */
+  readonly held?: ReactNode | undefined;
+  /** How the ask it carries stood once answered, "Answered", ending its words with the done check, where no reply's card says so; none otherwise. */
+  readonly settled?: string | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
   /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
@@ -584,6 +590,11 @@ function MessageView({
           </HStack>
         ) : null}
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
+        {message.answered === undefined ? null : (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            {message.answered}
+          </HStack>
+        )}
         {message.values === undefined ? null : <AnswerValues values={message.values} />}
         <RNHostView matchContents={{ vertical: true }}>
           <PictureOriginProvider origin={{ by: writer.name, at: message.at }}>
@@ -610,6 +621,14 @@ function MessageView({
             </View>
           </PictureOriginProvider>
         </RNHostView>
+        {message.held === undefined ? null : (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            {message.held}
+          </HStack>
+        )}
+        {message.settled === undefined ? null : (
+          <AnswerStamp stamp={{ words: message.settled, ahead: true }} />
+        )}
         {message.undelivered === undefined ? null : (
           <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
             <UndeliveredMark line={message.undelivered} />
