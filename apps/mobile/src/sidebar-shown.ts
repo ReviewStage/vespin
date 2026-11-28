@@ -2,7 +2,16 @@
 
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useEffect, useSyncExternalStore } from "react";
-import { useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
+
+/**
+ * Whether the app stands its own sidebar, the first column of the system's
+ * split view at the root, as the panel's sidebar stands: on an iPad, read by
+ * the device's idiom rather than the window, so nothing mounts again as the
+ * window turns or resizes. The unfolded iPhone Duo keeps the system's tab
+ * sidebar instead.
+ */
+export const APP_SIDEBAR = Platform.OS === "ios" && Platform.isPad;
 
 /**
  * A person's choice, held with the window's shape it was made in, so a turn

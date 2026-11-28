@@ -301,8 +301,7 @@ type InheritedPlace = {
  * its source runs, so a continue or a fork goes on where the work was, but
  * in the cloud for a source on another member's Mac, since a Mac runs its
  * owner's agents alone, and a teammate takes such an agent up in the cloud
- * unless they name a Mac of their own. A source on a workspace's machine is
- * taken up there by any member, since it runs every member's agents.
+ * unless they name a Mac of their own.
  */
 export function inheritedPlaceOf(
   userId: string,

@@ -906,21 +906,6 @@ body {
   padding: var(--ui-space-8) var(--ui-space-12);
 }
 
-/* A log whose groups each open on a band stuck to the area's top, the
-   band's height the role the area's fade inset begins beneath. */
-.catalog-scroll-banded {
-  padding: 0 var(--ui-space-12) var(--ui-space-8);
-}
-
-.catalog-scroll-band {
-  position: sticky;
-  top: 0;
-  display: flex;
-  height: var(--ui-scroll-band);
-  align-items: center;
-  background: var(--ui-color-ground);
-}
-
 .catalog-scroll-board {
   display: flex;
   gap: var(--ui-space-12);

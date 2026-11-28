@@ -189,7 +189,7 @@ export class LocalDatabaseFailed extends Data.TaggedError("LocalDatabaseFailed")
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema and their generation (`KEPT_ROWS_GENERATION`). */
-const keptRowsHash: Effect.Effect<string> = Effect.map(
+export const keptRowsHash: Effect.Effect<string> = Effect.map(
   Effect.promise(() =>
     crypto.subtle.digest(
       "SHA-256",

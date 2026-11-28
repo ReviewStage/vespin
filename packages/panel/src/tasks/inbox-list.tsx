@@ -10,6 +10,7 @@ import {
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
+  INBOX_VIEW_WORDS,
   INBOX_WHOSE,
   type InboxAnyHolder,
   type InboxCounts,
@@ -32,7 +33,9 @@ import {
   NEEDS_YOU,
   narrowedByWhose,
   READING_INBOX,
+  READING_OLDER_INBOX,
   SEARCH_INBOX,
+  SEARCHING_OLDER_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, inboxAddressedTo } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -76,7 +79,6 @@ import {
   RowHint,
   RowHintOptions,
   reachedKey,
-  SCROLL_FADE,
   ScrollArea,
   SearchField,
   type SelectionAct,
@@ -188,6 +190,7 @@ import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
 import { PlanGlyph } from "./tab-look.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 
 /**
  * inbox-list.tsx -- the Inbox's list of items: one row each, in one run, the latest changed first, with what the list shows at its head.
@@ -333,12 +336,6 @@ const SHOW_INSTEAD = {
   MINE: "Show mine",
   EVERYONE: "Show anyone's",
 } as const;
-
-/** What the view's submenu of whom the items are addressed to is called. */
-const WHOSE = "Addressed to";
-
-/** What the view's switch that stands the pinned tasks' items first is called. */
-const PINNED_FIRST = "Pinned tasks first";
 
 /** What the chip over the list says its × does, in full, since a reader hears it apart from the empty state's short press. */
 const CLEAR_WHOSE = "Show what's addressed to me";
@@ -522,13 +519,14 @@ export const InboxItemRow = memo(function InboxItemRow({
 }): React.JSX.Element {
   const { holder, item } = listed;
   const unread = isUnread(item);
-  const title = cardTitle(item.title);
+  const links = usePlainLinkNames();
+  const title = cardTitle(item.title, links);
   const directory = useMemberDirectory();
   const reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
   const preview = useInboxLinePieces(item, nameOf, ticked);
-  const heard = inboxPreviewHeard(item, nameOf, ticked);
+  const heard = inboxPreviewHeard(item, nameOf, ticked, links);
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();
@@ -722,7 +720,7 @@ function windowEntries(
       : [
           [
             {
-              label: PINNED_FIRST,
+              label: INBOX_VIEW_WORDS.PINNED_FIRST,
               icon: <PinIcon />,
               checked: order.pinnedFirst,
               mark: MENU_ITEM_MARK.SWITCH,
@@ -737,7 +735,7 @@ function windowEntries(
   return [
     [
       {
-        label: WHOSE,
+        label: INBOX_VIEW_WORDS.WHOSE,
         icon: <UsersIcon />,
         items: whoseEntries(choices.whose, choices.onWhose, reader, readerId),
       },
@@ -920,12 +918,15 @@ function ShowEmpty({
  */
 export function InboxListSkeleton({
   rows = SKELETON_ROWS.length,
+  label = READING_INBOX,
 }: {
   /** How many placeholder rows stand, at most five. */
   rows?: number;
+  /** What the region says is being read: the Inbox, the older items under All's rows, or those a search asks the service for. */
+  label?: string;
 }): React.JSX.Element {
   return (
-    <SkeletonRegion label={READING_INBOX}>
+    <SkeletonRegion label={label}>
       <List label={TAB_WORDS.INBOX}>
         {SKELETON_ROWS.slice(0, rows).map(({ task, title, preview }) => (
           <ListRow
@@ -1280,6 +1281,7 @@ export function InboxPaneEmpty({
 export function InboxListNote({
   failed,
   reading,
+  readingOlder = false,
   empty,
   alone,
   filteredOut,
@@ -1287,11 +1289,14 @@ export function InboxListNote({
   onList,
   onRetry,
   searched,
+  searching = false,
   onNewTask,
   none = NEEDS_YOU.NONE,
 }: {
   failed: boolean;
   reading: boolean;
+  /** Whether All reads its next page of older items, which a placeholder row under its rows stands for. */
+  readingOlder?: boolean | undefined;
   empty: boolean;
   /** Whether the list stands alone, the Inbox too narrow for the pane beside it. */
   alone: boolean;
@@ -1306,6 +1311,8 @@ export function InboxListNote({
   onRetry: () => void;
   /** The words the list's search narrows it by, where it narrows it, which an empty list says found nothing. */
   searched?: string | undefined;
+  /** Whether the service is still asked for the items those words find past what the Inbox holds, so an empty list says it is searching rather than that nothing matched. */
+  searching?: boolean | undefined;
   /** What the list standing alone says holding none: that nothing needs the reader, or `NOTHING_HERE` on a task's. */
   none?: string | undefined;
 }): React.JSX.Element | null {
@@ -1323,11 +1330,18 @@ export function InboxListNote({
     );
   }
 
-  if (!empty) return null;
+  if (!empty)
+    return readingOlder ? <InboxListSkeleton rows={1} label={READING_OLDER_INBOX} /> : null;
 
-  if (reading) return <InboxListSkeleton />;
+  if (reading || readingOlder) return <InboxListSkeleton />;
 
-  if (searched !== undefined) return <SearchEmpty searched={searched} />;
+  if (searched !== undefined) {
+    return searching ? (
+      <InboxListSkeleton rows={1} label={SEARCHING_OLDER_INBOX} />
+    ) : (
+      <SearchEmpty searched={searched} />
+    );
+  }
 
   if (filteredOut !== undefined)
     return <ShowEmpty view={filteredOut} counts={counts} onList={onList} />;
@@ -1503,10 +1517,13 @@ function InboxRows({
   items,
   place,
   row,
+  onAtEnd,
 }: {
   items: readonly InboxListed<InboxAnyHolder>[];
   place: RowsPlace;
   row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
+  /** Told whether the run's last row is in view as it scrolls and grows; none where nothing reads past the rows. */
+  onAtEnd?: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   const keys = useMemo(() => items.map(({ item }) => item.id), [items]);
   const handle = useRef<VirtualRowsHandle>(null);
@@ -1526,6 +1543,7 @@ function InboxRows({
       holdsFocus
       className="sidebar-tasks"
       handle={handle}
+      onAtEnd={onAtEnd}
     >
       {(index, at) => {
         const listed = items[index];
@@ -1559,12 +1577,15 @@ function InboxRuns({
   place,
   row,
   onFold,
+  onAtEnd,
 }: {
   view: InboxListView<InboxAnyHolder>;
   place: RowsPlace;
   row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
   /** Folds a run or opens it; none where the runs never fold. */
   onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
+  /** Told whether the last run's last row is in view, as All reads its older items there; none where nothing reads past the rows. */
+  onAtEnd: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   // Note that the runs are made once for the view they are made from, so a draw that moved nothing hands the rows the same runs.
   const headed = view.runs !== undefined;
@@ -1572,7 +1593,7 @@ function InboxRuns({
 
   return (
     <>
-      {runs.map(({ run, items, count, folded }) => (
+      {runs.map(({ run, items, count, folded }, at) => (
         <div key={run}>
           <GroupHeader
             look={GROUP_LOOK.SECTION}
@@ -1586,7 +1607,14 @@ function InboxRuns({
                 : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
             }
           >
-            {folded ? null : <InboxRows items={items} place={place} row={row} />}
+            {folded ? null : (
+              <InboxRows
+                items={items}
+                place={place}
+                row={row}
+                onAtEnd={at === runs.length - 1 ? onAtEnd : undefined}
+              />
+            )}
           </GroupHeader>
         </div>
       ))}
@@ -1609,6 +1637,7 @@ export function InboxList({
   onClose,
   onRemind,
   onPointing,
+  onAtEnd,
 }: {
   view: InboxListView<InboxAnyHolder>;
   /** The id of the item the pane shows. */
@@ -1631,6 +1660,8 @@ export function InboxList({
   onRemind?: InboxReminder | undefined;
   /** Told as the pointer comes onto the list and leaves it, while which its rows hold their places (`use-held-inbox-list.ts`); none where nothing holds them. */
   onPointing?: ((pointing: boolean) => void) | undefined;
+  /** Told whether the list's last row is in view, as All reads its older items at its end; none where nothing reads past the rows. */
+  onAtEnd?: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   const regionId = useId();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
@@ -1779,7 +1810,13 @@ export function InboxList({
     >
       {/* Note that the Inbox's intro stands on the Inbox itself, not on a task's own Inbox tab. */}
       {head.tab === true ? null : <PageIntro intro={INTRO.INBOX} />}
-      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.order?.onFold} />
+      <InboxRuns
+        view={view}
+        place={rowsPlace}
+        row={row}
+        onFold={head.order?.onFold}
+        onAtEnd={onAtEnd}
+      />
       {note}
     </div>
   );
@@ -1827,9 +1864,7 @@ export function InboxList({
         order={[drawn.map(({ item }) => item.id)]}
         bringIn={rows.bringIn}
       >
-        <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
-          {body}
-        </ScrollArea>
+        <ScrollArea ref={scroller}>{body}</ScrollArea>
       </SelectionRegion>
       {/* Note that a phone's bar stands at the list's foot rather than over its rows, so choosing a row moves none under the finger. */}
       {footed && picks.length > 0 ? (

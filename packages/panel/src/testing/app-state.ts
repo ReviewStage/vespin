@@ -3,7 +3,11 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import type { AccountPreferencesLive } from "@repo/features/account-preferences-live";
+import {
+  type AccountPreferencesLive,
+  accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
+} from "@repo/features/account-preferences-live";
 import {
   type AgentBrowserTab,
   type BrowserTabsPlace,
@@ -51,6 +55,7 @@ import {
   type AppHostRead,
   type AppHostReads,
   type AppHostsHeld,
+  type AppInboxFoundPlaces,
   type AppInboxItems,
   type AppInboxSlice,
   type AppIntegrationTools,
@@ -76,6 +81,7 @@ import {
   NO_BROWSER_TABS,
   NO_DESCRIPTION_COMMENTS,
   NO_HOLDER_INBOXES,
+  NO_INBOX_FOUND,
   NO_KEYS_HELD,
   NO_PAGES,
   NO_TRANSCRIPTS,
@@ -224,6 +230,8 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.ACCOUNT_PREFERENCES]: NO_KEYS_HELD,
     [LIVE_READ.AGENT_ORIGINS]: NO_AGENT_ORIGINS,
     [LIVE_READ.INBOX_ITEMS]: UNREAD,
+    [LIVE_READ.INBOX_OLDER]: UNREAD,
+    [LIVE_READ.INBOX_FOUND]: NO_INBOX_FOUND,
     [LIVE_READ.HOLDER_INBOX]: NO_HOLDER_INBOXES,
     [LIVE_READ.INSTALLED_SKILLS]: NO_KEYS_HELD,
     [LIVE_READ.INTEGRATIONS]: NO_KEYS_HELD,
@@ -249,6 +257,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
     [LIVE_READ.MACHINES]: NO_KEYS_HELD,
     [LIVE_READ.MACHINE_ASKS]: NO_KEYS_HELD,
+    [LIVE_READ.VIEW_CHOICES]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
@@ -498,6 +507,8 @@ export function handSettings(
 /** How the host's reads are delivered again as each moves, as the host tells them. */
 export interface HostReadsHanded {
   readonly deliverItems: (next: AppHostRead<AppInboxItems>) => void;
+  readonly deliverOlder: (next: AppHostRead<AppInboxItems>) => void;
+  readonly deliverFound: (next: AppInboxFoundPlaces) => void;
   readonly deliverHolders: (next: AppHolderInboxes) => void;
   readonly deliverPages: (next: AppPages) => void;
   readonly deliverChapters: (next: AppRepositoryChapters) => void;
@@ -540,6 +551,15 @@ function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id !== undefined) return snapshot;
 
   return { ...snapshot, account: { ...account, id: HELD_ACCOUNT_ID } };
+}
+
+/** The account's preferences as the host holds them once read: nothing chosen, as an account that stored no row reads, beside what `chosen` names. */
+export function heldPreferences(
+  chosen: Partial<AccountPreferencesLive> = {},
+): AppHostRead<AccountPreferencesLive> {
+  return {
+    rows: { ...accountPreferencesOfLiveRows([], accountSoundsOfLiveRows([], [])), ...chosen },
+  };
 }
 
 /**
@@ -646,6 +666,8 @@ export function handHostReads(first: {
 
   return {
     deliverItems: (next) => deliver({ [LIVE_READ.INBOX_ITEMS]: next }),
+    deliverOlder: (next) => deliver({ [LIVE_READ.INBOX_OLDER]: next }),
+    deliverFound: (next) => deliver({ [LIVE_READ.INBOX_FOUND]: next }),
     deliverHolders: (next) => deliver({ [LIVE_READ.HOLDER_INBOX]: next }),
     deliverPages: (next) => deliver({ [LIVE_READ.PAGES]: next }),
     deliverChapters: (next) => deliver({ [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: next }),

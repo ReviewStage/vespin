@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { HOSTED_SERVICE_PATH, NO_CREDENTIAL } from "@repo/features";
@@ -11,6 +13,7 @@ import {
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { THEME } from "@repo/settings";
+import { DIFF_LAYOUT } from "@repo/settings/diff-view";
 import { isRecord, type WireValue } from "@repo/wire";
 import { ConfigProvider, Effect, Layer, Queue, Stream } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -270,6 +273,108 @@ it.effect(
 
       assert.equal(sentTheme, THEME.DARK);
       assert.equal((yield* reader.settings.store.snapshot()).stored.theme, THEME.DARK);
+    }).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, async () => new Response(null, { status: 204 })),
+      Effect.provide([NodeFileSystem.layer, NodePath.layer]),
+    ),
+);
+
+/** The address every sync of this file's account reads and writes, as the session names it. */
+const SYNCED_ACCOUNT = "ada@app.test";
+
+it.effect(
+  "a diff choice made after the first sync's write failed is still written, though an earlier build's baseline read it as unchanged",
+  () =>
+    Effect.gen(function* () {
+      const stateRoot = yield* temporaryDirectoryScoped("settings-first-sync-");
+      // A Mac on Split with wrap off, its baseline kept by a build before the diff display joined the account.
+      yield* Effect.promise(() =>
+        fs.writeFile(
+          path.join(stateRoot, "settings.json"),
+          JSON.stringify({
+            version: 2,
+            diffLayout: DIFF_LAYOUT.SPLIT,
+            wordWrap: false,
+            accountPreferencesSync: { accountEmail: SYNCED_ACCOUNT, preferences: {} },
+          }),
+        ),
+      );
+
+      const writes = yield* Queue.unbounded<string>();
+      let written = 0;
+
+      // The account already holds Unified from another device; the first write fails, and every one after lands.
+      const service: typeof globalThis.fetch = async (input, init) => {
+        const request = new Request(input, init);
+
+        if (request.url !== `${SERVICE_BASE_URL}${HOSTED_SERVICE_PATH.ACCOUNT_PREFERENCES}`) {
+          return new Response(null, { status: 204 });
+        }
+
+        const json = (body: WireValue, status = 200) =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { "content-type": "application/json" },
+          });
+
+        if (request.method === "GET") {
+          return json({ preferences: {}, diffLayout: DIFF_LAYOUT.UNIFIED });
+        }
+
+        const body = await request.text();
+        Queue.offerUnsafe(writes, body);
+        written += 1;
+
+        return written === 1
+          ? json({ error: "unavailable" }, 503)
+          : json({ preferences: {}, ...JSON.parse(body) });
+      };
+
+      const machine = Layer.mergeAll(
+        Layer.succeed(
+          HostKernelTag,
+          hostKernelOver({
+            stateRoot,
+            runMode: runModeFor({ capture: false, fixture: true }),
+            accountBaseUrl: `${SERVICE_BASE_URL}/api/auth`,
+            now: () => 0,
+            createId: () => "id",
+            report: () => undefined,
+            emit: () => undefined,
+          }),
+        ),
+        Layer.succeed(Environment, ConfigProvider.fromEnvRecord({})),
+        Layer.succeed(AppIdentity, {
+          appVersion: "1.0.0",
+          packaged: false,
+          platform: PRODUCT_PLATFORM.DESKTOP,
+        }),
+        fixedAccountSource(),
+        NodeFileSystem.layer,
+        NodePath.layer,
+      );
+
+      const settings = yield* Effect.provide(composeSettings(), machine).pipe(
+        Effect.provideService(FetchHttpClient.Fetch, service),
+      );
+
+      yield* settings.link({
+        credential: NO_CREDENTIAL,
+        readAccountKey: () => Effect.succeed(SYNCED_ACCOUNT),
+        confirmAccount: () => Effect.void,
+      });
+      // Note that the syncs drain on the lifetime's fiber, so it is handed the service they reach.
+      yield* Effect.provideService(settings.lifetime, FetchHttpClient.Fetch, service);
+
+      yield* settings.reconcileAccountPreferences();
+      yield* Queue.take(writes);
+      // The first sync took the account's Unified; the member picks Split again.
+      yield* Effect.orDie(
+        settings.acts.SETTING_UPDATE({ field: "diffLayout", value: DIFF_LAYOUT.SPLIT }),
+      );
+      const pushed = yield* Queue.take(writes);
+
+      assert.equal(JSON.parse(pushed).diffLayout, DIFF_LAYOUT.SPLIT);
     }).pipe(
       Effect.provideService(FetchHttpClient.Fetch, async () => new Response(null, { status: 204 })),
       Effect.provide([NodeFileSystem.layer, NodePath.layer]),

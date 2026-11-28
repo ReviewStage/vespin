@@ -1604,7 +1604,7 @@ export function containing(words: string): string {
  * id the catalog has not been read for, its provider dropped and its words
  * spaced, because the catalog's own names live with the client.
  */
-const AGENT_SHOWN_NAME = sql<string>`coalesce(
+export const AGENT_SHOWN_NAME = sql<string>`coalesce(
   ${agentTable.title},
   ${agentTable.automationOrigin} ->> 'name',
   replace(regexp_replace(${agentTable.model}, '^[^/]*/', ''), '-', ' ')
@@ -1655,7 +1655,6 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   includeArchived: Schema.Boolean,
   archivedOnly: Schema.Boolean,
   onTaskOnly: Schema.Boolean,
-  offWorkspaceMachinesOnly: Schema.Boolean,
   startedBy: Schema.NullOr(Schema.String),
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
@@ -1721,7 +1720,6 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
     request.onTaskOnly ? isNotNull(agentTable.taskId) : undefined,
-    request.offWorkspaceMachinesOnly ? ne(agentTable.machine, AGENT_MACHINE.WORKSPACE) : undefined,
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),
     request.archivedOnly ? isNotNull(agentTable.archivedAt) : undefined,
@@ -2610,8 +2608,6 @@ interface WorkspaceAgentsAsked {
   readonly archivedOnly?: boolean;
   /** Only the agents on a task, for a reader that reads none on no task; every agent where unsaid. */
   readonly onTaskOnly?: boolean;
-  /** Only the agents on no machine a workspace owns, for a reader that reads none there; every agent where unsaid. */
-  readonly offWorkspaceMachinesOnly?: boolean;
   /** Only the agents this member started, by their account's id; every member's where unsaid. */
   readonly startedBy?: string;
   /** Only the agents an automation's run started where true, only those started otherwise where false; both where unsaid. */
@@ -2642,7 +2638,6 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     includeArchived: options.includeArchived ?? false,
     archivedOnly: options.archivedOnly ?? false,
     onTaskOnly: options.onTaskOnly ?? false,
-    offWorkspaceMachinesOnly: options.offWorkspaceMachinesOnly ?? false,
     startedBy: options.startedBy ?? null,
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,

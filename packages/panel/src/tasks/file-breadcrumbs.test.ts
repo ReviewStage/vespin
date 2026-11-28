@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import type { FolderListing } from "../file-tree/contract.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { relayout } from "../testing/resize-observer.js";
 import { FileBreadcrumbs } from "./file-breadcrumbs.js";
 import { FileViewBar } from "./file-view.js";
 

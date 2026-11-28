@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   Picker,
+  RNHostView,
   Spacer,
   Button as SwiftUIButton,
   TextField,
@@ -38,12 +39,15 @@ import {
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { linkLabels } from "@repo/features/mention-link";
 import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
+import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
@@ -310,33 +314,48 @@ function StepCode({ code }: { readonly code: string }) {
 }
 
 /**
- * One step: its checkbox, the accent's once ticked, and its Markdown words,
- * the whole row pressed to tick it or let it go, as the panel's checkbox and
- * the decide card's square marks are. Note that it is not the system's
- * switch, which takes a press on its knob alone, never on the step's words.
+ * One step: its checkbox, the accent's once ticked, and its words drawn as
+ * the thread's Markdown draws them, so a link of ours, bare or a mention,
+ * stands as its chip (`@repo/features/mention-link`'s `linkChipOf`), as the
+ * panel's step draws it. A press on the box or on the words ticks the step
+ * or lets it go, as the panel's checkbox and the decide card's square marks
+ * take one, but a chip's press opens its link and ticks nothing, as the
+ * panel's link in a step does. Note that the words stand in a React Native
+ * host beside the box, never inside a SwiftUI button, which would take the
+ * chip's press for its own; and that the box is the step's one element
+ * VoiceOver toggles, heard by its words, while the words' lines offer each
+ * chip they hold as their own actions.
  */
 function StepRow({
   step,
   ticked,
   onPress,
+  repository,
+  onOpenLink,
 }: {
   readonly step: string;
   readonly ticked: boolean;
   readonly onPress: () => void;
+  readonly repository: string | null | undefined;
+  readonly onOpenLink: (address: string) => void;
 }) {
   const colors = useColors();
+  const heard = linkLabels(step);
 
   return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[buttonStyle("plain"), accessibilityLabel(ticked ? `${step}, ${TICKED}` : step)]}
+    <HStack
+      spacing={SPACE.ROW}
+      alignment="top"
+      modifiers={[
+        padding(ASK_ROW_PADDING),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+      ]}
     >
-      <HStack
-        spacing={SPACE.ROW}
-        alignment="top"
+      <SwiftUIButton
+        onPress={onPress}
         modifiers={[
-          padding(ASK_ROW_PADDING),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          buttonStyle("plain"),
+          accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard),
         ]}
       >
         <Image
@@ -344,15 +363,13 @@ function StepRow({
           size={MARK_SIZE.LEAD}
           color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
         />
-        <Text
-          markdownEnabled
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}
-        >
-          {step}
-        </Text>
-        <Spacer />
-      </HStack>
-    </SwiftUIButton>
+      </SwiftUIButton>
+      <RNHostView matchContents={{ vertical: true }}>
+        <Pressable accessible={false} onPress={onPress}>
+          <Markdown words={step} repository={repository} onOpenLink={onOpenLink} />
+        </Pressable>
+      </RNHostView>
+    </HStack>
   );
 }
 
@@ -362,12 +379,18 @@ export function StepList({
   ticked,
   onToggle,
   acts,
+  repository,
+  onOpenLink,
 }: {
   readonly steps: readonly AskStep[];
   readonly ticked: readonly number[];
   /** Called with a step's place once its toggle is pressed. */
   readonly onToggle: (index: number) => void;
   readonly acts: readonly AskAct[];
+  /** The thread's repository, `owner/name`, whose GitHub pages are its files' chips. */
+  readonly repository: string | null | undefined;
+  /** Opens a link or a chip pressed in a step's words, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
 }) {
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
@@ -380,6 +403,8 @@ export function StepList({
                 step={step.words}
                 ticked={ticked.includes(index)}
                 onPress={() => onToggle(index)}
+                repository={repository}
+                onOpenLink={onOpenLink}
               />
               {step.code.map((code, at) => (
                 // A step's fences have no key of their own, and are never reordered.

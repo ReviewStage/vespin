@@ -88,6 +88,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_FILES: "files",
   /** The checks run on a pull request's head, under its own route. */
   PULL_REQUEST_CHECKS: "checks",
+  /** A pull request's chapters, under its own route. */
+  PULL_REQUEST_CHAPTERS: "chapters",
   /** One review thread of a pull request, by GitHub's id for it, under its own route. */
   PULL_REQUEST_THREAD: "thread",
   /** A new comment on a pull request, under its own route. */
@@ -302,6 +304,15 @@ export function iosPullRequestChecksRoute(pullRequest: {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHECKS}`;
 }
 
+/** The app's route for a pull request's chapters, by its workspace, its repository, and its number, where they are read in order. */
+export function iosPullRequestChaptersRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHAPTERS}`;
+}
+
 /** The app's route for one review thread of a pull request, by GitHub's id for it, where its comments are read and replied to. */
 export function iosPullRequestThreadRoute(
   pullRequest: {
@@ -353,6 +364,36 @@ export function iosTabOfGroup(segment: string | undefined): IosTab | undefined {
 /** The tab a route of the app's is its own by its first segment: the Inbox's for a thread, Tasks' for a task, an agent, and the pages under them. */
 export function iosRouteTab(route: string): IosTab | undefined {
   return tabNamed(route.split(/[/?#]/u).find((segment) => segment !== ""));
+}
+
+/**
+ * The routes no tab's split view lists, so a regular window has no list to
+ * select one beside: a person's page. Note that such a route is pushed onto
+ * the tab standing in every window, as a compact window pushes it, because
+ * on its own tab Back would land on that tab's empty detail rather than where
+ * it was opened from.
+ */
+const UNLISTED_ROUTES: readonly string[] = [IOS_ROUTE.PERSON];
+
+/** Whether a tab's split view lists the route's kind, as the Inbox's lists a thread and Tasks' a task or an agent; a person's page it lists nowhere. */
+function splitViewLists(route: string): boolean {
+  const path = route.split(/[?#]/u)[0] ?? "";
+
+  return !UNLISTED_ROUTES.some((unlisted) => path === unlisted || path.startsWith(`${unlisted}/`));
+}
+
+/**
+ * The tab a route is opened from, for `iosRouteOnTab`: the tab standing in a
+ * compact window; in a regular one, none for a route a split view lists, so
+ * it opens on its own tab, whose split view selects it beside its list, but
+ * the tab standing for one no split view lists, such as a person's page.
+ */
+export function iosRouteStanding(
+  route: string,
+  standing: IosTab | undefined,
+  compact: boolean,
+): IosTab | undefined {
+  return compact || !splitViewLists(route) ? standing : undefined;
 }
 
 /**

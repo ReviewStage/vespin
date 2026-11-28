@@ -221,7 +221,10 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           taskBrowserTabsRead.topics(params),
         ];
 
-        const teammateTopic: SyncTopic = [TOPIC.ACCOUNT, teammate];
+        const teammateTopics: readonly SyncTopic[] = [
+          [TOPIC.ACCOUNT, teammate],
+          [TOPIC.ACCOUNT_INBOX, teammate],
+        ];
 
         yield* wakes(
           recordRepositoryReads(
@@ -230,13 +233,18 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
             [{ repository: "acme/api", readable: true }],
             now,
           ),
-          [teammateTopic],
+          teammateTopics,
           reads,
         );
-        yield* wakes(removeGitHubToken(teammate), [teammateTopic], reads);
+        yield* wakes(removeGitHubToken(teammate), teammateTopics, reads);
         yield* wakes(
           leaveWorkspace(task.workspaceId, teammate),
-          [teammateTopic, [TOPIC.WORKSPACE, task.workspaceId]],
+          [
+            ...teammateTopics,
+            [TOPIC.WORKSPACE, task.workspaceId],
+            [TOPIC.WORKSPACE_PEOPLE, task.workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, task.workspaceId],
+          ],
           reads,
         );
       }),

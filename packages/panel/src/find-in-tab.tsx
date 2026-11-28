@@ -1,3 +1,4 @@
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
@@ -48,7 +49,9 @@ import {
   selectedWords,
   watchText,
 } from "./find-matches.js";
-import { keptFlag, keptKey, useKept } from "./use-kept.js";
+import { selectFixtureStaged, useAppStateSlice } from "./use-app-state.js";
+import { keptFlag, keptKey, useKeptLeaving } from "./use-kept.js";
+import { useAccountChoice } from "./view-choices.js";
 
 /**
  * find-in-tab.tsx -- ⌘F inside the tab that holds the window's focus: a find bar at the tab's top right, its matches tinted in the tab's own text and stepped through one at a time.
@@ -192,10 +195,8 @@ const FindScopeContext = createContext<FindScopeDoors>({
 /** Whether the find over the tab searches its details: so wherever no scope over it leaves them out. */
 const FindDetailsContext = createContext(true);
 
-/** The window's choice of whether a find searches a transcript's details, kept across launches. */
-const FIND_KEPT = {
-  DETAILS: keptKey("app.find-details", keptFlag),
-} as const;
+/** Where an earlier build kept whether a find searches a transcript's details on this device, moved up to the account once. */
+const FIND_KEPT_DETAILS = keptKey("app.find-details", keptFlag);
 
 /** What a transcript's detail wears: a call, a thought, or a run of them under one line, which a find may leave out. */
 export const FIND_DETAIL = { [FIND_DETAIL_ATTRIBUTE]: "" } as const;
@@ -584,7 +585,15 @@ export function FindScope({
   // Whether the tab holds details the find may leave out, and whether the window's find searches them.
   const [offerings, setOfferings] = useState(0);
   const offered = offerings > 0;
-  const [detailsSearched, setDetailsSearched] = useKept(FIND_KEPT.DETAILS, false);
+
+  const { value: detailsSearched, choose: setDetailsSearched } = useAccountChoice(
+    VIEW_CHOICE_KEY.FIND_DETAILS,
+    null,
+    false,
+    useAppStateSlice(selectFixtureStaged) === true,
+    useKeptLeaving(FIND_KEPT_DETAILS),
+  );
+
   const searchesDetails = !offered || detailsSearched;
 
   const domMatches = useFindMatches(

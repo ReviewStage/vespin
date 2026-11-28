@@ -37,7 +37,12 @@ import { confirmFailure } from "../failure-report.js";
 import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
 import { useAllowedApps } from "../tasks/mac-apps.js";
 import { MachineGlyph } from "../tasks/workspace-machines.js";
-import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectAccount,
+  selectExperiment,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { type AllowedApp, AllowedAppList } from "./allowed-app-row.js";
 import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { MenuRow } from "./menu-row.js";
@@ -363,7 +368,7 @@ export interface MachineSettingsRead {
 
 /** The account's machines with their own settings for agents, read while `signedIn`. */
 export function useMachineSettings(signedIn: boolean): MachineSettingsRead {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const read = useQuery(machinesQuery(signedIn ? accountId : undefined));
   const retry = useMutation(machinesRetryMutation());
 
@@ -407,7 +412,7 @@ export interface MachineRemove {
  * is asked, so the row is gone before a refusal comes back to be said.
  */
 export function useMachineRemove(): MachineRemove {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
 
   const { mutateAsync: sendRemove, ...removingWrite } = useMutation(
     actMutation(ACT_KIND.MACHINES_REMOVE),

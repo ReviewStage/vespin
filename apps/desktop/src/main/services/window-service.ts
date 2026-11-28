@@ -10,7 +10,12 @@ import {
   type VoiceCallPress,
 } from "@repo/features/voice-wire";
 import type { AppStateSnapshot, AppWindowFacts } from "@repo/host/app-state";
-import { applyThemePreference, NativeTheme, windowMaterialFor } from "@repo/host/appearance";
+import {
+  applyThemePreference,
+  NativeTheme,
+  WINDOW_MATERIAL,
+  windowMaterialFor,
+} from "@repo/host/appearance";
 import type { AppStateStore, OperatorClient } from "@repo/host/client";
 import { PUSH } from "@repo/host/contract";
 import type { DesktopService } from "@repo/host/desktop-service";
@@ -139,9 +144,11 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   const callHtmlPath = path.join(config.resourceDirectory, "renderer", "call.html");
   const callUrl = pathToFileURL(callHtmlPath).href;
 
+  const material = windowMaterialFor(process.getSystemVersion());
+
   const panels = new PanelManager({
     runMode,
-    material: windowMaterialFor(process.getSystemVersion()),
+    material,
     instance: config.instance,
     preloadPath,
     rendererHtmlPath,
@@ -412,11 +419,15 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
         ? undefined
         : devBuildBadge({ instance: config.instance, commit: config.commit });
 
-      const bandDockIcon = followDockIcon(
-        path.join(config.resourceDirectory, "icon"),
-        badge,
-        config.report,
-      );
+      // Note that a packaged build on a Mac with Liquid Glass leaves the Dock
+      // to the bundle's icon, because the system draws its Assets.car in each
+      // icon appearance (Default, Dark, Clear, Tinted) and an image set on the
+      // Dock would stand over all four. Before macOS 26, and in a development
+      // run, the app draws the Dock tile itself.
+      const bandDockIcon =
+        config.packaged && material === WINDOW_MATERIAL.LIQUID_GLASS
+          ? undefined
+          : followDockIcon(path.join(config.resourceDirectory, "icon"), badge, config.report);
 
       // Developer's Show Build Label hides the band and brings it back, so a
       // demo shows no branch.
@@ -424,7 +435,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
         shown,
         onShow: (next) => {
           if (badge === undefined) return;
-          bandDockIcon(next ? badge : undefined);
+          bandDockIcon?.(next ? badge : undefined);
           config.showMenuBar({ buildLabel: buildLabelMenu(next) });
         },
       });

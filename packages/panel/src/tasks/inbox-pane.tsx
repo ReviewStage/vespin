@@ -98,20 +98,20 @@ import {
   memberActor,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
-import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { isWireString } from "@repo/wire";
-import { useQuery } from "@tanstack/react-query";
-import { CheckIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
   ConversationRows,
   ConversationScrollButton,
-} from "../ai-elements/conversation.js";
+} from "@repo/ui/conversation";
+import { GLYPH } from "@repo/ui/icons";
+import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
+import { isWireString } from "@repo/wire";
+
+import { CheckIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   AgentCrumbMenu,
@@ -128,7 +128,7 @@ import { type Directory, useMemberDirectory, usePerson } from "../member-directo
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
@@ -174,6 +174,7 @@ import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { opensAsLink } from "./use-open-link.js";
 import {
   type InboxImageReads,
@@ -371,7 +372,7 @@ const DRAFT_HEAD = {
 
 /** The reader as the window draws them: as the workspace's members list them, else as their account signs in, else by their id alone. */
 function useReader(readerId: string | undefined): Actor {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const { members } = useMemberDirectory();
   const member = members?.find((each) => each.userId === readerId);
 
@@ -1297,6 +1298,8 @@ function Subject({
   /** The item's pager and ⋯ at the title's end, where no bar stands over the pane (`INBOX_PANE_ACTIONS.SUBJECT`); none where its bar holds them. */
   actions?: React.ReactNode;
 }): React.JSX.Element {
+  const links = usePlainLinkNames();
+
   return (
     <header
       className="inbox-subject flex flex-col gap-tight-gap border-b border-border pb-block-gap"
@@ -1310,7 +1313,7 @@ function Subject({
           className="inbox-subject-title min-w-0 flex-1"
           data-inbox-title=""
         >
-          {cardTitle(item.title)}
+          {cardTitle(item.title, links)}
         </Text>
         {actions === undefined ? null : (
           <div className="flex flex-none items-center gap-control-gap">{actions}</div>
@@ -1629,6 +1632,9 @@ export function InboxPane({
   actionsAt?: InboxPaneActions | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+  const title = cardTitle(item.title, usePlainLinkNames());
+  // Note that an ask's controls and its cards keep the title's own addresses, since a to-do of no steps stands its title as its one step, drawn as Markdown, where an address is its chip.
+  const askTitle = cardTitle(item.title);
   const board = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLElement>(null);
 
@@ -1737,7 +1743,7 @@ export function InboxPane({
       >
         <AskControls
           ask={openAsk}
-          title={cardTitle(item.title)}
+          title={askTitle}
           doors={{ draft, disabled: !open, text: formText, onDraft }}
         />
       </DraftQuestion>
@@ -1812,12 +1818,7 @@ export function InboxPane({
   const barless = atSubject && onBack === undefined;
 
   return (
-    <section
-      ref={pane}
-      className={INBOX_VIEW_ITEMS}
-      aria-label={cardTitle(item.title)}
-      hidden={hidden}
-    >
+    <section ref={pane} className={INBOX_VIEW_ITEMS} aria-label={title} hidden={hidden}>
       {barless ? null : phoneHead ? (
         <PhoneHead
           place="inbox-item"
@@ -1829,7 +1830,7 @@ export function InboxPane({
               onBack={onBack}
             />
           }
-          title={cardTitle(item.title)}
+          title={title}
           end={
             <>
               <PhoneSteps pager={pager} />
@@ -1869,12 +1870,12 @@ export function InboxPane({
                 by={by}
                 doors={doors}
                 agents={agents}
-                title={cardTitle(item.title)}
+                title={title}
                 titleShown={headingAway}
               />
             )
           }
-          pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
+          pickUp={within === true ? { name: title, shown: headingAway } : undefined}
           actions={atSubject ? undefined : itemActions}
         />
       )}
@@ -1882,9 +1883,7 @@ export function InboxPane({
         {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
         <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
           <Conversation list={board}>
-            <ConversationContent
-              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-            >
+            <ConversationContent className={`inbox-board ${LOG_OVER_COMPOSER_CLASS}`}>
               <Subject
                 item={item}
                 heading={setHeading}
@@ -1924,7 +1923,7 @@ export function InboxPane({
                         return (
                           <ThreadMessage
                             itemId={item.id}
-                            title={cardTitle(item.title)}
+                            title={askTitle}
                             threadAddressedTo={inboxAddressedTo(item)}
                             message={row.message}
                             thread={thread}
@@ -1945,7 +1944,7 @@ export function InboxPane({
                             itemId={item.id}
                             readerId={readerId}
                             reply={row.reply}
-                            title={cardTitle(item.title)}
+                            title={askTitle}
                             thread={thread}
                             now={now}
                             place={place}

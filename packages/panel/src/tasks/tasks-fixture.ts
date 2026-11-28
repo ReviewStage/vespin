@@ -53,7 +53,11 @@ import {
   agentTasksView,
   FIXTURE_AGENT_ID,
 } from "./agent-fixture.js";
-import { automationsAppState, automationsLaunchPlace } from "./automations-fixture.js";
+import {
+  automationsAppState,
+  automationsLaunchPlace,
+  automationsTasksView,
+} from "./automations-fixture.js";
 import type { AutomationsPlace } from "./automations-place.js";
 import {
   opensTasks,
@@ -663,7 +667,7 @@ export function fixtureTasksView(run: {
 
   return (
     settingsTasksView(run.profile, FIXTURE_TASK_LIST) ??
-    openTasksView(run.profile, FIXTURE_TASK_LIST)
+    openTasksView(run.profile, automationsTasksView(run.profile, FIXTURE_TASK_LIST))
   );
 }
 

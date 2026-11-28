@@ -8,6 +8,7 @@ import {
   inAgentListOrder,
   type StartedAgentsStanding,
 } from "@repo/features/task-agents-model";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
@@ -42,7 +43,9 @@ import {
   useTaskAgentsFor,
 } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
-import { keptKey, useKept } from "../use-kept.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 import type { MenuAction } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
@@ -137,10 +140,8 @@ const ARCHIVED = { LABEL: "Archived", LIST: "Archived agents" } as const;
 /** What the archived fold's count is read as while folded. */
 const ARCHIVED_NOUN: CountNoun = { one: "archived agent", many: "archived agents" };
 
-/** Whether the reader left Archived open, one choice for every task's Overview, kept on this device. */
-const KEPT = {
-  UNFOLDED: keptKey("app.taskArchivedUnfolded", Schema.fromJsonString(Schema.Boolean)),
-} as const;
+/** Where an earlier build kept whether Archived stood open on this device, moved up to the account once, where it is one choice for every task's Overview. */
+const KEPT_UNFOLDED = keptKey("app.taskArchivedUnfolded", Schema.fromJsonString(Schema.Boolean));
 
 /** New agent as the group's +, standing at rest on its head, its chord in its tooltip as the strip's "+" says it, and why it is unavailable where it is. */
 function NewAgentAction({ start }: { start: MenuAction }): React.JSX.Element {
@@ -287,7 +288,14 @@ function PlanArchivedAgents({
   onOpen: (agentId: string) => void;
   onOpenPullRequest: (pullRequest: NumberedAddress) => void;
 }): React.JSX.Element | null {
-  const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
+  const { value: unfolded, choose: setUnfolded } = useAccountChoice(
+    VIEW_CHOICE_KEY.ARCHIVED_AGENTS_OPEN,
+    null,
+    false,
+    useAppStateSlice(selectFixtureStaged) === true,
+    useKeptLeaving(KEPT_UNFOLDED),
+  );
+
   const selection = useAgentsSelection(acts, archived, shown);
 
   if (archived.length === 0) return null;

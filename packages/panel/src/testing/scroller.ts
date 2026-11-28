@@ -16,8 +16,9 @@ export function layScrollerOut(box: HTMLElement, view: number, length: number): 
   Object.defineProperty(box, "scrollTop", {
     configurable: true,
     get: () => top,
+    // Note that a write past the scroller's reach stops at its end, as the browser holds one.
     set: (to: number) => {
-      top = to;
+      top = Math.max(0, Math.min(to, length - view));
       box.dispatchEvent(new Event("scroll"));
     },
   });

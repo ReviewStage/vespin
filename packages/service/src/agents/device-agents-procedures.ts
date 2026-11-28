@@ -5,10 +5,8 @@
  * bearer alone, never a browser's session cookie (`deviceMiddleware`), since
  * a line carries a runner's secrets and an answer is the word of the device
  * that ran it, and names the device's id: the machine's device secret, which
- * acts for its own device alone and answers not found for any other, on
- * behalf of that device's owner (`HostPrincipal`), a member for their own
- * Mac or box and a workspace for a machine it owns, never assuming a
- * member; any other bearer is refused as unauthenticated. The own enroll's bearer is the
+ * acts for its own device alone and answers not found for any other; any
+ * other bearer is refused as unauthenticated. The own enroll's bearer is the
  * desktop's sign-in alone (`bearerOnlyMiddleware`, never a browser's cookie,
  * since it mints a credential), and it converts a device the member's account registered in place under its id, or creates one
  * under the account with the name, platform and architecture the enroll
@@ -19,7 +17,7 @@
  * as invalid. A host's every call,
  * the enroll's included, is refused as needing an upgrade where its daemon
  * is below the floor (`auth/device-secret.ts`). Every one but the enroll
- * and the register answers not found where the owner holds no such device
+ * and the register answers not found where the account holds no such Mac
  * (`agents/device-agent.ts`); a
  * register under an id another account holds writes nothing and answers
  * not found too, and a register naming a capability this service does not
@@ -33,11 +31,8 @@
  * A beat keeps where the host's update stands, cleared by one naming none,
  * and answers the release published (`HOST_RELEASE`) where the host's
  * daemon is below it, which the host updates itself to.
- * A workspace's machine registers on the row its approve made, keeping the
- * name its admins gave it, and folds nothing. A box's poll, once a member
- * approved it, names whose it is: the member's own, or a workspace's.
- * The live agents' read answers the ids of the owner's agents pinned to
- * that device and not archived (`GET /api/device-agents/live-agents`), which
+ * The live agents' read answers the ids of the account's agents pinned to
+ * that Mac and not archived (`GET /api/device-agents/live-agents`), which
  * the Mac keeps and removes everything else of ours it holds against.
  * A held read answers what waits for that Mac (`GET /api/device-agents/lines`,
  * `GET /api/device-agents/requests`), a claim takes one row by its id, a
@@ -68,7 +63,6 @@ import { readAgent } from "@repo/database/models/agent-store";
 import {
   answerDeviceAgentRequest,
   claimDeviceAgentRequest,
-  deviceAgentPin,
   liveDeviceAgents,
   openDeviceAgentLaunches,
   stepDeviceAgentLaunch,
@@ -85,7 +79,6 @@ import {
   DEVICE_LAUNCH_STEP,
   type DeviceAgentRelease,
   type DevicePlatform,
-  MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { HOST_RELEASE } from "@repo/features/host-release";
@@ -134,7 +127,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "./device-agent.js";
-import { removeAccountHost, removeHostOf } from "./hosts-procedures.js";
+import { removeAccountHost } from "./hosts-procedures.js";
 import { settleLostHostTurns } from "./lost-host-turns.js";
 
 export interface DeviceAgentsProcedureSeams {
@@ -192,28 +185,25 @@ const openedPairing = (opening: Omit<HostPairingOpening, "userCode">) =>
 const ownDevice = (caller: DeviceCaller, deviceId: string) =>
   actsForDevice(caller, deviceId) ? Effect.void : Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-/** The caller's own device, standing under its owner and registered, or not found. */
+/** The caller's own device, or not found. */
 const followed = (caller: DeviceCaller, deviceId: string) =>
   Effect.gen(function* () {
     yield* ownDevice(caller, deviceId);
+    const { userId } = caller;
 
-    if (!(yield* hostedStoreOrUnavailable(deviceAgentDeviceOf(caller)))) {
+    if (!(yield* hostedStoreOrUnavailable(deviceAgentDeviceOf(userId, deviceId)))) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }
   });
 
 /**
- * The agent's device started its runner: its first launch's boot made ready
- * under the attempt it stands at, which hands its queue on, the agent read
- * under the account that started it. Nothing for an agent gone or one with
- * no boot record.
+ * The agent's Mac started its runner: its first launch's boot made ready
+ * under the attempt it stands at, which hands its queue on. Nothing for an
+ * agent gone or one with no boot record.
  */
-const macRunnerStarted = (agentId: string) =>
+const macRunnerStarted = (userId: string, agentId: string) =>
   Effect.gen(function* () {
-    const pin = yield* deviceAgentPin(agentId);
-
-    if (Option.isNone(pin)) return;
-    const agent = yield* readAgent(pin.value.userId, agentId);
+    const agent = yield* readAgent(userId, agentId);
     const boot = yield* agentBootOf(agentId);
 
     if (Option.isNone(agent) || Option.isNone(boot)) return;
@@ -265,24 +255,15 @@ const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
 const keptOrNotFound = (kept: boolean) =>
   kept ? Effect.succeed(DONE) : Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-/** A host's register or beat, with its agents' cut-off turns carried on after the answer where it was away past its lease (`coder-host/carry-on.ts`). */
-const hostWrite = <A, E, R>(host: DeviceCaller, write: Effect.Effect<A, E, R>) =>
-  hostWriteCarriedOn(routedSessions, host, (agent) => queueAtTouch(routedSessions, agent), write);
-
-/**
- * The host's device removed as it leaves on its own secret: a member's own
- * as Settings › Hosts' Remove removes it, counted for them
- * (`removeAccountHost`), and a workspace's machine as its admins' Remove
- * does, which no member acted on (`removeHostOf`).
- */
-const hostLeft = (host: DeviceCaller) => {
-  switch (host.owner.kind) {
-    case MACHINE_OWNER.USER:
-      return removeAccountHost(host.owner.userId, host.deviceId);
-    case MACHINE_OWNER.WORKSPACE:
-      return removeHostOf(host);
-  }
-};
+/** A Mac's register or beat, with its agents' cut-off turns carried on after the answer where it was away past its lease (`coder-host/carry-on.ts`). */
+const hostWrite = <A, E, R>(userId: string, deviceId: string, write: Effect.Effect<A, E, R>) =>
+  hostWriteCarriedOn(
+    routedSessions,
+    userId,
+    deviceId,
+    (agent) => queueAtTouch(routedSessions, agent),
+    write,
+  );
 
 /**
  * The release a beat names, where one is published and the request's
@@ -320,14 +301,13 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       const { platform, arch } = input;
       const name = yield* keptMachineName(input.name);
 
-      // Note that the pairing keeps the machine's id alone, not its model, which the box's first register names again after its approve.
+      // Note that the pairing keeps no machine the start named, since the box's first register follows its approve at once and names it again.
       const userCode = yield* openedPairing({
         pollSecretHash: poll.hash,
         name,
         platform,
         arch,
         version: context.hostVersion,
-        machineId: input.machineId,
         ip: ip ?? null,
       });
 
@@ -356,12 +336,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
         },
       );
 
-      return {
-        status: polled.status,
-        deviceId: polled.deviceId,
-        deviceSecret: minted.secret,
-        owner: polled.owner,
-      };
+      return { status: polled.status, deviceId: polled.deviceId, deviceSecret: minted.secret };
     }),
     enrollOwn: signedIn.enrollOwn.effect(function* ({ context, input }) {
       const { userId } = context;
@@ -399,18 +374,19 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     // Note that a host leaving is removed as Settings › Hosts' Remove removes it, and that it answers done where its host was already gone, since the box deletes its secret either way.
     leave: deviceAgents.leave.effect(function* ({ context, input }) {
       yield* ownDevice(context, input.deviceId);
-      yield* hostLeft(context);
+      yield* removeAccountHost(context.userId, input.deviceId);
 
       return DONE;
     }),
     register: deviceAgents.register.effect(function* ({ context, input }) {
       yield* ownDevice(context, input.deviceId);
-      const { deviceId: _, ...device } = input;
+      const { userId } = context;
+      const { deviceId, ...device } = input;
       const name = joinedMachineName(device.name, device.platform);
 
       // Note that a host that restarts registers before its first beat, so the register carries its agents on as the beat does.
       const registered = yield* hostedStoreOrUnavailable(
-        hostWrite(context, registerHost(context, { ...device, name })),
+        hostWrite(userId, deviceId, registerHost(userId, { id: deviceId, ...device, name })),
       );
 
       if (Option.isNone(registered)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -420,15 +396,18 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     }),
     beat: deviceAgents.beat.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
-      const { update, updateFailure } = input;
+      const { deviceId, update, updateFailure } = input;
+      const { userId } = context;
       yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
-          hostWrite(context, beatDevice(context, { update, updateFailure })),
+          hostWrite(userId, deviceId, beatDevice(userId, deviceId, { update, updateFailure })),
         ),
       );
 
       // Note that the launches are read after the beat is written, so a claim the device finished before it sent the beat is among them.
-      const openLaunches = yield* hostedStoreOrUnavailable(openDeviceAgentLaunches(context));
+      const openLaunches = yield* hostedStoreOrUnavailable(
+        openDeviceAgentLaunches(context.userId, deviceId),
+      );
 
       const release = newerReleaseFor(context.request);
 
@@ -437,14 +416,18 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     liveAgents: deviceAgents.liveAgents.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
 
-      const agentIds = yield* hostedStoreOrUnavailable(liveDeviceAgents(context));
+      const agentIds = yield* hostedStoreOrUnavailable(
+        liveDeviceAgents(context.userId, input.deviceId),
+      );
 
       return { agentIds };
     }),
     lines: deviceAgents.lines.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
 
-      const lines = yield* hostedStoreOrUnavailable(deviceAgentLinesFor(context));
+      const lines = yield* hostedStoreOrUnavailable(
+        deviceAgentLinesFor(context.userId, input.deviceId),
+      );
 
       return { lines };
     }),
@@ -452,7 +435,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       const claimed = yield* hostedStoreOrUnavailable(
-        claimedDeviceAgentLine(context, input.id, input.claimToken),
+        claimedDeviceAgentLine(context.userId, input.deviceId, input.id, input.claimToken),
       );
 
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -465,13 +448,16 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       const stepped = yield* hostedStoreOrUnavailable(
-        stepDeviceAgentLaunch(context, input.id, input.step),
+        stepDeviceAgentLaunch(context.userId, input.deviceId, input.id, input.step),
       );
 
       // A launch starting its runner is the Mac's machine up for the agent's first launch, which hands its queue on:
       // the lines go on the runner's stdin behind its launch, so the first message reaches it once it runs.
       if (Option.isSome(stepped) && input.step === DEVICE_LAUNCH_STEP.STARTING) {
-        yield* afterResponse("a Mac's first launch up", macRunnerStarted(stepped.value));
+        yield* afterResponse(
+          "a Mac's first launch up",
+          macRunnerStarted(context.userId, stepped.value),
+        );
       }
 
       return yield* keptOrNotFound(Option.isSome(stepped));
@@ -481,21 +467,31 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
 
       return yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
-          settledDeviceAgentLine(context, input.id, input.exitCode, input.unstarted),
+          settledDeviceAgentLine(
+            context.userId,
+            input.deviceId,
+            input.id,
+            input.exitCode,
+            input.unstarted,
+          ),
         ),
       );
     }),
     requests: deviceAgents.requests.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
 
-      const requests = yield* hostedStoreOrUnavailable(deviceAgentRequestsFor(context));
+      const requests = yield* hostedStoreOrUnavailable(
+        deviceAgentRequestsFor(context.userId, input.deviceId),
+      );
 
       return { requests };
     }),
     claimRequest: deviceAgents.claimRequest.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
 
-      const claimed = yield* hostedStoreOrUnavailable(claimDeviceAgentRequest(context, input.id));
+      const claimed = yield* hostedStoreOrUnavailable(
+        claimDeviceAgentRequest(context.userId, input.deviceId, input.id),
+      );
 
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
@@ -505,7 +501,9 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* followed(context, input.deviceId);
 
       return yield* keptOrNotFound(
-        yield* hostedStoreOrUnavailable(answerDeviceAgentRequest(context, input.id, input.answer)),
+        yield* hostedStoreOrUnavailable(
+          answerDeviceAgentRequest(context.userId, input.deviceId, input.id, input.answer),
+        ),
       );
     }),
   };

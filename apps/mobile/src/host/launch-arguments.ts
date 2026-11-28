@@ -30,6 +30,7 @@ const LAUNCH_ARGUMENT = {
   BUSY_RENDER: "busyRender",
   PILL_FIELD: "pillField",
   SENTRY_TEST: "sentryTest",
+  MEDIA_ORIGIN: "mediaOrigin",
 } as const;
 
 /** The test reports `-sentryTest` may ask for: a handled JavaScript error, or a native crash. */
@@ -143,6 +144,17 @@ export function launchPillField(): boolean {
 /** Whether this launch's fixture run refuses the writes a flow presses, as `-refuseWrites true` asks, so a flow shoots the failure notice (`maestro/failure-notice.yaml`). */
 export function launchRefusesWrites(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.REFUSE_WRITES);
+}
+
+/** Where a fixture run's agent recording is served over HTTP, as `-mediaOrigin <http://127.0.0.1:port>` names it on the rig, so its player takes the remote path a device's does; none where the launch names none, or a word that is no loopback HTTP origin. */
+export function launchMediaOrigin(): string | undefined {
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.MEDIA_ORIGIN);
+
+  if (!Predicate.isString(named) || !URL.canParse(named)) return undefined;
+  const url = new URL(named);
+  const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+
+  return loopback && url.protocol === "http:" ? url.origin : undefined;
 }
 
 /** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none for a word that is no test. */

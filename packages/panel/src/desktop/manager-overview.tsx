@@ -74,6 +74,7 @@ import { inboxLineGlyph } from "../tasks/inbox-item-parts.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
@@ -168,12 +169,13 @@ function WaitingRow({
     actorName(personActor(member, directory.members, directory.readerId, directory.former));
 
   const row = inboxRowOf(item);
+  const links = usePlainLinkNames();
 
   return (
     <ListRow
       leading={inboxLineGlyph(inboxLineKind(row))}
       title={item.title}
-      description={inboxPreview(row, nameOf)}
+      description={inboxPreview(row, nameOf, undefined, links)}
       chevron
       onPress={() => threads.onOpen(item)}
     />

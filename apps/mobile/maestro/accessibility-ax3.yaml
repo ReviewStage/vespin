@@ -109,10 +109,10 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
-- openLink: "vespin://settings"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://settings"
 - extendedWaitUntil:
     visible: ".*Signed in with GitHub.*"
     timeout: 15000

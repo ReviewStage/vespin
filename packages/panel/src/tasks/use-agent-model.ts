@@ -1,7 +1,7 @@
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
 import type { AgentRuntime, AgentSummary } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 
 /**
@@ -58,7 +58,20 @@ export function useAgentModel(input: {
   /** How many changes have been sent, so an answer to an earlier one is told apart from the latest. */
   const writes = useRef(0);
 
-  if (agent === undefined) return undefined;
+  const model = agent?.model;
+  const effort = agent?.effort;
+  const contextWindow = agent?.contextWindow;
+
+  // Note that the choice is the same object while what it names is, so the box drawn from it holds from write to write.
+  const choice = useMemo(
+    () =>
+      model === undefined || effort === undefined
+        ? undefined
+        : { model, effort, ...(contextWindow === undefined ? undefined : { contextWindow }) },
+    [model, effort, contextWindow],
+  );
+
+  if (agent === undefined || choice === undefined) return undefined;
 
   const choose = (next: ModelChoice) => {
     writes.current += 1;
@@ -74,11 +87,7 @@ export function useAgentModel(input: {
   };
 
   return {
-    choice: {
-      model: agent.model,
-      effort: agent.effort,
-      ...(agent.contextWindow === undefined ? undefined : { contextWindow: agent.contextWindow }),
-    },
+    choice,
     note: held.note,
     choose,
     runtime: agent.runtime,

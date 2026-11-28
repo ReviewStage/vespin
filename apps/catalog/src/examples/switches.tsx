@@ -6,6 +6,7 @@ import {
   Stack,
   Switch,
   SwitchMark,
+  SwitchRoom,
   TEXT_TONE,
   Text,
 } from "@repo/ui";
@@ -15,7 +16,8 @@ import { CatalogSection } from "../section";
 
 /**
  * switches.tsx -- a switch off, on, unavailable, and locked in each, its why
- * its tooltip, and the drawing alone as a menu row draws it.
+ * its tooltip, the drawing alone as a menu row draws it, and the room a row
+ * that offers none keeps for one.
  */
 
 function Held({ start, label }: { start: boolean; label: string }): React.JSX.Element {
@@ -66,6 +68,23 @@ function Switches(): React.JSX.Element {
               <Inline justify={JUSTIFY.BETWEEN}>
                 <Text tone={TEXT_TONE.MUTED}>{on ? "Archive runs" : "Keep runs"}</Text>
                 <SwitchMark checked={on} />
+              </Inline>
+            </div>
+          ))}
+        </Stack>
+      </CatalogSection>
+      <CatalogSection id="switch-room" title="Its room kept, where a row offers none">
+        <Stack gap={GAP.TIGHT}>
+          {[true, false].map((offered) => (
+            <div key={String(offered)} className="catalog-frame catalog-frame-wide">
+              <Inline justify={JUSTIFY.BETWEEN}>
+                <Text tone={TEXT_TONE.MUTED}>
+                  {offered ? "Nightly sweep" : "Launch-day check, ran"}
+                </Text>
+                <Inline gap={GAP.ITEM}>
+                  <Text tone={TEXT_TONE.MUTED}>{offered ? "Next: Mon" : "Ran Oct 20"}</Text>
+                  {offered ? <Held start label="Nightly sweep" /> : <SwitchRoom />}
+                </Inline>
               </Inline>
             </div>
           ))}
