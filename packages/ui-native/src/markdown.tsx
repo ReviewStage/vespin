@@ -4,6 +4,7 @@ import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import { ALERT_KIND, ALERT_TITLE, type AlertKind } from "@repo/features/markdown-alert";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { heldChipName } from "@repo/features/place-chip-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -40,7 +41,7 @@ import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { ENTITY_GLYPH } from "./entity-glyph.js";
 import { FileChip } from "./file-chip.js";
-import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
+import { ALERT_GLYPH, GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import {
   HeldMenu,
   PictureSetProvider,
@@ -206,6 +207,7 @@ const styles = StyleSheet.create({
   pending: { alignItems: "center", justifyContent: "center" },
   pictureChip: { paddingLeft: 2, borderWidth: StyleSheet.hairlineWidth },
   measured: { alignSelf: "stretch" },
+  alertTitle: { flexDirection: "row", alignItems: "center", gap: SPACE.TIGHT, marginBottom: 4 },
 });
 
 /** What VoiceOver hears of each chip by the name the app found for it, by chip, for the blocks the chips were read from. */
@@ -1445,6 +1447,54 @@ function PictureBlock({
   );
 }
 
+/** The ink each of GitHub's alerts draws its rule and title in, the panel's own (`prose.css`'s `--ui-markdown-alert-ink`). */
+const ALERT_INK = {
+  [ALERT_KIND.NOTE]: "WORKING",
+  [ALERT_KIND.TIP]: "COMPLETE",
+  [ALERT_KIND.IMPORTANT]: "MERGED",
+  [ALERT_KIND.WARNING]: "ATTENTION",
+  [ALERT_KIND.CAUTION]: "DANGER_TEXT",
+} as const satisfies Record<AlertKind, keyof BrandColors>;
+
+/**
+ * One of GitHub's alerts, as GitHub and the panel draw one: a quote whose
+ * rule stands in its kind's ink, headed by its kind's glyph and title in
+ * that ink ("Note", "Warning"), over its words. The title is heard as the
+ * alert's first words, its glyph left unheard.
+ */
+function AlertView({
+  block,
+  drawing,
+}: {
+  readonly block: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.ALERT }>;
+  readonly drawing: Drawing;
+}) {
+  const { colors, fontScale } = drawing;
+  const ink = colors[ALERT_INK[block.alert]];
+
+  return (
+    <View style={[styles.quote, { borderColor: ink }]}>
+      <View style={styles.alertTitle}>
+        <SymbolView
+          name={glyphSymbol(ALERT_GLYPH[block.alert])}
+          size={ROLE_SIZE.ROW_LINE * fontScale}
+          tintColor={ink}
+          accessibilityElementsHidden
+        />
+        <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: ink }}>
+          {ALERT_TITLE[block.alert]}
+        </Text>
+      </View>
+      {/* Note that an alert's chips are held to the width inside its rule and padding, as a quote's are. */}
+      <Blocks
+        blocks={block.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+        gap={NESTED_GAP}
+      />
+    </View>
+  );
+}
+
 function BlockView({
   block,
   drawing,
@@ -1487,6 +1537,8 @@ function BlockView({
           />
         </View>
       );
+    case MARKDOWN_BLOCK.ALERT:
+      return <AlertView block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.TABLE:
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:

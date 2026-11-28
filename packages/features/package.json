@@ -35,6 +35,7 @@
     "./link-standing-model": "./src/link-standing-model.js",
     "./machine-name": "./src/machine-name.js",
     "./machines-settings-words": "./src/machines-settings-words.js",
+    "./markdown-alert": "./src/markdown-alert.js",
     "./markdown-fence": "./src/markdown-fence.js",
     "./integration-settings-words": "./src/integration-settings-words.js",
     "./cloud-environment-words": "./src/cloud-environment-words.js",

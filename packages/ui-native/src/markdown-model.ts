@@ -19,6 +19,7 @@ import {
   readLink,
 } from "@repo/features/link-grammar";
 import { githubPageAsked } from "@repo/features/link-standing-model";
+import { type AlertKind, alertMarkerOf } from "@repo/features/markdown-alert";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
@@ -34,6 +35,7 @@ import { placeChipLook } from "@repo/features/place-chip-model";
 import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
 import type {
+  Blockquote,
   Code,
   Definition,
   ImageReference,
@@ -73,6 +75,8 @@ export const MARKDOWN_BLOCK = {
   DIAGRAM: "diagram",
   RULE: "rule",
   PICTURE: "picture",
+  /** One of GitHub's alerts (`> [!NOTE]`), a quote headed by its kind. */
+  ALERT: "alert",
 } as const;
 
 /** What a run inside a block is. */
@@ -184,6 +188,11 @@ export type MarkdownBlock =
       readonly items: readonly MarkdownListItem[];
     }
   | { readonly kind: typeof MARKDOWN_BLOCK.QUOTE; readonly blocks: readonly MarkdownBlock[] }
+  | {
+      readonly kind: typeof MARKDOWN_BLOCK.ALERT;
+      readonly alert: AlertKind;
+      readonly blocks: readonly MarkdownBlock[];
+    }
   | {
       readonly kind: typeof MARKDOWN_BLOCK.TABLE;
       readonly align: readonly ColumnAlign[];
@@ -660,6 +669,37 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
+/**
+ * A quote, or one of GitHub's alerts where its first line is an alert's
+ * marker alone (`> [!NOTE]`), as GitHub and the panel draw one: its kind,
+ * and its words with the marker taken out, the paragraph that held only the
+ * marker gone.
+ */
+function quoteBlock(node: Blockquote, reader: Reader): MarkdownBlock {
+  const [first, ...rest] = node.children;
+  const words = first?.type === "paragraph" ? first.children[0] : undefined;
+  const marker = words?.type === "text" ? alertMarkerOf(words.value) : undefined;
+  const plain = { kind: MARKDOWN_BLOCK.QUOTE, blocks: blocksOf(node.children, reader) } as const;
+
+  if (first?.type !== "paragraph" || words?.type !== "text" || marker === undefined) return plain;
+  const after = first.children[1];
+
+  // Note that a marker matched up to its words' own end stands alone only where nothing follows it on its line.
+  const alone =
+    words.value.slice(0, marker.length).endsWith("\n") ||
+    after === undefined ||
+    after.type === "break";
+
+  if (!alone) return plain;
+  const left = words.value.slice(marker.length);
+  const kept = [...(left === "" ? [] : [{ ...words, value: left }]), ...first.children.slice(1)];
+  const opening = kept.findIndex((child) => child.type !== "break");
+  const children = opening === -1 ? [] : kept.slice(opening);
+  const opened = children.length === 0 ? rest : [{ ...first, children }, ...rest];
+
+  return { kind: MARKDOWN_BLOCK.ALERT, alert: marker.kind, blocks: blocksOf(opened, reader) };
+}
+
 /** A fence: a diagram where it names Mermaid and the words are read for diagrams, a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
 function codeBlock(node: Code, reading: MarkdownReading): MarkdownBlock {
   if (reading.diagrams === true && node.lang === DIAGRAM_LANGUAGE) {
@@ -688,7 +728,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "list":
       return [listBlock(node, reader)];
     case "blockquote":
-      return [{ kind: MARKDOWN_BLOCK.QUOTE, blocks: blocksOf(node.children, reader) }];
+      return [quoteBlock(node, reader)];
     case "table":
       return [tableBlock(node, reader)];
     case "code":

@@ -10,6 +10,13 @@
  * quote (`ALERT_PROPERTY`) is never one a writer could set themselves.
  */
 
+import {
+  ALERT_KIND,
+  ALERT_TITLE,
+  type AlertKind,
+  alertMarkerOf,
+  isAlertKind,
+} from "@repo/features/markdown-alert";
 import { isWireString } from "@repo/wire";
 import type { Element, ElementContent, Root } from "hast";
 import type { ReactNode } from "react";
@@ -22,22 +29,8 @@ import {
   TriangleAlert,
 } from "../icons/icons.js";
 
-/** The kinds of alert GitHub draws, by the word its marker names. */
-export const ALERT_KIND = {
-  NOTE: "note",
-  TIP: "tip",
-  IMPORTANT: "important",
-  WARNING: "warning",
-  CAUTION: "caution",
-} as const;
-
-export type AlertKind = (typeof ALERT_KIND)[keyof typeof ALERT_KIND];
-
 /** The property the step sets on a quote it marks, its alert's kind. */
 const ALERT_PROPERTY = "dataAlert";
-
-/** The marker an alert opens on, alone on its line, in any case, as GitHub reads it. */
-const ALERT_MARKER = /^\s*\[!(note|tip|important|warning|caution)\][^\S\n]*(?:\n|$)/iu;
 
 /** How an alert's kind is drawn: its title, and the glyph beside it. */
 interface AlertFace {
@@ -47,16 +40,12 @@ interface AlertFace {
 
 /** Each kind's title and glyph, GitHub's own words and the glyphs nearest its own. */
 const ALERT_FACE: Readonly<Record<AlertKind, AlertFace>> = {
-  [ALERT_KIND.NOTE]: { title: "Note", Glyph: Info },
-  [ALERT_KIND.TIP]: { title: "Tip", Glyph: Lightbulb },
-  [ALERT_KIND.IMPORTANT]: { title: "Important", Glyph: MessageSquareWarning },
-  [ALERT_KIND.WARNING]: { title: "Warning", Glyph: TriangleAlert },
-  [ALERT_KIND.CAUTION]: { title: "Caution", Glyph: CircleAlert },
+  [ALERT_KIND.NOTE]: { title: ALERT_TITLE[ALERT_KIND.NOTE], Glyph: Info },
+  [ALERT_KIND.TIP]: { title: ALERT_TITLE[ALERT_KIND.TIP], Glyph: Lightbulb },
+  [ALERT_KIND.IMPORTANT]: { title: ALERT_TITLE[ALERT_KIND.IMPORTANT], Glyph: MessageSquareWarning },
+  [ALERT_KIND.WARNING]: { title: ALERT_TITLE[ALERT_KIND.WARNING], Glyph: TriangleAlert },
+  [ALERT_KIND.CAUTION]: { title: ALERT_TITLE[ALERT_KIND.CAUTION], Glyph: CircleAlert },
 };
-
-function isAlertKind(word: string): word is AlertKind {
-  return Object.values(ALERT_KIND).some((kind) => kind === word);
-}
 
 /** Whether a node stands for nothing a reader sees: blank words, or a line break. */
 function empty(node: ElementContent): boolean {
@@ -86,21 +75,23 @@ function takeMarker(quote: Element): AlertKind | undefined {
   const words = first.children[0];
 
   if (words?.type !== "text") return undefined;
-  const marker = ALERT_MARKER.exec(words.value);
-  const kind = marker?.[1]?.toLowerCase();
+  const marker = alertMarkerOf(words.value);
 
-  if (marker === null || kind === undefined || !isAlertKind(kind)) return undefined;
+  if (marker === undefined) return undefined;
 
   // Note that a marker matched up to its words' own end stands alone only where nothing follows it on its line.
-  if (!marker[0].endsWith("\n") && !lineEndsAt(first.children[1])) return undefined;
-  words.value = words.value.slice(marker[0].length);
+  if (!words.value.slice(0, marker.length).endsWith("\n") && !lineEndsAt(first.children[1])) {
+    return undefined;
+  }
+
+  words.value = words.value.slice(marker.length);
 
   // Note that a line break left after the marker would open the alert's words on an empty line.
   while (first.children[0] !== undefined && empty(first.children[0])) first.children.shift();
 
   if (first.children.length === 0) quote.children = quote.children.filter((each) => each !== first);
 
-  return kind;
+  return marker.kind;
 }
 
 function markAlerts(holder: Root | Element): void {

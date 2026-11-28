@@ -5,6 +5,7 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import { ALERT_KIND, type AlertKind } from "@repo/features/markdown-alert";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -411,6 +412,15 @@ export const PERMISSION_MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
 } as const satisfies Record<AgentPermissionMode, Glyph>;
+
+/** The glyph each of GitHub's alerts is headed by, the panel's own (`markdown-alerts.tsx`'s `ALERT_FACE`). */
+export const ALERT_GLYPH = {
+  [ALERT_KIND.NOTE]: lucide(LUCIDE_SYMBOL.INFO),
+  [ALERT_KIND.TIP]: lucide(LUCIDE_SYMBOL.LIGHTBULB),
+  [ALERT_KIND.IMPORTANT]: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_WARNING),
+  [ALERT_KIND.WARNING]: lucide(LUCIDE_SYMBOL.TRIANGLE_ALERT),
+  [ALERT_KIND.CAUTION]: lucide(LUCIDE_SYMBOL.CIRCLE_ALERT),
+} as const satisfies Record<AlertKind, Glyph>;
 
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {
