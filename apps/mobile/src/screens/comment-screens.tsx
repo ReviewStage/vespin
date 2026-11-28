@@ -28,7 +28,7 @@ import {
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
-import { useOpenLink } from "../open-link.js";
+import { LINK_OPENS, useOpenLink } from "../open-link.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import {
   type CommentReply,
@@ -299,7 +299,8 @@ function CommentThread({
 }) {
   const half = useSheetAtHalf();
   const overview = useTaskOverview(taskId);
-  const openLink = useOpenLink(overview?.task.workspaceId);
+  // Note that a link opens on the tabs under the sheet, closing it, since a push from inside the sheet would stand the tabs again inside it.
+  const openLink = useOpenLink(overview?.task.workspaceId, LINK_OPENS.OUT_OF_SHEET);
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
@@ -452,7 +453,8 @@ function NewComment({
   const router = useRouter();
   const half = useSheetAtHalf();
   const overview = useTaskOverview(taskId);
-  const openLink = useOpenLink(overview?.task.workspaceId);
+  // Note that a link opens on the tabs under the sheet, closing it, since a push from inside the sheet would stand the tabs again inside it.
+  const openLink = useOpenLink(overview?.task.workspaceId, LINK_OPENS.OUT_OF_SHEET);
   const body = overview?.document?.description.body ?? "";
 
   // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.
