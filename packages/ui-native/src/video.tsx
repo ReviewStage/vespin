@@ -7,7 +7,7 @@ import { useEvent } from "expo";
 import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoSource, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
@@ -15,6 +15,7 @@ import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { mediaFrame } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import {
   type PictureRef,
   type PictureSource,
@@ -25,7 +26,7 @@ import { Press } from "./press.js";
 import { BRAND_COLOR } from "./tokens/brand-colors.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
@@ -192,7 +193,6 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
             {failed ? (
               <Text
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.ROW_LINE,
                   color: colors.TEXT_MUTED,
                 }}
@@ -210,7 +210,6 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
               >
                 <Text
                   style={{
-                    fontFamily: TEXT_FONT,
                     fontSize: ROLE_SIZE.ROW_LINE,
                     fontWeight: "600",
                     color: colors.TEXT_BODY,

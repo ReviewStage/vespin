@@ -25,7 +25,6 @@ import {
   type NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -66,6 +65,7 @@ import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import { PictureSet } from "./picture-set.js";
 import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
@@ -490,12 +490,7 @@ function BodyBlock({
 }) {
   return (
     <View style={[styles.block, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}>
-      <Text
-        style={[
-          styles.blockTitle,
-          { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED },
-        ]}
-      >
+      <Text style={[styles.blockTitle, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }]}>
         {title}
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -646,7 +641,6 @@ function CallRow({
             style={{
               flexShrink: 0,
               maxWidth: "70%",
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -665,7 +659,6 @@ function CallRow({
               <Text
                 numberOfLines={lines}
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.TIME,
                   color: colors.TEXT_BODY,
                   fontWeight: "500",
@@ -693,7 +686,6 @@ function CallRow({
           <Text
             numberOfLines={lines}
             style={{
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -788,10 +780,7 @@ function OriginFrom({
         };
 
   return (
-    <Text
-      {...actions}
-      style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
-    >
+    <Text {...actions} style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
       {parts.map(({ lead, words, after, address }, at) => (
         <Fragment key={at}>
           {at === 0 ? null : " · "}
@@ -835,7 +824,6 @@ function SenderName({
       <Text
         accessibilityRole="header"
         style={{
-          fontFamily: TEXT_FONT,
           fontSize: ROLE_SIZE.ROW_LINE,
           fontWeight: "600",
           color: colors.TEXT,
@@ -874,7 +862,6 @@ function OriginBody({ body }: { readonly body: string }) {
         <Text
           style={{
             flex: 1,
-            fontFamily: TEXT_FONT,
             fontSize: ROLE_SIZE.ROW_LINE,
             color: colors.TEXT_MUTED,
           }}
@@ -947,7 +934,6 @@ function PromptCard({
             numberOfLines={large ? undefined : 1}
             style={{
               flex: 1,
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -1024,7 +1010,6 @@ function FoldRow({
           numberOfLines={large ? undefined : 1}
           style={{
             flex: 1,
-            fontFamily: TEXT_FONT,
             fontSize: ROLE_SIZE.ROW_LINE,
             color: colors.TEXT_MUTED,
           }}
@@ -1245,12 +1230,7 @@ function TranscriptRow({
           ]}
         >
           {item.stamp === undefined ? null : (
-            <Text
-              style={[
-                styles.stamp,
-                { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED },
-              ]}
-            >
+            <Text style={[styles.stamp, { fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }]}>
               {item.stamp}
             </Text>
           )}
@@ -1337,10 +1317,7 @@ function TranscriptRow({
       // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
-          <Text
-            selectable
-            style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}
-          >
+          <Text selectable style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
           <View style={styles.turnActs}>
@@ -1363,7 +1340,6 @@ function TranscriptRow({
                 <View>
                   <Text
                     style={{
-                      fontFamily: TEXT_FONT,
                       fontSize: PROSE_SIZE,
                       color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
                     }}
@@ -1382,7 +1358,6 @@ function TranscriptRow({
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
           <Text
             style={{
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
             }}
@@ -1493,7 +1468,6 @@ function TranscriptRow({
               {shown.caption === "" ? null : (
                 <Text
                   style={{
-                    fontFamily: TEXT_FONT,
                     fontSize: ROLE_SIZE.ROW_LINE,
                     color: colors.TEXT_MUTED,
                   }}
@@ -1530,7 +1504,6 @@ function TranscriptRow({
               <Text
                 numberOfLines={large ? undefined : 2}
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.ROW_TITLE,
                   fontWeight: "500",
                   color: colors.TEXT,
@@ -1540,7 +1513,6 @@ function TranscriptRow({
               </Text>
               <Text
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.ROW_LINE,
                   color: colors.TEXT_MUTED,
                 }}
@@ -1702,9 +1674,7 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
 
   return (
     <View style={styles.older}>
-      <Text
-        style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
-      >
+      <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
         {OLDER_WORDS.FAILED}
       </Text>
       <InlineHost matchContents>

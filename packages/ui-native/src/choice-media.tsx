@@ -1,15 +1,16 @@
 // choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, sound clip, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
 
 import { SymbolView } from "expo-symbols";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /** What a piece of an option's media is drawn as: a picture, a recording in the system's player, a sound clip in its strip, a page the agent showed, or a live address. */
@@ -124,7 +125,7 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
       )}
       <Text
         numberOfLines={large ? undefined : 1}
-        style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+        style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
         accessibilityElementsHidden
       >
         {piece.title}

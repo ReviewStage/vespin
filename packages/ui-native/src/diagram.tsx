@@ -16,7 +16,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { StyleSheet, Text, useColorScheme, View } from "react-native";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import {
   DIAGRAM_ANSWER,
@@ -26,10 +26,11 @@ import {
   diagramDocument,
 } from "./diagram-page.js";
 import type { MediaSize } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** The address the page is handed in at, the one place it may stand. */
 const HANDED_IN = "about:blank";
@@ -316,7 +317,7 @@ export function DiagramBlock({
     <View style={styles.card}>
       <View style={styles.head}>
         <Text
-          style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
           accessibilityRole="header"
         >
           {DIAGRAM_WORDS.HEAD}
@@ -325,7 +326,6 @@ export function DiagramBlock({
           <Press onPress={() => setShowingCode(!showingCode)} accessibilityRole="button">
             <Text
               style={{
-                fontFamily: TEXT_FONT,
                 fontSize: ROLE_SIZE.ROW_LINE,
                 color: colors.TEXT,
                 fontWeight: "500",

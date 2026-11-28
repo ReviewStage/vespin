@@ -29,20 +29,15 @@ import {
   draftCopy,
 } from "@repo/features/draft-text";
 import { SymbolView } from "expo-symbols";
-import {
-  type AccessibilityActionEvent,
-  StyleSheet,
-  Text,
-  type TextStyle,
-  View,
-} from "react-native";
+import { type AccessibilityActionEvent, StyleSheet, type TextStyle, View } from "react-native";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
 
 /** The glyph each draft's header leads with, the panel's own: Slack's nearest, the mail, and the pen. */
 const DRAFT_GLYPH = {
@@ -194,7 +189,7 @@ export function DraftCard({
   const colors = useColors();
   const keeping = useKeeping();
   const edge = { borderColor: colors.CHIP_EDGE };
-  const quiet = { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
+  const quiet = { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
   const { subject } = draft;
   const links = draftLinks(draft.runs);
 
@@ -232,13 +227,7 @@ export function DraftCard({
       {subject === undefined ? null : (
         <View style={[styles.bar, edge]}>
           <Text style={quiet}>{DRAFT_WORDS.SUBJECT}</Text>
-          <Text
-            selectable
-            style={[
-              styles.barWords,
-              { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, color: colors.TEXT },
-            ]}
-          >
+          <Text selectable style={[styles.barWords, { fontSize: PROSE_SIZE, color: colors.TEXT }]}>
             {subject}
           </Text>
           {keeping === undefined ? null : (
@@ -251,11 +240,7 @@ export function DraftCard({
         </View>
       )}
       <View style={styles.body}>
-        <Text
-          selectable
-          style={{ fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, color: colors.TEXT }}
-          {...linkActions}
-        >
+        <Text selectable style={{ fontSize: PROSE_SIZE, color: colors.TEXT }} {...linkActions}>
           <DraftRuns runs={draft.runs} onOpenLink={onOpenLink} colors={colors} />
         </Text>
       </View>

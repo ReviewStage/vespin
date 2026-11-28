@@ -4,14 +4,15 @@
 
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { InlineHost } from "./inline-host.js";
 import { Avatar, ManagerFace } from "./marks.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 import type { ChatSender, ChatThreadMark } from "./transcript-model.js";
 
 /** A sender's face at a channel row's seat, and how far its words stand past it, as the panel's channel stands its avatars in a gutter; fixed rather than scaled, so a turn's work and what the Manager showed, drawn as rows of their own, line up with the words past it. */
@@ -189,10 +190,7 @@ export function ChannelMessage({
             <SenderPress name={sender.name} address={sender.address} onOpenLink={onOpenLink}>
               <Text
                 numberOfLines={1}
-                style={[
-                  styles.name,
-                  { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT },
-                ]}
+                style={[styles.name, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT }]}
               >
                 {sender.name}
               </Text>
@@ -200,7 +198,6 @@ export function ChannelMessage({
             {stamp === undefined ? null : (
               <Text
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.TIME,
                   color: colors.TEXT_MUTED,
                 }}
@@ -256,7 +253,6 @@ export function ThreadReplies({
       </View>
       <Text
         style={{
-          fontFamily: TEXT_FONT,
           fontSize: ROLE_SIZE.TIME,
           fontWeight: "600",
           color: colors.TEXT,
@@ -277,7 +273,6 @@ export function NewRule({ words }: { readonly words: string }) {
       <View style={[styles.ruleLine, { backgroundColor: colors.ACCENT }]} />
       <Text
         style={{
-          fontFamily: TEXT_FONT,
           fontSize: ROLE_SIZE.TIME,
           fontWeight: "600",
           color: colors.ACCENT_TEXT,
@@ -295,9 +290,7 @@ export function ThreadRule({ words }: { readonly words: string }) {
 
   return (
     <View style={styles.rule}>
-      <Text style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
-        {words}
-      </Text>
+      <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{words}</Text>
       <View style={[styles.ruleLine, { backgroundColor: colors.CHIP_EDGE }]} />
     </View>
   );

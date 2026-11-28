@@ -17,7 +17,7 @@ import {
   useState,
 } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { useScaledSize } from "./accessibility.js";
+import { useBoldText, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
@@ -722,6 +722,8 @@ function SelectedWords({ words, onDone }: { readonly words: string; readonly onD
   // Whether the words have stood selected, so the caret the view opens with never ends the selection before it is drawn.
   const spanned = useRef(false);
   const plain = markdownPlainText(words);
+  // Note that the words selected stand a step heavier under Bold Text, as the drawn words they stand in for do (`NativeText`).
+  const bold = useBoldText();
 
   // Note that the view takes the focus as it stands, so its selection shows its handles and the edit menu at once, as Messages' Select does.
   useEffect(() => {
@@ -748,7 +750,7 @@ function SelectedWords({ words, onDone }: { readonly words: string; readonly onD
         else if (spanned.current) onDone();
       }}
       onBlur={onDone}
-      style={[styles.selecting, { color: colors.TEXT_BODY }]}
+      style={[styles.selecting, { color: colors.TEXT_BODY, ...(bold && { fontWeight: "500" }) }]}
     />
   );
 }

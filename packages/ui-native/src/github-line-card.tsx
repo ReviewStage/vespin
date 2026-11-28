@@ -6,16 +6,17 @@ import {
   githubCheckState,
 } from "@repo/features/transcript-lines";
 import { SymbolView } from "expo-symbols";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, glyphSymbol, type MarkLook } from "./glyph.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { Markdown } from "./markdown.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { CHECK_LOOK, githubLineLook } from "./pull-request-look.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
 
 /** What VoiceOver hears of a card's fold and its press. */
 const HEARD = {
@@ -124,7 +125,6 @@ function FoldBody({
             {comment.line === undefined ? null : (
               <Text
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.TIME,
                   color: colors.TEXT_MUTED,
                 }}
@@ -157,7 +157,6 @@ function FoldBody({
             numberOfLines={1}
             style={{
               flex: 1,
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT,
             }}
@@ -166,7 +165,6 @@ function FoldBody({
           </Text>
           <Text
             style={{
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -251,7 +249,6 @@ export function GitHubLineCard({
                 style={{
                   flexShrink: 0,
                   maxWidth: "45%",
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.ROW_LINE,
                   fontWeight: "600",
                   color: colors.TEXT,
@@ -264,7 +261,6 @@ export function GitHubLineCard({
               numberOfLines={lines}
               style={{
                 flexShrink: 1,
-                fontFamily: TEXT_FONT,
                 fontSize: ROLE_SIZE.ROW_LINE,
                 color: colors.TEXT_MUTED,
               }}
@@ -281,7 +277,6 @@ export function GitHubLineCard({
               <Text
                 numberOfLines={1}
                 style={{
-                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.TIME,
                   color: colors.TEXT_BODY,
                   fontWeight: "500",
@@ -297,7 +292,6 @@ export function GitHubLineCard({
               numberOfLines={lines}
               style={{
                 flexShrink: 1000,
-                fontFamily: TEXT_FONT,
                 fontSize: ROLE_SIZE.ROW_LINE,
                 color: colors.TEXT_MUTED,
               }}

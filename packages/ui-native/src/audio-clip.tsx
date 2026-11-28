@@ -11,7 +11,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
@@ -19,10 +18,11 @@ import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaFailed } from "./media-failed.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What a clip says where the player cannot play it, such as an Ogg, which AVPlayer has no reader for. */
 const CANNOT_PLAY = "This clip can't play here.";
@@ -249,7 +249,6 @@ export function AudioClip({ source, label, onRetry }: AudioClipProps) {
           <Text
             style={{
               flexShrink: 1,
-              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -298,7 +297,6 @@ export function AudioClip({ source, label, onRetry }: AudioClipProps) {
         </View>
         <Text
           style={{
-            fontFamily: TEXT_FONT,
             fontSize: ROLE_SIZE.TIME,
             color: colors.TEXT_MUTED,
             fontVariant: ["tabular-nums"],
