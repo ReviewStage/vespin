@@ -1,4 +1,4 @@
-// choice-list.tsx -- a decide ask's options as rows inside the composer over its field: one row each, its words drawn as Markdown so a link of ours stands as its chip, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
+// choice-list.tsx -- a decide ask's options as rows inside the composer over its field, or in a thread's card once answered: one row each, its words drawn as Markdown so a link of ours stands as its chip, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
 import { Button, HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -13,10 +13,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { linkLabels } from "@repo/features/mention-link";
-import { Fragment } from "react";
 import { Pressable } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
+import { AskRows, RecommendedTag, useAskRowPadding } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
@@ -113,6 +112,7 @@ function ChoiceRow({
   readonly repository: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
 }) {
+  const rowPadding = useAskRowPadding();
   const stacked = useAccessibilitySize();
   const stepped = useSteppedBack();
   const markSize = useScaledSize(MARK_SIZE.GLYPH);
@@ -134,7 +134,7 @@ function ChoiceRow({
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
-        padding(ASK_ROW_PADDING),
+        padding(rowPadding),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
@@ -202,8 +202,9 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
  * `PickRows` and iOS's own Settings check a choice, with no mark leading an
  * unpicked row, whether one or several may be picked, and a pick pressed
  * again lets go, as the panel's options clear. With no `onChange`, the rows
- * stand as an answered ask left them, as the panel's held controls do: its
- * picks checked at full strength, and no row taking a press.
+ * stand as an answered ask left them, in a thread's card, as the panel's
+ * held controls do: its picks checked at full strength, and no row taking a
+ * press.
  */
 export function ChoiceList(props: ChoiceListProps) {
   const {
@@ -232,45 +233,43 @@ export function ChoiceList(props: ChoiceListProps) {
           {title}
         </Text>
       )}
-      <VStack
-        alignment="leading"
-        spacing={0}
-        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
-      >
-        {choices.map((choice, index) => (
-          <Fragment key={choice.label}>
-            {index === 0 ? null : <CardDivider inset={CARD_WORDS_INSET.BARE} />}
-            <ChoiceRow
-              choice={choice}
-              picked={picked.includes(choice.label)}
-              recommended={recommended.includes(choice.label)}
-              onPress={
-                onChange === undefined
-                  ? undefined
-                  : () => onChange(nextPicked(picked, choice.label, multiple))
-              }
-              repository={repository}
-              onOpenLink={onOpenLink}
-            />
-            {choice.media === undefined || choice.media.length === 0 ? null : (
-              <ChoiceMediaBlock media={choice.media} />
-            )}
-          </Fragment>
-        ))}
-        {none === undefined ? null : (
-          <>
-            <CardDivider inset={CARD_WORDS_INSET.BARE} />
-            <ChoiceRow
-              choice={{ label: none.label }}
-              picked={none.picked}
-              recommended={false}
-              onPress={none.onPress}
-              repository={repository}
-              onOpenLink={onOpenLink}
-            />
-          </>
-        )}
-      </VStack>
+      {/* Note that an answered ask's options stand in a thread's card, and an open ask's on the composer's glass with none (`AskRows`). */}
+      <AskRows marked={false} carded={onChange === undefined}>
+        {[
+          ...choices.map((choice) => (
+            <VStack key={choice.label} alignment="leading" spacing={0}>
+              <ChoiceRow
+                choice={choice}
+                picked={picked.includes(choice.label)}
+                recommended={recommended.includes(choice.label)}
+                onPress={
+                  onChange === undefined
+                    ? undefined
+                    : () => onChange(nextPicked(picked, choice.label, multiple))
+                }
+                repository={repository}
+                onOpenLink={onOpenLink}
+              />
+              {choice.media === undefined || choice.media.length === 0 ? null : (
+                <ChoiceMediaBlock media={choice.media} />
+              )}
+            </VStack>
+          )),
+          ...(none === undefined
+            ? []
+            : [
+                <ChoiceRow
+                  key={none.label}
+                  choice={{ label: none.label }}
+                  picked={none.picked}
+                  recommended={false}
+                  onPress={none.onPress}
+                  repository={repository}
+                  onOpenLink={onOpenLink}
+                />,
+              ]),
+        ]}
+      </AskRows>
     </VStack>
   );
 }
