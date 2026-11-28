@@ -180,6 +180,7 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  PartedSections,
   PRIORITY_MARK_SYMBOL,
   ProblemLine,
   personChoice,
@@ -199,6 +200,7 @@ import {
   repositoryChoice,
   runsOnGlyph,
   Screen,
+  SECTION_LOOK,
   STATUS_MARK_SYMBOL,
   StackBarMenu,
   type StandingMenus,
@@ -1558,7 +1560,7 @@ function GroupSection({
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
-      leadColumn
+      look={SECTION_LOOK.GROUP}
       count={group.rows.length}
       foldable={group.rows.length > 0}
       folded={hold.folded(group)}
@@ -1713,14 +1715,17 @@ function TreeSections({
 }) {
   const { tree } = listing;
 
+  // Note that Managers is handed in only while it is listed, so the first group drawn is the one its groups leave unparted.
   return (
-    <>
-      <ManagersSection
-        workspaceId={listing.workspace?.id}
-        listed={managersListed}
-        managers={managers}
-        hold={hold}
-      />
+    <PartedSections>
+      {managersListed ? (
+        <ManagersSection
+          workspaceId={listing.workspace?.id}
+          listed={managersListed}
+          managers={managers}
+          hold={hold}
+        />
+      ) : null}
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1733,7 +1738,7 @@ function TreeSections({
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
-    </>
+    </PartedSections>
   );
 }
 
@@ -1797,6 +1802,7 @@ function ManagersSection({
       foldable={managers.length > 0}
       folded={hold.managersFolded}
       onFold={hold.setManagersFolded}
+      look={SECTION_LOOK.GROUP}
       footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
       menu={[[sortBy]]}
       add={{

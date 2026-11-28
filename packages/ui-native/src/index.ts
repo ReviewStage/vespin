@@ -352,9 +352,12 @@ export {
   LIST_LOOK,
   type ListLook,
   ListSection,
+  PartedSections,
   type RowChoosing,
   RowForEach,
   RowList,
+  SECTION_LOOK,
+  type SectionLook,
 } from "./row-list.js";
 
 export {
