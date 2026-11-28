@@ -399,7 +399,6 @@ function AgentComposerBar({
   call,
   otherCall,
   ending,
-  tools,
   trailing,
   dictation,
   threads,
@@ -420,9 +419,7 @@ function AgentComposerBar({
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
   /** Continue in new agent and why, where only a new agent goes on past the agent's failed turn; none elsewhere. */
   readonly ending: ReactNode;
-  /** What leads the row under the field after the +: where the agent works. */
-  readonly tools: ReactNode;
-  /** What stands at the end of the row under the field, before Send: the model chip. */
+  /** What stands after the field, before Send: the model chip, on a coding agent's page alone. */
   readonly trailing: ReactNode;
   /** Dictate before Send, and its strip while a dictation stands. */
   readonly dictation: ComposerDictation;
@@ -497,7 +494,6 @@ function AgentComposerBar({
     sendable: composer.sendable,
     onSend: composer.send,
     addMenu,
-    tools,
     trailing,
     dictation,
     onDropPictures: composer.dropPictures,
@@ -541,7 +537,6 @@ function AgentComposerArea({
   call,
   otherCall,
   ending,
-  tools,
   trailing,
   onOpenInbox,
   pullRequest,
@@ -558,15 +553,13 @@ function AgentComposerArea({
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
-  /** The + menu's MCP servers › (`useAgentBox`). */
+  /** The + menu's Machine › and MCP servers › (`useAgentBox`). */
   readonly submenus: readonly BarMenu[];
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
   readonly ending: ReactNode;
-  /** What leads the row under the field after the +: where the agent works. */
-  readonly tools: ReactNode;
-  /** What stands at the end of the row under the field, before Send: the model chip. */
+  /** What stands after the field, before Send: the model chip, on a coding agent's page alone. */
   readonly trailing: ReactNode;
   /** Opens the agent's own Inbox, its threads alone, which the row's threads capsule opens. */
   readonly onOpenInbox: () => void;
@@ -598,7 +591,6 @@ function AgentComposerArea({
         call={call}
         otherCall={otherCall}
         ending={ending}
-        tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
         pullRequest={pullRequest}
@@ -614,9 +606,9 @@ function AgentComposerArea({
 
 /**
  * What the composer's + opens, as the desktop composer's + does: Photos,
- * then the agent's MCP servers › (`useAgentBox`). The model, its effort,
- * Fast and the permission mode stand once, in the model chip's choices at
- * the row's end, as the desktop's model chip holds them.
+ * then where the agent works and its MCP servers › (`useAgentBox`). The
+ * model, its effort, Fast and the permission mode stand once, in the model
+ * chip's choices before Send, as the desktop's model chip holds them.
  */
 function agentAddMenu(composer: AgentComposer, submenus: readonly BarMenu[]): ComposerMenu {
   return {
@@ -1351,8 +1343,8 @@ const AgentConversation = memo(function AgentConversation({
           />
         )
       }
-      tools={box.tools}
-      trailing={box.trailing}
+      // Note that a Manager's chat holds no model chip, as a chat with a person holds none; its model is chosen in its Settings.
+      trailing={chat ? undefined : box.trailing}
     />
   );
 

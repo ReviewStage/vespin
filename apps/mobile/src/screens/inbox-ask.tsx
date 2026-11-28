@@ -305,15 +305,14 @@ const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as co
  * The box under a thread: the agent's own composer, as the panel's thread
  * box is its agent box (`inbox-answer-box.tsx`), writing to the thread's
  * agent and reading off it what the agent's page reads (`useAgentBox`): the
- * Machine chip after the +, the model chip at the row's end, whose choices
- * hold the model, its effort, Fast, and the permission mode, the + menu's
- * MCP servers, and Dictate before Send. Left out, as the panel leaves them
- * out of its thread box: Stop, since an empty Send here settles a notice,
- * and the agent's dock and queue, since a thread is no transcript. Its line
- * asks for a note while an ask's controls stand over it and a reply
+ * + menu's Machine › and MCP servers, and Dictate before Send. Left out:
+ * Stop, since an empty Send here settles a notice, as the panel leaves it out
+ * of its thread box; the agent's dock and queue, since a thread is no
+ * transcript; and the model chip, which stands on the agent's own page
+ * alone, so a reply's pill holds the +, the field, and Dictate or Send. Its
+ * line asks for a note while an ask's controls stand over it and a reply
  * otherwise, Send lit once an answer is picked; docked in a compact window,
- * or at a split view column's foot, where the model's choices pop over the
- * chip since no sheet can stand in a SwiftUI column.
+ * or at a split view column's foot.
  * A notice waiting on the reader's nod, where opening did not settle it,
  * reads Got it on the empty box's Send, as the panel's Send does, which
  * settles it without messaging its agent, with Undo; a word or a picture
@@ -347,7 +346,7 @@ export function ThreadComposer({
   const { nods } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
   // What the composer reads off the thread's agent, read as the agent's page reads it, so the two stand alike.
-  const box = useAgentBox(item.agentId, useFollowedAgent(item.agentId), inColumn === true);
+  const box = useAgentBox(item.agentId, useFollowedAgent(item.agentId));
 
   // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
   const attach = () => {
@@ -422,8 +421,6 @@ export function ThreadComposer({
     sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
-    tools: box.tools,
-    trailing: box.trailing,
     dictation: dictated.dictation,
     addMenu: {
       actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
@@ -440,12 +437,7 @@ export function ThreadComposer({
 
   if (inColumn) return <ComposerFoot {...props} />;
 
-  return (
-    <>
-      <Composer {...props} />
-      {box.sheet}
-    </>
-  );
+  return <Composer {...props} />;
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

@@ -34,6 +34,7 @@ import type { ReactNode } from "react";
 import { useAnnounced, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL } from "./call.js";
 import {
+  COMPOSER_LOOK,
   Composer,
   type ComposerDictation,
   type ComposerMenu,
@@ -421,6 +422,7 @@ export function StartPage(props: StartPageProps) {
     <GlassDock
       bar={
         <Composer
+          look={COMPOSER_LOOK.BOX}
           placeholder={words.placeholder}
           words={words.words}
           onWords={words.onWords}

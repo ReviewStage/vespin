@@ -1,4 +1,4 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and Send, Stop, or Talk on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the glass pill at a conversation's foot: a + on the left, one act or a menu, the field, and Dictate, Send, Stop, or Talk on the right, or a start's field over its capsules, in a React Native bar or a SwiftUI column's foot.
 
 import {
   Button,
@@ -60,7 +60,7 @@ import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
@@ -137,8 +137,17 @@ function RoundSpinner({ label }: { readonly label: string }) {
   );
 }
 
-/** How far the field's words stand from the bar's edge above and below, its own room inside the thin edge. */
+/** How far a box's field stands its words from the bar's edge above, its own room inside the thin edge. */
 const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
+
+/** How far the pill's field stands its words from the row's top and foot: a list row's, so one line stands a press tall, centered on the presses beside it, and a field grown past one line keeps its last line on their center. */
+const PILL_FIELD_INSET = ROW_INSET.VERTICAL;
+
+/** The least width the pill's field keeps beside its presses, three presses' worth, so a placeholder's first words and a typed line stay readable; what is picked, such as the model chip, is cut before the field goes under it. */
+const FIELD_LEAST_WIDTH = PRESS_SIZE * 3;
+
+/** A piece in the pill's row standing a press tall, so its words or capsule sit on the presses' center rather than the row's foot. */
+const ON_PRESS_LINE = frame({ minHeight: PRESS_SIZE });
 
 /** How far the field stands in from the bar's leading edge where no + leads it. */
 const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
@@ -194,7 +203,23 @@ export interface ComposerPills {
   readonly onPicturePress?: ((name: string) => void) | undefined;
 }
 
+/**
+ * How a composer stands: one glass pill at a conversation's foot, as
+ * Messages stands its field, the +, the field, what is picked for the
+ * message such as the model, and its presses in one row; or a start's box,
+ * its field over a row of the + and the capsules saying where the work runs,
+ * as the desktop composer stands.
+ */
+export const COMPOSER_LOOK = {
+  PILL: "pill",
+  BOX: "box",
+} as const;
+
+type ComposerLook = (typeof COMPOSER_LOOK)[keyof typeof COMPOSER_LOOK];
+
 type ComposerProps = {
+  /** How the composer stands; the pill where none is given. */
+  readonly look?: ComposerLook | undefined;
   /** What the field says before anything is typed: "Reply", "Add a note". */
   readonly placeholder: string;
   /** The words in the field, where its holder keeps them, such as a thread's draft that outlives its screen; the field keeps its own where none are given. */
@@ -231,11 +256,11 @@ type ComposerProps = {
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
-  /** The capsules saying where and how the message runs, such as a start's repository or where an agent works, leading the row under the field after the +, as the desktop composer's foot stands them; none on a thread's composer. */
+  /** A box's capsules saying where and how the work runs, such as a start's repository, leading the row under the field after the +, as the desktop composer's foot stands them; a pill holds none. */
   readonly tools?: ReactNode;
-  /** What stands at the end of the row under the field before Send, such as the model chip, as the desktop composer stands its model picker at its foot's end; none on a thread's composer. */
+  /** What is picked for the message, such as an agent's model chip, before the presses: after the pill's field, or at the end of a box's row, as the desktop composer stands its model picker; none on a thread's or a Manager's composer. */
   readonly trailing?: ReactNode;
-  /** Dictate, just before Send at the row's end, and the strip the row becomes while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
+  /** Dictate, just before Send, and the strip that stands in the presses' place while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
   readonly dictation?: ComposerDictation | undefined;
   /** Draws the words with their mentions as pills (`ComposerPills`), as the desktop's box draws its chips, and hands the field's door, the `@` word, and the files to its holder; the same field, with none of those, where none is given. */
   readonly pills?: ComposerPills | undefined;
@@ -368,6 +393,51 @@ function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }
         onPress={dictation.onFinish}
       />
     </HStack>
+  );
+}
+
+/**
+ * The pill's presses while a dictation stands, after its field, in Dictate's
+ * and Send's place: ✕, how long it has run, and ✓; then, once sent, that it
+ * is being heard, the system's spinner where Send stands, until the words land
+ * in the field.
+ */
+function PillDictation({ dictation }: { readonly dictation: ComposerDictation }) {
+  const colors = useColors();
+
+  if (dictation.phase === DICTATION_PHASE.TRANSCRIBING) {
+    return (
+      <>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            ON_PRESS_LINE,
+          ]}
+        >
+          {DICTATION_WORDS.TRANSCRIBING}
+        </Text>
+        <ProgressView modifiers={[...PRESS_FRAME, tint(colors.TEXT_MUTED)]} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <DictationPress
+        glyph={GLYPH.REMOVE}
+        label={DICTATION_WORDS.CANCEL}
+        onPress={dictation.onCancel}
+      />
+      <HStack modifiers={[ON_PRESS_LINE]}>
+        <DictationClock startedAt={dictation.startedAt} />
+      </HStack>
+      <DictationPress
+        glyph={GLYPH.CHECK}
+        label={DICTATION_WORDS.FINISH}
+        onPress={dictation.onFinish}
+      />
+    </>
   );
 }
 
@@ -612,17 +682,18 @@ export function AddPress({
   );
 }
 
-/** The composer's pieces: the +, the field, a call's presses, and Send or Stop, each laid out by its holder. */
+/** The composer's pieces: the +, the field, a call's presses, and Send or Stop, each laid out by its holder, and whether the field holds nothing to send. */
 interface ComposerParts {
+  readonly empty: boolean;
   readonly add: ReactElement | null;
   readonly field: ReactElement;
   readonly call: ReactElement | null;
   readonly send: ReactElement;
 }
 
-/** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
+/** Whether the composer stands its controls in a row under its field, as the desktop composer does: a start's box. */
 function stacked(props: ComposerProps): boolean {
-  return props.tools !== undefined || props.trailing !== undefined;
+  return props.look === COMPOSER_LOOK.BOX;
 }
 
 /** The composer's pieces, the field holding its words and Send sending them. */
@@ -700,8 +771,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 
   // Note that a field standing over its row keeps no room under its last line, which with the bar's double step and the row's press frames stood about thirty points of air between the words and the row; it keeps a press's height, the least target, so a press anywhere on it still takes the keyboard.
   const room = padding({
-    top: FIELD_INSET,
-    bottom: rowed ? 0 : FIELD_INSET,
+    top: rowed ? FIELD_INSET : PILL_FIELD_INSET,
+    bottom: rowed ? 0 : PILL_FIELD_INSET,
     trailing: FIELD_TRAILING,
     ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
       leading: FIELD_LEADING,
@@ -710,6 +781,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 
   // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
   const span = frame({
+    minWidth: rowed ? 0 : FIELD_LEAST_WIDTH,
     minHeight: PRESS_SIZE,
     maxWidth: Number.POSITIVE_INFINITY,
     alignment: "leading",
@@ -738,6 +810,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   );
 
   return {
+    empty,
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
     field,
     call:
@@ -762,14 +835,50 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   };
 }
 
-/** The composer's pieces in one row, the field between the + and Send, as a thread's reply stands. */
-function RowPieces({ parts }: { readonly parts: ComposerParts }) {
+/**
+ * The pill's pieces in one row along the field's last line, as Messages'
+ * field stands: the +, the field, what is picked for the message (an agent's
+ * model chip), Dictate while nothing is typed, and the round button, Send,
+ * or Stop while the agent works; a dictation under way stands its strip in
+ * Dictate's and the round's place. While a call into the agent stands, its
+ * three presses take the model chip's and Dictate's place, since the call
+ * holds the microphone and a phone's pill has no room for all of them.
+ * Note that the model chip is offered its whole width first, but the field
+ * keeps its least (`FIELD_LEAST_WIDTH`), so at a large text size the chip's
+ * name is cut rather than the field, with no width of ours measured.
+ */
+function PillPieces({
+  props,
+  parts,
+}: {
+  readonly props: ComposerProps;
+  readonly parts: ComposerParts;
+}) {
+  const { trailing, dictation } = props;
+  const calling = parts.call !== null;
+
   return (
     <>
       {parts.add}
       {parts.field}
-      {parts.call}
-      {parts.send}
+      {trailing === undefined || calling ? null : (
+        <HStack modifiers={[layoutPriority(1), ON_PRESS_LINE]}>{trailing}</HStack>
+      )}
+      {dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE ? (
+        <PillDictation dictation={dictation} />
+      ) : (
+        <>
+          {dictation === undefined || !parts.empty || calling ? null : (
+            <DictationPress
+              glyph={GLYPH.DICTATE}
+              label={DICTATION_WORDS.DICTATE}
+              onPress={dictation.onStart}
+            />
+          )}
+          {parts.call}
+          {parts.send}
+        </>
+      )}
     </>
   );
 }
@@ -1035,10 +1144,11 @@ function ComposerRow({
 
 /**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
- * bar: the + for what a message carries, the field, which grows with its
- * words, and Send filled with the ink, or Stop while the field is empty and
- * a turn runs, and, where it starts work, the + and the start's capsules in
- * a row under the field. Where its holder keeps the words, the field
+ * bar: one pill a bar's height tall (`BAR_HEIGHT`) holding the + for what a
+ * message carries, the field, which grows with its words, the model chip on
+ * an agent's page, Dictate, and Send filled with the ink, or Stop while the
+ * field is empty and a turn runs; or, in a start's box, the + and the
+ * start's capsules in a row under the field. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
@@ -1051,15 +1161,13 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
-      // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
-      field={!rowed}
       head={props.head}
       heads={props.pills !== undefined}
       foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
-      {rowed ? parts.field : <RowPieces parts={parts} />}
+      {rowed ? parts.field : <PillPieces props={props} parts={parts} />}
     </GlassBar>
   );
 }
@@ -1087,7 +1195,7 @@ export function ComposerFoot(props: ComposerProps) {
     parts.field
   ) : (
     <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
-      <RowPieces parts={parts} />
+      <PillPieces props={props} parts={parts} />
     </HStack>
   );
 
@@ -1095,7 +1203,7 @@ export function ComposerFoot(props: ComposerProps) {
   const foot =
     props.head === undefined && !rowed && props.pills === undefined ? (
       <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
-        <RowPieces parts={parts} />
+        <PillPieces props={props} parts={parts} />
       </HStack>
     ) : (
       <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>

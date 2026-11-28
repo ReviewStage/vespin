@@ -3,12 +3,11 @@
  *
  * The desktop's `@repo/panel` reads it once (`agent-box.tsx`'s
  * `useAgentBox`) so its agent tab's box and an Inbox thread's box stand
- * alike, and the phone does the same: the Machine chip after the +, saying
- * where the agent works and, where it is offered `run_on_mac`, where its
- * commands go; the model chip at the row's end, whose choices hold the
- * model, its effort, Fast, and the permission mode, popping over the chip in
- * a regular window and rising as a sheet in a compact one; and the + menu's
- * MCP servers. Note that a chip a later change gives an agent's composer
+ * alike, and the phone does the same: the model chip before Send, whose
+ * choices hold the model, its effort, Fast, and the permission mode, popping
+ * over the chip in a regular window and rising as a sheet in a compact one;
+ * and the + menu's Machine ›, saying where the agent works and, where it is
+ * offered `run_on_mac`, where its commands go, and its MCP servers. Note that a chip a later change gives an agent's composer
  * belongs here rather than at one screen's call, because each screen reading
  * the agent for itself is how the thread's composer fell behind the agent's.
  */
@@ -21,6 +20,7 @@ import type { FollowedAgent } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import {
   type BarMenu,
+  type BarMenuGroup,
   CHOICE_MARK,
   GLYPH,
   MENU_CHIP_LOOK,
@@ -43,10 +43,7 @@ import { type AgentCommandsPlace, useAgentCommandsPlace } from "./use-agent-tool
 /** The name a flow finds the composer's model chip by. */
 const MODEL_CHIP_ID = "agent-model-chip";
 
-/** The name a flow finds the composer's Machine chip by. */
-const MACHINE_CHIP_ID = "agent-machine-chip";
-
-/** What the Machine chip's menu heads its two groups with, as the panel's place popover ("Where this agent works") heads its Agent runs in row and its machines (`agent-place.tsx`, `agent-machines.tsx`). */
+/** What the + menu's Machine › heads its two groups with, as the panel's place popover ("Where this agent works") heads its Agent runs in row and its machines (`agent-place.tsx`, `agent-machines.tsx`). */
 const PLACE_WORDS = {
   RUNS_IN: "Agent runs in",
   COMMANDS: "It can also run commands on",
@@ -82,34 +79,32 @@ function AgentModelChip({
 }
 
 /**
- * Where the agent works, as the desktop's Machine chip stands after the +:
- * Cloud or its device's name, led by the panel's runs-on mark. Its menu is
- * the panel's place popover as the system's menu: first Agent runs in, the
- * agent's own place checked, since an agent never moves from a phone; then,
- * where the agent is offered `run_on_mac`, It can also run commands on, each
- * machine its terminal commands and computer use may go to, the default
- * checked, a pick making another the default (`useAgentCommandsPlace`).
- * Note that the place leads the menu, since a menu of Macs alone under a
- * chip saying Cloud read as where the agent runs.
+ * Where the agent works, as the desktop's Machine chip says it, as the +
+ * menu's Machine ›, since the composer's pill holds the model chip alone:
+ * first Agent runs in, the agent's own place, Cloud or its device's name led
+ * by the panel's runs-on mark, checked, since an agent never moves from a
+ * phone; then, where the agent is offered `run_on_mac`, It can also run
+ * commands on, each machine its terminal commands and computer use may go
+ * to, the default checked, a pick making another the default
+ * (`useAgentCommandsPlace`). Note that the place leads the menu, since a
+ * menu of Macs alone read as where the agent runs.
  */
-function AgentMachineChip({
-  agent,
-  commands,
-}: {
-  readonly agent: Pick<FollowedAgent, "machine" | "mac">;
-  readonly commands: AgentCommandsPlace | undefined;
-}) {
-  const platform = useDevicePlatform(agent.mac?.deviceId);
+function machineMenu(
+  agent: Pick<FollowedAgent, "machine" | "mac">,
+  platform: ReturnType<typeof useDevicePlatform>,
+  commands: AgentCommandsPlace | undefined,
+): BarMenu {
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
   const symbol = runsOnGlyph({ cloud, platform });
   const place = agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL;
 
-  const runsIn = {
+  const runsIn: BarMenuGroup = {
     title: PLACE_WORDS.RUNS_IN,
     choices: [{ label: place, symbol, on: true, onPress: () => undefined }],
+    items: [],
   };
 
-  const machines =
+  const machines: readonly BarMenuGroup[] =
     commands === undefined || commands.machines.length === 0
       ? []
       : [
@@ -121,18 +116,17 @@ function AgentMachineChip({
               on: machine.id === commands.machine?.id,
               onPress: () => commands.choose(machine.id),
             })),
+            items: [],
           },
         ];
 
-  return (
-    <MenuChip
-      look={MENU_CHIP_LOOK.COMPOSER}
-      label={place}
-      symbol={symbol}
-      menu={{ groups: [runsIn, ...machines] }}
-      testId={MACHINE_CHIP_ID}
-    />
-  );
+  return {
+    label: RUNS_ON_WORDS.LABEL,
+    symbol,
+    choices: [],
+    actions: [],
+    groups: [runsIn, ...machines],
+  };
 }
 
 /**
@@ -206,15 +200,13 @@ function serverMenus(servers: AgentServers, listed: boolean): readonly BarMenu[]
 
 /** What a composer writing to a started agent takes from that agent, handed to `Composer` and its + menu as it is. */
 export interface AgentBox {
-  /** What leads the row under the field after the +: the Machine chip; none before the agent is read. */
-  readonly tools: ReactNode;
-  /** What stands at the row's end before Send: the model chip, its choices popping over it in a regular window. */
+  /** What stands before Send on the agent's own page: the model chip, its choices popping over it in a regular window. */
   readonly trailing: ReactNode;
   /** The model's choices as a sheet, which a compact window raises from the chip; drawn by the screen beside its dock, since a sheet stands outside the bar. None where they pop over the chip. */
   readonly sheet: ReactNode;
   /** Opens the model's choices; none before the agent is read. */
   readonly openModels: (() => void) | undefined;
-  /** The + menu's MCP servers ›, after its Photos. */
+  /** The + menu's Machine › and MCP servers ›, after its Photos. */
   readonly submenus: readonly BarMenu[];
   /** Why the last change of a server, the permission mode, or the model did not take, in that order, for the screen's newest note (`useNewestNote`). */
   readonly notes: readonly (string | undefined)[];
@@ -223,29 +215,23 @@ export interface AgentBox {
 /**
  * What a composer writing to the agent `id` names reads off it, as the
  * desktop's `useAgentBox` reads it for both its boxes. `agent` is the agent
- * as the task list holds it, none where the list doesn't; `popover` says
- * the model's choices pop over the chip whatever the window, as a SwiftUI
- * column's foot needs, where no sheet of React Native's can stand.
+ * as the task list holds it, none where the list doesn't.
  */
-export function useAgentBox(
-  id: string,
-  agent: FollowedAgent | undefined,
-  popover = false,
-): AgentBox {
+export function useAgentBox(id: string, agent: FollowedAgent | undefined): AgentBox {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const servers = useAgentServers(id);
   const commands = useAgentCommandsPlace(id);
+  const platform = useDevicePlatform(agent?.mac?.deviceId);
   const [shown, setShown] = useState(false);
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const openModels = agent === undefined ? undefined : () => setShown(true);
   // Note that a regular window's model choices pop over from the model chip rather than rising as a sheet; with no chip standing they keep the sheet.
-  const pops = (popover || regular) && openModels !== undefined && pick.model !== undefined;
+  const pops = regular && openModels !== undefined && pick.model !== undefined;
   const chip = <AgentModelChip pick={pick} onOpen={openModels} />;
   const choices = agentModelChoices(pick, mode);
 
   return {
-    tools: agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />,
     trailing: pops ? (
       <ModelChoicePopover
         chip={chip}
@@ -260,7 +246,11 @@ export function useAgentBox(
       <ModelChoiceSheet presented={shown} onDismiss={() => setShown(false)} {...choices} />
     ),
     openModels,
-    submenus: serverMenus(servers, agent !== undefined),
+    // Note that Machine › leads the servers once the agent is read, as the desktop's Machine chip leads its box's row.
+    submenus:
+      agent === undefined
+        ? serverMenus(servers, false)
+        : [machineMenu(agent, platform, commands), ...serverMenus(servers, true)],
     notes: [servers.note, mode?.note, pick.note],
   };
 }

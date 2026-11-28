@@ -70,18 +70,23 @@ builds a control of its own.
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
-  Native bar can stand, such as a split view's detail. Its round button is
-  Send, or, with nothing typed, Stop while an agent works; its + is one act
-  or a native menu (`ComposerMenu`: an agent's Photos and MCP servers, as
-  the desktop's + holds them); where it holds capsules it stands as the
-  desktop composer does, its field on top, one line until its words wrap,
-  and under it one row of the + and the capsules saying where the
-  message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once, a
-  popover from the chip in a regular window, `ModelChoicePopover`),
-  Dictate, and Send, a dictation under way standing its strip in the row's
-  place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
-  and its head, inside the same glass, holds an agent's
+  Native bar can stand, such as a split view's detail. A conversation's
+  stands as one glass pill (`COMPOSER_LOOK.PILL`, the developer's round 4,
+  Nov 27, 2026), `BAR_HEIGHT` tall and `BAR_MARGIN` in from the edges, as
+  Messages stands its field: the +, the field, which grows as its words
+  wrap with the presses on its last line, the model chip on an agent's own
+  page alone (`trailing`, whose sheet holds the model, effort, Fast and the
+  permission mode, each once, a popover from the chip in a regular window,
+  `ModelChoicePopover`), Dictate while nothing is typed, and its round
+  button, Send, or, with nothing typed, Stop while an agent works, a
+  dictation under way standing its strip in Dictate's and the round's place
+  (✕, how long it has run, ✓, then Transcribing). Its + is one act or a
+  native menu (`ComposerMenu`: an agent's Photos, Machine › and MCP servers,
+  as the desktop's + and Machine chip hold them). A page that starts work
+  stands as the desktop composer does (`COMPOSER_LOOK.BOX`), its field on
+  top, one line until its words wrap, and under it one row of the + and the
+  capsules saying where the work runs, then the model chip, Dictate, and
+  Send. In either look, its head, inside the same glass, holds an agent's
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
