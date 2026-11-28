@@ -7,6 +7,7 @@ import {
   inboxOfLiveRows,
 } from "@repo/features/inbox-live";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { liveRowsInSlices } from "@repo/features/live-read";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
@@ -146,6 +147,9 @@ export type AccountItemsPart = keyof typeof INBOX_ITEMS_READ.parts;
 /** Every part of the account's items read, each counted where its reading drops any rows. */
 // SAFETY: the keys of the read's own parts are its parts, every one of them.
 const ACCOUNT_ITEMS_PARTS = Object.keys(INBOX_ITEMS_READ.parts) as readonly AccountItemsPart[];
+
+/** The items read's rows decoded a slice at a time, since a busy account's whole Inbox runs to tens of thousands of rows (`liveRowsInSlices`). */
+const INBOX_ITEMS_ROWS = liveRowsInSlices(INBOX_ITEMS_READ.parts);
 
 type HeldAfterResult = {
   readonly held: Held;
@@ -574,7 +578,7 @@ export function followAccountItems(
           },
         },
         first,
-        INBOX_ITEMS_READ.rows,
+        INBOX_ITEMS_ROWS,
         (decoded, standing, read) => {
           for (const [part, count] of droppedParts(ACCOUNT_ITEMS_PARTS, read, decoded)) {
             dependencies.dropped?.(part, count);

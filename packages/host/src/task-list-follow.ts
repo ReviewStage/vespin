@@ -1,3 +1,4 @@
+import { liveRowsInSlices } from "@repo/features/live-read";
 import {
   TASK_LIST_READ,
   type TaskListLiveAnswer,
@@ -42,6 +43,9 @@ import {
 
 /** The parts of the list's read whose rows are taken, and counted where its reading drops any. */
 const TASK_LIST_PARTS = ["tasks", "agents"] as const;
+
+/** The list's rows decoded a slice at a time, since a busy account's whole list runs to thousands of agents (`liveRowsInSlices`). */
+const TASK_LIST_ROWS = liveRowsInSlices(TASK_LIST_READ.parts);
 
 /** What an answer says beside its rows (`TASK_LIST_READ.beside`). */
 type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
@@ -96,7 +100,7 @@ function followRows(
       ...(onTxWait === undefined ? undefined : { onTxWait }),
     },
     first,
-    TASK_LIST_READ.rows,
+    TASK_LIST_ROWS,
     (rows, standing, read) => {
       for (const [part, count] of droppedParts(TASK_LIST_PARTS, read, rows)) dropped?.(part, count);
 

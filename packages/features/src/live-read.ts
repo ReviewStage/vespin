@@ -38,7 +38,7 @@
 
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
-import { Option, Schema, SchemaTransformation } from "effect";
+import { Effect, Option, Schema, SchemaTransformation } from "effect";
 import { ANY_PROCEDURE_REFUSALS, declaredProcedure, refuses } from "./contract/base.js";
 import type { HOSTED_ERRORS } from "./contract/errors.js";
 import { LIVE_POLL, sealedLiveQuerySchema } from "./live-wire.js";
@@ -342,6 +342,61 @@ function rowsReading<Row extends LiveRowSchema>(row: Row) {
 }
 
 type RowsReading<Row extends LiveRowSchema> = ReturnType<typeof rowsReading<Row>>;
+
+/**
+ * How many rows a sliced decode reads before it yields (`liveRowsInSlices`):
+ * some 5 ms of Schema's work on a Mac.
+ */
+const ROWS_A_SLICE = 1_000;
+
+/** A read's rows decoded a slice at a time, as `liveRowsInSlices` makes them. */
+export interface SlicedLiveRows<Rows> {
+  readonly decodeInSlices: (
+    carried: Readonly<Record<string, readonly unknown[]>>,
+  ) => Effect.Effect<Rows>;
+}
+
+/**
+ * A read's rows decoded as its `rows` decodes them, each row under its
+ * part's `row` and one that does not read left out, but `ROWS_A_SLICE` rows
+ * at a time, yielding between slices. Note that it is for a read whose whole
+ * answer runs to thousands of rows, an account's Inbox or task list, because
+ * the Mac's host decodes on Electron's main process, where one decode of such
+ * an answer held main's loop for hundreds of milliseconds. A part an answer
+ * leaves out decodes as no rows.
+ */
+export function liveRowsInSlices<const Parts extends LiveParts>(
+  parts: Parts,
+): SlicedLiveRows<Schema.Struct<RowsFields<Parts>>["Type"]> {
+  const decoders = Object.entries<AnyLiveRows>(parts).map(
+    ([part, rows]) => [part, Schema.decodeUnknownOption(rows.row)] as const,
+  );
+
+  return {
+    decodeInSlices: (carried) =>
+      Effect.gen(function* () {
+        const decoded: Record<string, unknown[]> = {};
+        let read = 0;
+
+        for (const [part, decodeRow] of decoders) {
+          const kept: unknown[] = [];
+
+          for (const row of carried[part] ?? []) {
+            if (read > 0 && read % ROWS_A_SLICE === 0) yield* Effect.yieldNow;
+            read += 1;
+            const one = decodeRow(row);
+
+            if (Option.isSome(one)) kept.push(one.value);
+          }
+
+          decoded[part] = kept;
+        }
+
+        // SAFETY: every part is decoded above under its own row, as `rowsReading` decodes it.
+        return decoded as Schema.Struct<RowsFields<Parts>>["Type"];
+      }),
+  };
+}
 
 /**
  * Declares a live read, deriving its query, its answer, and its rows from

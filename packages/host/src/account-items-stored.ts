@@ -32,6 +32,7 @@ import {
   inboxOfLiveRows,
 } from "@repo/features/inbox-live";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { liveRowsInSlices } from "@repo/features/live-read";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import { failureKind, reportUnexpected } from "@repo/runtime/effect";
@@ -69,6 +70,9 @@ const KEPT_HOLDERS = 250;
 
 /** No item told on the document, whose rows a screen reads from the kind's collection instead. */
 const NO_ITEMS: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
+
+/** The items read's rows decoded a slice at a time, since a busy account's whole Inbox runs to tens of thousands of rows (`liveRowsInSlices`). */
+const INBOX_ITEMS_ROWS = liveRowsInSlices(INBOX_ITEMS_READ.parts);
 
 /**
  * What the database keeps beside the items, as the read's cursor: the sync
@@ -402,7 +406,7 @@ export function followStoredItems(
     yield* followTakingRows(
       { poll: (_after, _cursor, sync) => follow.seal(sync), onTxWait: follow.onTxWait },
       first,
-      INBOX_ITEMS_READ.rows,
+      INBOX_ITEMS_ROWS,
       (rows, standing, read) => {
         follow.decoded(rows, read);
 

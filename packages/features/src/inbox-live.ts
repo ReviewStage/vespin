@@ -374,7 +374,11 @@ function groupedBy<Row>(
     const key = keyOf(row);
 
     if (key === null) continue;
-    groups.set(key, [...(groups.get(key) ?? []), row]);
+    const group = groups.get(key);
+
+    // Note that a group is pushed onto rather than copied, because a copy for each row made a long thread's grouping quadratic.
+    if (group === undefined) groups.set(key, [row]);
+    else group.push(row);
   }
 
   return groups;
