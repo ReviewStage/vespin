@@ -70,6 +70,8 @@ function harness() {
     },
     target: TARGET,
     viewport: () => VIEWPORT,
+    onInspected: () => undefined,
+    onPicked: () => undefined,
     onFrame: (frame) => frames.push(frame),
   });
 

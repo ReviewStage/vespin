@@ -77,8 +77,9 @@ import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
+import { useInboxSearch } from "../tasks/use-inbox-search.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
-import type { InboxChoice } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
 import {
@@ -333,14 +334,16 @@ class InboxWorld {
   olderAsked: string[] = [];
   /** Delivers the older items the host holds to the window, as main delivers a move of them; nothing before a mount. */
   deliverOlder: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
-  /** The items the service's search finds by each query, by the task each stands on; a query none names finds nothing. */
-  searchFinds = new Map<string, Readonly<Record<string, readonly InboxItem[]>>>();
+  /** The items the service's search finds by each query, by the task each stands on and those on no task by their agent; a query none names finds nothing. */
+  searchFinds = new Map<string, AppInboxItems>();
   /** Each place's search the window asked the host for, in order. */
   searchAsked: AgentInboxSearchParams[] = [];
   /** What each place's search found, as the host holds it. */
   foundAt = new Map<InboxSearchPlace, AppInboxFound>();
   /** Delivers what each place's search found to the window, as main delivers a move of it; nothing before a mount. */
   deliverFound: (found: AppInboxFoundPlaces) => void = () => undefined;
+  /** Opens ⌘K's search of the Inbox on `query`, or closes it with none, as the palette asks and stops asking (`use-inbox-search.ts`); nothing before a mount. */
+  searchEverything: (query: string | undefined) => void = () => undefined;
   /** Whether a read of a plan's agents is held open, never answering. */
   agentListHeld = false;
   /** How a read of a task from the start answers, where a test holds it in its own hands. */
@@ -404,7 +407,7 @@ function searchRead(params: AgentInboxSearchParams): FakeActAnswer {
 
   if (params.query === undefined) world.foundAt.delete(params.place);
   else {
-    const items = { [INBOX_SCOPE_KIND.TASK]: world.searchFinds.get(params.query) ?? {} };
+    const items = world.searchFinds.get(params.query) ?? { [INBOX_SCOPE_KIND.TASK]: {} };
     world.foundAt.set(params.place, { query: params.query, items });
   }
 
@@ -598,6 +601,15 @@ function feedNow(): AppHostRead<AppInboxItems> {
   };
 }
 
+/** ⌘K's search of the Inbox, standing drawn while shut as the palette does, opened on words and closed by `world.searchEverything`. */
+function EverythingSearch({ tasks }: { tasks: TasksControl }): null {
+  const [query, setQuery] = useState<string | undefined>(undefined);
+  world.searchEverything = setQuery;
+  useInboxSearch(tasks, query !== undefined, query ?? "");
+
+  return null;
+}
+
 /** The account's feed delivered to the window as it now stands, as main delivers a move of it. */
 function deliverFeed(): void {
   world.deliverFeed(feedNow());
@@ -645,6 +657,7 @@ beforeEach(() => {
   world.searchAsked = [];
   world.foundAt = new Map();
   world.deliverFound = () => undefined;
+  world.searchEverything = () => undefined;
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       if (request.kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) {
@@ -969,9 +982,21 @@ export function mount({
             createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE }),
           );
 
+    const searched = createElement(
+      Fragment,
+      null,
+      createElement(EverythingSearch, { tasks: control }),
+      inbox,
+    );
+
     return withSidebar
-      ? createElement(Fragment, null, createElement(DesktopSidebar, sidebarProps(control)), inbox)
-      : inbox;
+      ? createElement(
+          Fragment,
+          null,
+          createElement(DesktopSidebar, sidebarProps(control)),
+          searched,
+        )
+      : searched;
   }
 
   function Paneled({ at }: { at: ShellRoom }) {

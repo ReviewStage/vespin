@@ -5,12 +5,15 @@ import {
   GROUP_ACTIONS,
   GROUP_HEADING,
   GROUP_LOOK,
+  GROUP_ROW_LEAD,
   GROUP_SURFACE,
   GroupAction,
   GroupHeader,
   GroupHeaderEditor,
   type GroupHeaderEditorHandle,
   IconButton,
+  List,
+  ListRow,
   MoreButton,
   NAV_COUNT_SHOWN,
   PinIcon,
@@ -269,6 +272,34 @@ function Sections(): React.JSX.Element {
   );
 }
 
+/** A page's list of rows under bands, as Linear heads a list's groups: each band on the well's tint, its glyph in the rows' leading column and its label where their titles stand. */
+function Bands(): React.JSX.Element {
+  return (
+    <div className="catalog-column">
+      {[
+        { label: "acme", open: true },
+        { label: "Finished", open: false },
+      ].map((group) => (
+        <GroupHeader
+          key={group.label}
+          label={group.label}
+          glyph={<FolderIcon />}
+          look={GROUP_LOOK.BAND}
+          rowLead={GROUP_ROW_LEAD.GLYPH}
+          count={{ value: TASKS.length, noun: "tasks" }}
+          fold={{ defaultOpen: group.open }}
+        >
+          <List label={group.label}>
+            {TASKS.map((task) => (
+              <ListRow key={task} leading={<GLYPH.TASK />} title={task} onPress={ignore} />
+            ))}
+          </List>
+        </GroupHeader>
+      ))}
+    </div>
+  );
+}
+
 function GroupHeaders(): React.JSX.Element {
   return (
     <>
@@ -307,6 +338,9 @@ function GroupHeaders(): React.JSX.Element {
         title="A page's sections, the chevron standing open or folded"
       >
         <Sections />
+      </CatalogSection>
+      <CatalogSection id="group-header-bands" title="Bands over a page's list of rows">
+        <Bands />
       </CatalogSection>
       <CatalogSection id="group-header-editing" title="A group named in place">
         <Renamed />

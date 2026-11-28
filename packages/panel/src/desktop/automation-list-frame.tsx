@@ -1,5 +1,8 @@
 import {
+  GROUP_HEAD,
   GROUP_HEADING,
+  GROUP_LOOK,
+  GROUP_ROW_LEAD,
   GroupHeader,
   LIST_HEADS_ACTS,
   LIST_HEADS_LEAD,
@@ -95,10 +98,13 @@ export interface AutomationGroupFold {
 
 /**
  * One group of automations in a list, an owner's or Finished, under its
- * head where `headed`: the head the sidebar's groups wear (`sidebarHead`),
- * led by the group's picture or glyph (`glyph`), folding its rows on a
- * press as the list keeps it (`fold`), and counting them while folded, and
- * at rest on a phone, as the sidebar counts its groups.
+ * head where `headed`: a band on the well's tint, sticking to the top of the
+ * page while its rows scroll beneath it, as Linear heads a list's groups
+ * (`GROUP_LOOK.BAND`), led by the group's picture or glyph (`glyph`) in the
+ * rows' leading column, a phone's rows' glyph or a wide row's avatar, so its
+ * label stands where their titles do; folding its rows on a press as the
+ * list keeps it (`fold`), and counting them while folded, and at rest on a
+ * phone, as the sidebar counts its groups (`sidebarHead`).
  * Note that the list is a plain one, each row lit on its own as the Tasks
  * list's and the Inbox's are, so a row's hover, focus, and open menu draw
  * as theirs do. A list with no head, the placeholder's, is still a region
@@ -147,6 +153,9 @@ export function AutomationGroupList({
           phone,
         )}
         heading={GROUP_HEADING.H2}
+        look={GROUP_LOOK.BAND}
+        head={GROUP_HEAD.STICKS}
+        rowLead={phone ? GROUP_ROW_LEAD.GLYPH : GROUP_ROW_LEAD.AVATAR}
         glyph={glyph}
         label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
       >

@@ -53,6 +53,11 @@ const longTaskWatch = new PerformanceObserver((list) => {
 
 longTaskWatch.observe({ type: "longtask", buffered: true });
 
+/** When this launch's load window ends, on the performance clock, so a return from the background can tell whether its trip away began inside it. */
+export function launchLoadWindowEnd(): number {
+  return WINDOW_END;
+}
+
 /**
  * Counts this launch's load once its window is over, or as the app goes to
  * the background before then, which marks it cut short: the long tasks
