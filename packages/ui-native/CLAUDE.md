@@ -154,7 +154,9 @@ builds a control of its own.
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
   land); a call the agent holds for an answer says so under its line with
-  Deny, Always allow and Allow; its rows
+  Deny, Always allow and Allow, Deny asking why first in the system's alert
+  with a field, which goes to the agent with the denial or is left empty, as
+  the panel's Deny opens its note; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its

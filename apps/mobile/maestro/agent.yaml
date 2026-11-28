@@ -219,6 +219,17 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-jump
+# Deny asks why first, as the panel's Deny opens its note: the system's
+# alert with a field, Deny sending the words with the denial or none.
+# Cancel leaves the call waiting.
+- tapOn: "Deny"
+- extendedWaitUntil:
+    visible: "Why you denied it"
+    timeout: 5000
+- assertVisible: "Tell the agent why \\(optional\\)"
+- takeScreenshot: agent-deny-why
+- tapOn: "Cancel"
+- assertVisible: "Waiting for approval"
 # Allowed, the held call says so in a word, and the working line stops waiting.
 - tapOn: "Allow"
 - assertVisible: "Allowed"

@@ -36,6 +36,12 @@ export const APPROVAL_PRESS_WORDS = {
   DENYING: "Denying",
 } as const;
 
+/** What Deny asks before a held call is denied: why, which goes to the agent with the denial, and may be left empty. */
+export const DENY_WHY_WORDS = {
+  LABEL: "Why you denied it",
+  PLACEHOLDER: "Tell the agent why (optional)",
+} as const;
+
 /** What stands under the presses where Always allow keeps the command's first words for every agent of the member's: these words either side of the command (`pnpm test *`). */
 export const ALWAYS_ALLOW_COMMAND_WORDS = {
   BEFORE: `${APPROVAL_PRESS_WORDS.ALLOW_FOR_AGENT} won't ask again for `,
