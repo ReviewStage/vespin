@@ -1,4 +1,4 @@
-// mention-offer.ts -- the people, agents, tasks, the description's sections, pages, the repository's files and folders, threads, automations, pull requests, dates and machines an `@` typed in a phone's composer or description offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
+// mention-offer.ts -- what an `@` offers in every client's mention list: the people, agents, tasks, the description's sections, pages, the repository's files and folders, threads, automations, pull requests, dates and machines, grouped, scored, capped and narrowed by kind (`@people:`), as the panel's picker and the phone's list both draw them.
 
 import { fileName } from "./code-ref-words.js";
 import {
@@ -9,20 +9,23 @@ import {
   suggestedDates,
 } from "./date-mention.js";
 import { descriptionSections } from "./description-sections.js";
+import { INTEGRATION_PROVIDER } from "./integration-wire.js";
 import { LINK_DESTINATION, linkOf } from "./link-grammar.js";
+import { MENTION_BROWSE, MENTION_FROM, narrowingQuery, typedMentionKind } from "./mention-kind.js";
 import {
-  MENTION_BROWSE,
-  MENTION_FROM,
-  type MentionFrom,
-  narrowingQuery,
-  typedMentionKind,
-} from "./mention-kind.js";
-import { encodeMention, MENTION_KIND, type MentionPlace, sectionAnchors } from "./mention-link.js";
-import { searchHit } from "./search-score.js";
+  encodeMention,
+  MENTION_KIND,
+  type Mention,
+  type MentionPlace,
+  sectionAnchors,
+} from "./mention-link.js";
+import { LOOSE_FROM, type SearchSubject, searchHit } from "./search-score.js";
+import { searchTokens } from "./search-tokens.js";
 import { sinceText } from "./time-format.js";
 import { noMatchWords, showMoreWords, TERM } from "./words.js";
+import { namesTaskKey } from "./workspace-key.js";
 
-/** The groups an `@` offers, in the panel's words (`MENTION_GROUP`). */
+/** The groups an `@` offers, in the panel's words. */
 export const MENTION_OFFER_GROUP = {
   SUGGESTED: "Suggested",
   DATES: "Dates",
@@ -58,13 +61,13 @@ export type MentionOfferKind = (typeof MENTION_OFFER_KIND)[keyof typeof MENTION_
 
 export type MentionOfferGroup = (typeof MENTION_OFFER_GROUP)[keyof typeof MENTION_OFFER_GROUP];
 
-/** The most rows a group stands, as the panel's picker stands four (`PER_GROUP`). */
+/** The most rows a group stands. */
 const PER_GROUP = 4;
 
-/** The most rows a list narrowed to one kind stands, as the panel's (`PER_KIND`). */
+/** The most rows a list narrowed to one kind stands. */
 const PER_KIND = 50;
 
-/** The kinds an `@` on the phone narrows to, by their panel's words, in the panel's order (`kindsOf`). */
+/** The kinds an `@` narrows to by their words, in the order Browse lists them. */
 const OFFERED_FROM = [
   MENTION_FROM.AGENTS,
   MENTION_FROM.TASKS,
@@ -77,39 +80,41 @@ const OFFERED_FROM = [
   MENTION_FROM.PULL_REQUESTS,
   MENTION_FROM.DATES,
   MENTION_FROM.MACHINES,
-] as const satisfies readonly MentionFrom[];
+] as const;
 
-/** A kind an `@` on the phone may be narrowed to, by its word. */
+/** A kind an `@` may be narrowed to by its word. */
 export type MentionOfferFrom = (typeof OFFERED_FROM)[number];
 
 /** Each kind's group, whose heading names it in the Browse list and in the crumb a narrowed list stands under. */
 const FROM_GROUP = {
-  [MENTION_FROM.AGENTS]: "Agents",
-  [MENTION_FROM.TASKS]: "Tasks",
-  [MENTION_FROM.PEOPLE]: "People",
-  [MENTION_FROM.DESCRIPTION]: "Description",
-  [MENTION_FROM.PAGES]: "Pages",
-  [MENTION_FROM.FILES]: "Files and folders",
-  [MENTION_FROM.THREADS]: "Threads",
-  [MENTION_FROM.AUTOMATIONS]: "Automations",
-  [MENTION_FROM.PULL_REQUESTS]: "Pull requests",
-  [MENTION_FROM.DATES]: "Dates",
-  [MENTION_FROM.MACHINES]: "Machines",
+  [MENTION_FROM.AGENTS]: MENTION_OFFER_GROUP.AGENTS,
+  [MENTION_FROM.TASKS]: MENTION_OFFER_GROUP.TASKS,
+  [MENTION_FROM.PEOPLE]: MENTION_OFFER_GROUP.PEOPLE,
+  [MENTION_FROM.DESCRIPTION]: MENTION_OFFER_GROUP.DESCRIPTION,
+  [MENTION_FROM.PAGES]: MENTION_OFFER_GROUP.PAGES,
+  [MENTION_FROM.FILES]: MENTION_OFFER_GROUP.FILES,
+  [MENTION_FROM.THREADS]: MENTION_OFFER_GROUP.THREADS,
+  [MENTION_FROM.AUTOMATIONS]: MENTION_OFFER_GROUP.AUTOMATIONS,
+  [MENTION_FROM.PULL_REQUESTS]: MENTION_OFFER_GROUP.PULL_REQUESTS,
+  [MENTION_FROM.DATES]: MENTION_OFFER_GROUP.DATES,
+  [MENTION_FROM.MACHINES]: MENTION_OFFER_GROUP.MACHINES,
 } as const satisfies Record<MentionOfferFrom, string>;
 
-/** Each kind's sources, which its narrowed list searches. */
-const FROM_SOURCE = {
+/** The kinds whose rows the place hands over as a list, each by its source. */
+const FROM_LIST = {
   [MENTION_FROM.AGENTS]: "agents",
   [MENTION_FROM.TASKS]: "tasks",
   [MENTION_FROM.PEOPLE]: "people",
   [MENTION_FROM.DESCRIPTION]: "description",
   [MENTION_FROM.PAGES]: "pages",
-  [MENTION_FROM.FILES]: "files",
   [MENTION_FROM.THREADS]: "threads",
   [MENTION_FROM.AUTOMATIONS]: "automations",
   [MENTION_FROM.PULL_REQUESTS]: "pullRequests",
   [MENTION_FROM.MACHINES]: "machines",
-} as const satisfies Record<Exclude<MentionOfferFrom, typeof MENTION_FROM.DATES>, string>;
+} as const;
+
+/** A kind whose rows the place hands over as a list. */
+type ListedFrom = keyof typeof FROM_LIST;
 
 /** What a description's rows say after their names, in the panel's words. */
 const DESCRIPTION_WORDS = {
@@ -136,21 +141,30 @@ export interface MentionCandidate {
   readonly detail?: string | undefined;
   /** A task's key, which typed whole finds it first. */
   readonly key?: string | undefined;
-  /** Words it is found by and never draws, such as a person's address. */
+  /** The other words it is found by, each its own line of what the row is known by: a person's address, a file's path, a task's key. */
   readonly terms?: readonly string[] | undefined;
   /** The link a pick writes, as the panel's mention writes it (`encodeMention`). */
   readonly target: string;
+  /** The mention the target names, which its chip's mark and card are drawn from; none for a thread or an automation, which no mention names. */
+  readonly mention?: Mention | undefined;
   /** The query a press writes to walk into it, as a folder's row opens its paths, rather than naming it; none for a row a press names. */
   readonly walk?: string | undefined;
-  /** The name a pick writes where it is not the row's, as a date's row says "Tomorrow" and writes the day it names whole, as the panel's does. */
+  /** The name a pick writes where it is not the row's, as a date's row says "Tomorrow" and writes the day it names whole. */
   readonly written?: string | undefined;
+}
+
+/** A kind the place offers, as its row under Browse and its narrowed list's crumb name it, and the word that, typed before a colon after the `@`, narrows the list to it. */
+interface MentionOfferedKind {
+  readonly from: MentionOfferFrom;
+  readonly name: string;
+  readonly keyword: string;
 }
 
 /**
  * A kind's row, which narrows the list to it by writing its word before a
  * colon in the `@` word (`@people:`): its word, its name, and the query a
- * press writes; `more` where it ends a group past its few, said "Show 3
- * more", which keeps the words already typed.
+ * press writes; `more` where it ends a group past its few, said
+ * "Show 3 more", which keeps the words already typed.
  */
 export interface MentionKindChoice {
   readonly from: MentionOfferFrom;
@@ -160,12 +174,14 @@ export interface MentionKindChoice {
 }
 
 /** A row an `@` offers: a thing a pick names, or a kind a press narrows the list to. */
-export type MentionOfferRow = MentionCandidate | MentionKindChoice;
+export type MentionOfferRow<Row extends MentionCandidate = MentionCandidate> =
+  | Row
+  | MentionKindChoice;
 
 /** A group of rows an `@` offers, under its heading. */
-export interface MentionGroup {
+export interface MentionGroup<Row extends MentionCandidate = MentionCandidate> {
   readonly title: string;
-  readonly rows: readonly MentionOfferRow[];
+  readonly rows: readonly MentionOfferRow<Row>[];
 }
 
 /** What an `@` word offers: its groups, and the kind it is narrowed to, which its crumb names; none for every kind. */
@@ -181,25 +197,37 @@ export interface MentionOffered {
   readonly groups: readonly MentionGroup[];
 }
 
-/** What an `@` offers from: what the place suggests (its own agents, threads, pull requests and pages, as the panel's Suggested holds them), then every agent, task, person, section of the description, page, thread and pull request the place reads, and the dates the words name. */
-export interface MentionSources {
-  readonly suggested: readonly MentionCandidate[];
-  readonly agents: readonly MentionCandidate[];
-  readonly tasks: readonly MentionCandidate[];
-  readonly people: readonly MentionCandidate[];
+/** The repository's paths as an `@` searches them (`mentionPaths`): every path's row, and the rows some words find, best first. */
+export interface MentionPaths<Row extends MentionCandidate = MentionCandidate> {
+  readonly rows: readonly Row[];
+  /** The rows the words find, best first, ties in the listing's order; the words are never blank. */
+  readonly found: (term: string) => readonly Row[];
+}
+
+/**
+ * What an `@` offers from: what the place suggests (its own agents, threads,
+ * pull requests and pages), then every agent, task, person, section of the
+ * description, page, path, thread, automation, pull request and machine the
+ * place reads, and the dates the words name.
+ */
+export interface MentionSources<Row extends MentionCandidate = MentionCandidate> {
+  readonly suggested: readonly Row[];
+  readonly agents: readonly Row[];
+  readonly tasks: readonly Row[];
+  readonly people: readonly Row[];
   /** The description's sections and the description whole, where the place stands in a task; none elsewhere. */
-  readonly description: readonly MentionCandidate[];
-  readonly pages: readonly MentionCandidate[];
+  readonly description: readonly Row[];
+  readonly pages: readonly Row[];
   /** The task's repository's files and folders at its default branch; none where it names no repository. */
-  readonly files: readonly MentionCandidate[];
-  readonly threads: readonly MentionCandidate[];
-  readonly automations: readonly MentionCandidate[];
-  readonly pullRequests: readonly MentionCandidate[];
-  /** The workspace's machines, the reader's own first, then the task's followers', as the panel's list stands them. */
-  readonly machines: readonly MentionCandidate[];
+  readonly files: MentionPaths<Row>;
+  readonly threads: readonly Row[];
+  readonly automations: readonly Row[];
+  readonly pullRequests: readonly Row[];
+  /** The workspace's machines, the reader's own first, then the task's followers'. */
+  readonly machines: readonly Row[];
   /** The dates the words name; with none typed, the few a list narrowed to dates suggests. */
-  readonly dates: (words: string) => readonly MentionCandidate[];
-  /** The kinds whose rows are still being read, which Browse lists as if they held some, so a kind's row never pops in under the reader's eye once its rows land. */
+  readonly dates: (words: string) => readonly Row[];
+  /** The kinds Browse lists though they hold no rows now, such as those still being read, so a kind's row never pops in under the reader's eye once its rows land. */
   readonly pending?: ReadonlySet<MentionOfferFrom> | undefined;
 }
 
@@ -209,45 +237,93 @@ export interface PickedMention {
   readonly target: string;
 }
 
-/** The candidates the query finds, best first. */
-function matching(rows: readonly MentionCandidate[], query: string): readonly MentionCandidate[] {
+/** A folder an `@` walked into: its path, and the words as they stood then, past which the words typed search it. */
+interface MentionWalked {
+  readonly path: string;
+  readonly entry: string;
+}
+
+/** Where an `@` list stands for its word: every kind, or one kind, its folders walked, and the words that search it. */
+interface MentionScope {
+  readonly kind: MentionOfferedKind | undefined;
+  /** The words as they stood when the kind was narrowed to, or the `kind:` typed. */
+  readonly entry: string;
+  /** Whether the word spells the kind (`@files:`), typed or written as its row opened, which ⌫ widens by deleting the colon rather than by a key the list takes. */
+  readonly typed: boolean;
+  readonly walked: readonly MentionWalked[];
+  readonly term: string;
+}
+
+/** Whether a row is a path's, whose letters typed in order find it. */
+function isPath(row: MentionCandidate): boolean {
+  return row.kind === MENTION_OFFER_KIND.FILE || row.kind === MENTION_OFFER_KIND.FOLDER;
+}
+
+/** Whether a row names a kind a press narrows to, rather than a thing a pick names. */
+export function isKindChoice<Row extends MentionCandidate>(
+  row: MentionOfferRow<Row>,
+): row is MentionKindChoice {
+  return "query" in row && "more" in row;
+}
+
+/** What a row is searched by: its name, the other words it is found by, its task's key, and, for a path, its letters in order. */
+function mentionSubject(row: MentionOfferRow): SearchSubject {
+  if (isKindChoice(row)) return { label: row.name, lines: [], key: undefined, loose: false };
+
+  return { label: row.name, lines: row.terms ?? [], key: row.key, loose: isPath(row) };
+}
+
+/** How well a row answers the words, by the tier it meets; 0 where it meets none. */
+function scoreOf(row: MentionOfferRow, query: string): number {
+  return searchHit(mentionSubject(row), query)?.score ?? 0;
+}
+
+/** Every row the words find, best first, ties in the order given; every row for no words. */
+function matching<Row extends MentionOfferRow>(
+  rows: readonly Row[],
+  query: string,
+): readonly Row[] {
+  if (query.trim() === "") return rows;
+
   return rows
     .flatMap((row) => {
-      const hit = searchHit(
-        {
-          label: row.name,
-          key: row.key,
-          keywords: [...(row.terms ?? []), ...(row.detail === undefined ? [] : [row.detail])],
-        },
-        query,
-      );
+      const score = scoreOf(row, query);
 
-      return hit === undefined ? [] : [{ row, score: hit.score }];
+      return score > 0 ? [{ row, score }] : [];
     })
     .sort((one, other) => other.score - one.score)
     .map(({ row }) => row);
 }
 
-/** A date's row: its chip's words, its whole date after them, and its `mention://date` link. */
+/** The rows the words find, best first, as many as a narrowed list stands. */
+function best<Row extends MentionOfferRow>(rows: readonly Row[], query: string): readonly Row[] {
+  return matching(rows, query).slice(0, PER_KIND);
+}
+
+/** A date's row: its chip's words, its whole date after them, found by it, and its `mention://date` link. */
 function dateCandidate(
   date: DateSpan,
   now: number,
   zone: string,
   place: MentionPlace,
 ): MentionCandidate {
-  const target = encodeMention({ kind: MENTION_KIND.DATE, ...date }, place);
+  const mention: Mention = { kind: MENTION_KIND.DATE, ...date };
+  const target = encodeMention(mention, place);
+  const whole = dateLabel(date, zone);
 
   return {
     id: target,
     kind: MENTION_OFFER_KIND.DATE,
     name: dateChipText(date, now, zone),
-    detail: dateLabel(date, zone),
-    written: dateLabel(date, zone),
+    detail: whole,
+    terms: [whole],
+    written: whole,
     target,
+    mention,
   };
 }
 
-/** The date the words name, as the panel's Dates offers it; with no words, today, tomorrow and next Monday, as a list narrowed to dates offers them; none where the words name no date. */
+/** The date the words name; with no words, today, tomorrow and next Monday, as a list narrowed to dates offers them; none where the words name no date. */
 export function dateCandidates(
   query: string,
   now: number,
@@ -284,11 +360,11 @@ function headingWithout(heading: string, typing: string | undefined): string {
 }
 
 /**
- * The description's rows, as the panel's picker offers them: each section by
- * its heading, a heading that spells no anchor left out, then the
- * description whole, which names the task and is found by its key. The `@`
- * word being typed, `typing`, is read out of the headings, since the words
- * being edited hold it until a pick takes its place.
+ * The description's rows: each section by its heading, a heading that spells
+ * no anchor left out, then the description whole, which names the task and
+ * is found by its key. The `@` word being typed, `typing`, is read out of
+ * the headings, since the words being edited hold it until a pick takes its
+ * place.
  */
 export function descriptionCandidates(
   holder: DescriptionHolder,
@@ -308,6 +384,7 @@ export function descriptionCandidates(
     const anchor = anchors[at] ?? "";
 
     if (anchor === "") return [];
+    const mention: Mention = { kind: MENTION_KIND.SECTION, taskId, anchor };
 
     return [
       {
@@ -315,10 +392,13 @@ export function descriptionCandidates(
         kind: MENTION_OFFER_KIND.SECTION,
         name: heading,
         detail: DESCRIPTION_WORDS.SECTION,
-        target: encodeMention({ kind: MENTION_KIND.SECTION, taskId, anchor }, place),
+        target: encodeMention(mention, place),
+        mention,
       },
     ];
   });
+
+  const mention: Mention = { kind: MENTION_KIND.TASK, taskId };
 
   const whole: MentionCandidate = {
     id: taskId,
@@ -326,7 +406,9 @@ export function descriptionCandidates(
     name,
     detail: DESCRIPTION_WORDS.WHOLE,
     key,
-    target: encodeMention({ kind: MENTION_KIND.TASK, taskId }, place),
+    terms: key === undefined ? undefined : [key],
+    target: encodeMention(mention, place),
+    mention,
   };
 
   return [...sections, whole];
@@ -339,12 +421,11 @@ export interface RepositoryPath {
 }
 
 /**
- * The repository's files and folders an `@` offers, as the panel's picker
- * offers them: each by its own name, a folder's ending in `/`, saying the
- * folder it stands in, found by its whole path, a file's pick writing its
- * GitHub page at the default branch and a folder's press walking into it,
- * where the folder heads its own list to be named; none where the place
- * names no repository.
+ * The repository's files and folders an `@` offers: each by its own name, a
+ * folder's ending in `/`, saying the folder it stands in, found by its whole
+ * path, a file's pick writing its GitHub page at the default branch and a
+ * folder's press walking into it, where the folder heads its own list to be
+ * named; none where the place names no repository.
  */
 export function pathCandidates(
   paths: readonly RepositoryPath[],
@@ -355,6 +436,10 @@ export function pathCandidates(
   return paths.map(({ path, folder }): MentionCandidate => {
     const name = fileName(path);
 
+    const mention: Mention = folder
+      ? { kind: MENTION_KIND.FOLDER, path }
+      : { kind: MENTION_KIND.FILE, path };
+
     return {
       id: path,
       kind: folder ? MENTION_OFFER_KIND.FOLDER : MENTION_OFFER_KIND.FILE,
@@ -362,60 +447,133 @@ export function pathCandidates(
       detail: path.slice(0, -name.length - 1) || undefined,
       terms: [path],
       walk: folder ? narrowingQuery(MENTION_FROM.FILES, `${path}/`) : undefined,
-      target: encodeMention(
-        folder ? { kind: MENTION_KIND.FOLDER, path } : { kind: MENTION_KIND.FILE, path },
-        place,
-      ),
+      target: encodeMention(mention, place),
+      mention,
     };
   });
 }
 
-/** An agent an `@` offers, as the panel's picker offers it: by its name, a pick writing its link. */
-export function agentCandidate(
-  agent: { readonly id: string; readonly name: string },
-  workspace: string,
-): MentionCandidate {
+/** The words found so far among a listing's paths: those found in the listing's order, and best first. */
+interface PathsFound<Row> {
+  readonly matched: readonly { readonly row: Row; readonly score: number }[];
+  readonly ranked: readonly Row[];
+}
+
+/**
+ * A search over the paths one read listed, which a repository may hold tens
+ * of thousands of. Each word's finds are kept while the word is typed on or
+ * back, so a word met again is answered from what it found; and a word typed
+ * on from one kept searches only what that one found. Note that the
+ * narrowing is sound only from a word of at least `LOOSE_FROM` letters: a
+ * letter more never begins, starts, or holds a word the shorter one did not,
+ * and its letters in order are the shorter one's in order, but a shorter
+ * word finds nothing by letters in order, which a longer one may.
+ */
+export function mentionPaths<Row extends MentionCandidate>(
+  rows: readonly Row[],
+): MentionPaths<Row> {
+  const all = rows.map((row) => ({ row, score: 0 }));
+  const kept = new Map<string, PathsFound<Row>>();
+
+  const found = (term: string): readonly Row[] => {
+    const known = kept.get(term);
+
+    if (known !== undefined) return known.ranked;
+
+    // Only the words this one types on or back from stay kept.
+    for (const word of kept.keys()) {
+      if (!term.startsWith(word) && !word.startsWith(term)) kept.delete(word);
+    }
+
+    const shorter = [...kept.keys()]
+      .filter((word) => term.startsWith(word) && searchTokens(word).join("").length >= LOOSE_FROM)
+      .sort((one, other) => other.length - one.length)
+      .at(0);
+
+    const among = shorter === undefined ? all : (kept.get(shorter)?.matched ?? all);
+
+    const matched = among
+      .map(({ row }) => ({ row, score: scoreOf(row, term) }))
+      .filter((each) => each.score > 0);
+
+    const ranked = [...matched]
+      .sort((one, other) => other.score - one.score)
+      .map((each) => each.row);
+
+    kept.set(term, { matched, ranked });
+
+    return ranked;
+  };
+
+  return { rows, found };
+}
+
+/** What an agent's row is drawn from: its id, its name, and the words said beside it, such as its task's. */
+interface OfferedAgentRow {
+  readonly id: string;
+  readonly name: string;
+  readonly detail?: string | undefined;
+}
+
+/** An agent an `@` offers: by its name, said and found by what stands beside it, a pick writing its link. */
+export function agentCandidate(agent: OfferedAgentRow, workspace: string): MentionCandidate {
+  const mention: Mention = { kind: MENTION_KIND.AGENT, agentId: agent.id };
+
   return {
     id: agent.id,
     kind: MENTION_OFFER_KIND.AGENT,
     name: agent.name,
-    target: linkOf({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }, workspace),
+    detail: agent.detail,
+    terms: agent.detail === undefined ? undefined : [agent.detail],
+    target: encodeMention(mention, { workspace, repository: null }),
+    mention,
   };
 }
 
-/** A task an `@` offers, as the panel's picker offers it: by its name, its key beside it and found by it, a pick writing its link. */
+/** A task an `@` offers: by its name, its key beside it and found by it, a pick writing its link. */
 export function taskCandidate(
   task: { readonly id: string; readonly name: string },
   key: string | undefined,
   workspace: string,
 ): MentionCandidate {
+  const mention: Mention = { kind: MENTION_KIND.TASK, taskId: task.id };
+
   return {
     id: task.id,
     kind: MENTION_OFFER_KIND.TASK,
     name: task.name,
     detail: key,
     key,
-    target: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, workspace),
+    terms: key === undefined ? undefined : [key],
+    target: encodeMention(mention, { workspace, repository: null }),
+    mention,
   };
 }
 
-/** A person an `@` offers, as the panel's picker offers them: by their name, said as You where they are the reader and else by their address, found by it, a pick writing their link. */
+/** A person an `@` offers: by their name, said as You where they are the reader and else by their address, found by it, a pick writing their link. */
 export function personCandidate(
-  person: { readonly userId: string; readonly name: string; readonly email: string },
+  person: {
+    readonly userId: string;
+    readonly name: string;
+    readonly email?: string | undefined;
+  },
   you: boolean,
   workspace: string,
 ): MentionCandidate {
+  const mention: Mention = { kind: MENTION_KIND.PERSON, userId: person.userId };
+
   return {
     id: person.userId,
     kind: MENTION_OFFER_KIND.PERSON,
     name: person.name,
     detail: you ? MENTION_DETAIL.YOU : person.email,
-    terms: [person.email],
-    target: linkOf({ kind: LINK_DESTINATION.PERSON, userId: person.userId }, workspace),
+    terms: person.email === undefined ? undefined : [person.email],
+    target: encodeMention(mention, { workspace, repository: null }),
+    mention,
   };
 }
 
-/** A page of a task an `@` offers, as the panel's picker offers it: by its title, its version past its first and else when it was shown, a pick writing its link. */
+/** A page of a task an `@` offers: by its title, its version past its first and else when it was shown, a pick writing its link. */
 export function pageCandidate(
   page: {
     readonly id: string;
@@ -427,16 +585,19 @@ export function pageCandidate(
   now: number,
   workspace: string,
 ): MentionCandidate {
+  const mention: Mention = { kind: MENTION_KIND.PAGE, taskId, pageId: page.id };
+
   return {
     id: page.id,
     kind: MENTION_OFFER_KIND.PAGE,
     name: page.title,
     detail: page.version > 1 ? MENTION_DETAIL.VERSION(page.version) : sinceText(page.at, now),
-    target: linkOf({ kind: LINK_DESTINATION.PAGE, taskId, pageId: page.id }, workspace),
+    target: encodeMention(mention, { workspace, repository: null }),
+    mention,
   };
 }
 
-/** An Inbox thread an `@` offers, as the panel's picker offers it: by its title, said and found by what holds it, a pick writing the thread's link, by itself alone. */
+/** An Inbox thread an `@` offers: by its title, said and found by what holds it, a pick writing the thread's link, by itself alone. */
 export function threadCandidate(
   item: { readonly id: string; readonly title: string },
   holder: string,
@@ -452,22 +613,31 @@ export function threadCandidate(
   };
 }
 
-/** A pull request an `@` offers, as the panel's picker offers it: by its number and title, said by the agent that published it, a pick writing its GitHub address. */
+/** A pull request an `@` offers: by its number and title, said by the agent that published it, found by that and as a pull request, a pick writing its GitHub address. */
 export function pullRequestCandidate(
   pullRequest: { readonly url: string; readonly number: number; readonly title: string },
   publisher: string | undefined,
 ): MentionCandidate {
+  const detail = publisher ?? MENTION_DETAIL.PULL_REQUEST;
+
+  const mention: Mention = {
+    kind: MENTION_KIND.LINK,
+    provider: INTEGRATION_PROVIDER.GITHUB,
+    url: pullRequest.url,
+  };
+
   return {
     id: pullRequest.url,
     kind: MENTION_OFFER_KIND.PULL_REQUEST,
     name: `#${pullRequest.number} ${pullRequest.title}`,
-    detail: publisher ?? MENTION_DETAIL.PULL_REQUEST,
-    terms: [MENTION_DETAIL.PULL_REQUEST],
+    detail,
+    terms: [detail, MENTION_DETAIL.PULL_REQUEST],
     target: pullRequest.url,
+    mention,
   };
 }
 
-/** An automation an `@` offers, as the panel's picker offers it: by its name, saying what fires it, a pick writing its page's link. */
+/** An automation an `@` offers: by its name, saying what fires it, a pick writing its page's link. */
 export function automationCandidate(
   automation: { readonly id: string; readonly name: string },
   fires: string,
@@ -486,13 +656,16 @@ export function automationCandidate(
 /** A workspace member's machine, as an `@` offers it: its id, its name, whose it is, and what it runs. */
 export interface OfferedMachine {
   readonly id: string;
+  /** What the list calls it, such as This Mac. */
   readonly name: string;
+  /** The name a pick writes where it is not the row's: its own, which This Mac means another Mac to every other reader. */
+  readonly written?: string | undefined;
   readonly ownerId: string | null;
   /** Words it is found by, such as its owner's name and its platform's. */
   readonly terms: readonly string[];
 }
 
-/** The workspace's machines an `@` offers, as the panel's picker offers them: the reader's own first, then the task's followers', then everyone else's, each by its name, a pick writing its `mention://machine/` link. */
+/** The workspace's machines an `@` offers: the reader's own first, then the task's followers', then everyone else's, each by its name, a pick writing its `mention://machine/` link. */
 export function machineCandidates(
   machines: readonly OfferedMachine[],
   people: { readonly readerId: string | undefined; readonly followerIds: ReadonlySet<string> },
@@ -510,67 +683,66 @@ export function machineCandidates(
   return machines
     .map((machine, at) => ({ machine, at }))
     .sort((one, other) => rank(one.machine) - rank(other.machine) || one.at - other.at)
-    .map(({ machine }) => machine)
-    .map(
-      (machine): MentionCandidate => ({
+    .map(({ machine }): MentionCandidate => {
+      const mention: Mention = { kind: MENTION_KIND.MACHINE, machineId: machine.id };
+
+      return {
         id: machine.id,
         kind: MENTION_OFFER_KIND.MACHINE,
         name: machine.name,
+        written: machine.written,
         terms: machine.terms,
-        target: encodeMention({ kind: MENTION_KIND.MACHINE, machineId: machine.id }, place),
-      }),
-    );
+        target: encodeMention(mention, place),
+        mention,
+      };
+    });
 }
 
-/** Whether the words are a task's key typed whole, which leads its group, as the panel's keyed group leads. */
-function keyed(rows: readonly MentionOfferRow[], query: string): boolean {
-  return rows.some(
-    (row) => !isKindChoice(row) && row.key !== undefined && query.toLocaleUpperCase() === row.key,
+/**
+ * The kinds the place offers, in the order Browse lists them: each kind it
+ * holds, and dates wherever it stands.
+ */
+function mentionKinds(held: ReadonlySet<MentionOfferFrom>): readonly MentionOfferedKind[] {
+  return OFFERED_FROM.flatMap((from): MentionOfferedKind[] =>
+    from === MENTION_FROM.DATES || held.has(from)
+      ? [{ from, name: FROM_GROUP[from], keyword: from }]
+      : [],
   );
 }
 
-/** Whether a row names a kind a press narrows to, rather than a thing a pick names. */
-export function isKindChoice(row: MentionOfferRow): row is MentionKindChoice {
-  return "from" in row;
-}
+/** Where the list stands for the words: the kind whose word they begin with, typed before a colon, searched by the words after it; else every kind, searched by the words whole. */
+function mentionScope(query: string, kinds: readonly MentionOfferedKind[]): MentionScope {
+  const typed = typedMentionKind(query);
+  const kind = typed === undefined ? undefined : kinds.find((each) => each.keyword === typed.word);
 
-/** The candidates of a kind, which its narrowed list and its group search. */
-function fromRows(sources: MentionSources, from: MentionOfferFrom, term: string) {
-  return from === MENTION_FROM.DATES ? sources.dates(term) : sources[FROM_SOURCE[from]];
-}
+  if (typed === undefined || kind === undefined) {
+    return { kind: undefined, entry: "", typed: false, walked: [], term: query };
+  }
 
-/** The kinds the place offers, in the panel's order: each one it holds any of or is still reading, and dates wherever it stands. */
-function offeredKinds(sources: MentionSources): readonly MentionOfferFrom[] {
-  return OFFERED_FROM.filter(
-    (from) =>
-      from === MENTION_FROM.DATES ||
-      sources.pending?.has(from) === true ||
-      sources[FROM_SOURCE[from]].length > 0,
-  );
+  return {
+    kind,
+    entry: typed.entry,
+    typed: true,
+    walked: [],
+    term: query.slice(typed.entry.length),
+  };
 }
 
 /** A kind's row, which opens its list afresh; or, as a group's foot holding `more` past its few, searched by the words typed. */
-function kindChoice(from: MentionOfferFrom, term: string, more: number): MentionKindChoice {
+function kindChoice(kind: MentionOfferedKind, term: string, more: number): MentionKindChoice {
+  const { from, keyword } = kind;
+
   return more > 0
-    ? { from, name: showMoreWords(more), query: narrowingQuery(from, term), more: true }
-    : { from, name: FROM_GROUP[from], query: narrowingQuery(from, ""), more: false };
+    ? { from, name: showMoreWords(more), query: narrowingQuery(keyword, term), more: true }
+    : { from, name: kind.name, query: narrowingQuery(keyword, ""), more: false };
 }
 
-/** A group of the wide list: its best few the words find, and where it finds more, the row that opens its kind searched by the same words. */
-function cappedGroup(
-  sources: MentionSources,
-  from: MentionOfferFrom,
-  term: string,
-  offered: readonly MentionOfferFrom[],
-): MentionGroup {
-  const found = matching(fromRows(sources, from, term), term);
-  const more = offered.includes(from) ? found.length - PER_GROUP : 0;
-  const shown = found.slice(0, PER_GROUP);
-
-  return {
-    title: FROM_GROUP[from],
-    rows: more > 0 ? [...shown, kindChoice(from, term, more)] : shown,
-  };
+/** The rows of a kind the place hands over as a list. */
+function listOf<Row extends MentionCandidate>(
+  sources: MentionSources<Row>,
+  from: ListedFrom,
+): readonly Row[] {
+  return sources[FROM_LIST[from]];
 }
 
 /** The folder a path stands in, or "" at the repository's root. */
@@ -579,105 +751,207 @@ function parentOf(path: string): string {
 }
 
 /**
- * A folder walked into, as the panel's → walks one: with the words after
- * `files:` a folder's path and a `/`, the folder itself first, a pick naming
- * it, then what stands in it, its folders walking on; its crumb names the
- * folder and steps back out to the one it stands in, or to every path from
- * the root. None where the words name no folder.
+ * The repository's paths a list narrowed to them offers: for no words, the
+ * folder walked into, a pick naming it, then what it holds, its folders
+ * first, each said without the folder the crumb already names, or what the
+ * repository's root holds where none was; else the best of every path under
+ * the folder by the words.
  */
-function walkedFolder(
-  files: readonly MentionCandidate[],
+function fileRows<Row extends MentionCandidate>(
+  paths: MentionPaths<Row>,
+  folder: string | undefined,
   term: string,
-): MentionOffered | undefined {
-  if (!term.endsWith("/")) return undefined;
+): readonly Row[] {
+  const within = (row: Row) => folder === undefined || row.id.startsWith(`${folder}/`);
+
+  if (term.trim() !== "") return paths.found(term).filter(within).slice(0, PER_KIND);
+
+  const entries = paths.rows
+    .filter((row) => within(row) && parentOf(row.id) === (folder ?? ""))
+    .toSorted(
+      (one, other) =>
+        Number(other.kind === MENTION_OFFER_KIND.FOLDER) -
+        Number(one.kind === MENTION_OFFER_KIND.FOLDER),
+    )
+    .map((row) => ({ ...row, detail: undefined }));
+
+  const itself =
+    folder === undefined
+      ? []
+      : paths.rows
+          .filter((row) => row.kind === MENTION_OFFER_KIND.FOLDER && row.id === folder)
+          .map((row) => ({ ...row, walk: undefined }));
+
+  return [...itself, ...entries].slice(0, PER_KIND);
+}
+
+/** Up to fifty of one kind's rows, found by the words; a folder's where one was walked into. */
+function narrowedRows<Row extends MentionCandidate>(
+  sources: MentionSources<Row>,
+  from: MentionOfferFrom,
+  folder: string | undefined,
+  term: string,
+): readonly Row[] {
+  switch (from) {
+    case MENTION_FROM.FILES:
+      return fileRows(sources.files, folder, term);
+    case MENTION_FROM.DATES:
+      return sources.dates(term);
+    default:
+      return best(listOf(sources, from), term);
+  }
+}
+
+/** A group of the wide list: the best few of `found`, then, where it holds more and its kind can be opened, the row that opens it searched by the same words. */
+function cappedGroup<Row extends MentionCandidate>(
+  title: string,
+  found: readonly Row[],
+  kind: MentionOfferedKind | undefined,
+  term: string,
+): MentionGroup<Row> {
+  const shown = found.slice(0, PER_GROUP);
+  const more = found.length - shown.length;
+
+  return {
+    title,
+    rows: more > 0 && kind !== undefined ? [...shown, kindChoice(kind, term, more)] : shown,
+  };
+}
+
+/** Whether the words are a row's task's key whole. */
+function keyed(row: MentionOfferRow, query: string): boolean {
+  return !isKindChoice(row) && row.key !== undefined && namesTaskKey(query, row.key);
+}
+
+/**
+ * The groups an `@` offers for where its list stands. For no words: up to
+ * four rows the place suggests, then a row for each kind to browse. For
+ * words: the kinds they name, then the date they name, since words that
+ * read as a date mean one, then the group holding the task whose key they
+ * are whole, then agents, tasks, people, the description, pages, and files
+ * and folders, since agents and tasks are what is mentioned most and a
+ * path's letters in order find it by almost any word, then threads,
+ * automations, pull requests and machines, each its best four, a group
+ * finding more ending in the row that opens its kind searched by the same
+ * words, a group finding none left out. One kind: up to fifty of its rows,
+ * a folder's where one was walked into.
+ */
+function mentionGroups<Row extends MentionCandidate>(
+  sources: MentionSources<Row>,
+  scope: MentionScope,
+  kinds: readonly MentionOfferedKind[],
+): readonly MentionGroup<Row>[] {
+  const { kind, term } = scope;
+
+  if (kind !== undefined) {
+    const folder = scope.walked.at(-1)?.path;
+    const rows = narrowedRows(sources, kind.from, folder, term);
+
+    return rows.length === 0 ? [] : [{ title: folder ?? kind.name, rows }];
+  }
+
+  const browsed = kinds.map((each) => kindChoice(each, term, 0));
+
+  const shown = (groups: readonly MentionGroup<Row>[]) =>
+    groups.filter((group) => group.rows.length > 0);
+
+  if (term.trim() === "") {
+    return shown([
+      { title: MENTION_OFFER_GROUP.SUGGESTED, rows: sources.suggested.slice(0, PER_GROUP) },
+      { title: MENTION_BROWSE, rows: browsed },
+    ]);
+  }
+
+  const kindOf = (from: MentionOfferFrom) => kinds.find((each) => each.from === from);
+
+  const group = (from: MentionOfferFrom, found: readonly Row[]) =>
+    cappedGroup(FROM_GROUP[from], found, kindOf(from), term);
+
+  const listed = (from: ListedFrom) => group(from, matching(listOf(sources, from), term));
+  const description = listed(MENTION_FROM.DESCRIPTION);
+  const tasks = listed(MENTION_FROM.TASKS);
+  // The group holding the task the words are the key of, the place's own or another, leads the list.
+  const keyedGroup = [description, tasks].find((each) => each.rows.some((row) => keyed(row, term)));
+
+  const ranked = [
+    listed(MENTION_FROM.AGENTS),
+    tasks,
+    listed(MENTION_FROM.PEOPLE),
+    description,
+    listed(MENTION_FROM.PAGES),
+    group(MENTION_FROM.FILES, sources.files.found(term)),
+  ].filter((each) => each !== keyedGroup);
+
+  return shown([
+    // Note that a kind the words name leads, so `@agent` still offers the way into the agents.
+    { title: MENTION_BROWSE, rows: matching(browsed, term) },
+    { title: MENTION_OFFER_GROUP.DATES, rows: sources.dates(term) },
+    ...(keyedGroup === undefined ? [] : [keyedGroup]),
+    ...ranked,
+    listed(MENTION_FROM.THREADS),
+    listed(MENTION_FROM.AUTOMATIONS),
+    listed(MENTION_FROM.PULL_REQUESTS),
+    listed(MENTION_FROM.MACHINES),
+  ]);
+}
+
+/** The kinds the sources hold any rows of, or list while they hold none. */
+function heldKinds(sources: MentionSources): ReadonlySet<MentionOfferFrom> {
+  return new Set(
+    OFFERED_FROM.filter((from) => {
+      if (sources.pending?.has(from) === true) return true;
+
+      if (from === MENTION_FROM.FILES) return sources.files.rows.length > 0;
+
+      if (from === MENTION_FROM.DATES) return false;
+
+      return listOf(sources, from).length > 0;
+    }),
+  );
+}
+
+/** A folder walked into by the words, as a folder's row writes them (`files:apps/web/`): the list standing in it, its crumb's name, and the words that step back out to the folder it stands in, or to every path from the root. */
+function walkedByWords(
+  files: MentionPaths,
+  scope: MentionScope,
+  query: string,
+): { readonly scope: MentionScope; readonly name: string; readonly back: string } | undefined {
+  const term = scope.term.trim();
+
+  if (scope.kind?.from !== MENTION_FROM.FILES || !term.endsWith("/")) return undefined;
   const path = term.slice(0, -1);
-  const folder = files.find((row) => row.kind === MENTION_OFFER_KIND.FOLDER && row.id === path);
+
+  const folder = files.rows.find(
+    (row) => row.kind === MENTION_OFFER_KIND.FOLDER && row.id === path,
+  );
 
   if (folder === undefined) return undefined;
-  const inside = files.filter((row) => parentOf(row.id) === path);
   const up = parentOf(path);
 
   return {
-    narrowed: {
-      from: MENTION_FROM.FILES,
-      name: folder.name,
-      back: narrowingQuery(MENTION_FROM.FILES, up === "" ? "" : `${up}/`),
-    },
-    groups: [
-      { title: folder.name, rows: [{ ...folder, walk: undefined }, ...inside].slice(0, PER_KIND) },
-    ],
+    scope: { ...scope, walked: [{ path, entry: query }], term: "" },
+    name: folder.name,
+    back: narrowingQuery(MENTION_FROM.FILES, up === "" ? "" : `${up}/`),
   };
 }
 
 /**
- * What an `@` offers for what is typed after it, as the panel's picker
- * offers it. With nothing typed: what the place suggests, then Browse, a
- * row for each kind it offers. With a kind's word typed before a colon
- * (`people:dea`), that kind alone under its crumb, up to fifty rows the
- * words after the colon find, all of them with none typed. With words
- * typed: the kinds they name, under Browse, then the date they name, then
- * Agents, Tasks (first where the words are a task's key), People, the
- * description's sections, Pages, Files and folders,
- * Threads, Automations, Pull requests and Machines, each the rows the words find, best first,
- * four at most, a group finding more ending in the row that opens its kind
- * searched by the same words, a group finding none left out.
+ * What an `@` offers for what is typed after it, where the words alone say
+ * where the list stands: a kind's word before a colon narrows it
+ * (`people:dea`), and a folder's path and a `/` after `files:` walks into
+ * that folder, as its row's press writes it. Its rows are grouped, scored,
+ * capped and narrowed as the panel's picker does (`mentionGroups`).
  */
 export function mentionOffer(sources: MentionSources, query: string): MentionOffered {
-  const offered = offeredKinds(sources);
-  const typed = typedMentionKind(query);
-  const from = offered.find((each) => each === typed?.word);
+  const kinds = mentionKinds(heldKinds(sources));
+  const scope = mentionScope(query, kinds);
+  const walked = walkedByWords(sources.files, scope, query);
 
-  if (typed !== undefined && from !== undefined) {
-    const term = query.slice(typed.entry.length).trim();
-    const walked = from === MENTION_FROM.FILES ? walkedFolder(sources.files, term) : undefined;
-
-    if (walked !== undefined) return walked;
-    const rows = fromRows(sources, from, term);
-    const found = term === "" ? rows : matching(rows, term);
-    const name = FROM_GROUP[from];
-
-    return {
-      narrowed: { from, name },
-      groups: found.length === 0 ? [] : [{ title: name, rows: found.slice(0, PER_KIND) }],
-    };
-  }
-
-  const asked = query.trim();
-  const kinds = offered.map((each) => kindChoice(each, asked, 0));
-
-  if (asked === "") {
-    const groups = [
-      { title: MENTION_OFFER_GROUP.SUGGESTED, rows: sources.suggested.slice(0, PER_GROUP) },
-      { title: MENTION_BROWSE, rows: kinds },
-    ];
-
-    return { narrowed: undefined, groups: groups.filter((group) => group.rows.length > 0) };
-  }
-
-  const group = (each: MentionOfferFrom) => cappedGroup(sources, each, asked, offered);
-  const tasks = group(MENTION_FROM.TASKS);
-  const leadsWithKey = keyed(tasks.rows, asked);
-
-  // Note that a kind the words name leads, so `@peo` still offers the way into the people.
-  const named = kinds.filter(
-    (kind) => searchHit({ label: kind.name, key: undefined, keywords: [] }, asked) !== undefined,
-  );
-
-  const groups = [
-    { title: MENTION_BROWSE, rows: named },
-    { title: MENTION_OFFER_GROUP.DATES, rows: sources.dates(asked) },
-    ...(leadsWithKey ? [tasks] : []),
-    group(MENTION_FROM.AGENTS),
-    ...(leadsWithKey ? [] : [tasks]),
-    group(MENTION_FROM.PEOPLE),
-    group(MENTION_FROM.DESCRIPTION),
-    group(MENTION_FROM.PAGES),
-    group(MENTION_FROM.FILES),
-    group(MENTION_FROM.THREADS),
-    group(MENTION_FROM.AUTOMATIONS),
-    group(MENTION_FROM.PULL_REQUESTS),
-    group(MENTION_FROM.MACHINES),
-  ];
-
-  return { narrowed: undefined, groups: groups.filter((each) => each.rows.length > 0) };
+  return {
+    narrowed:
+      scope.kind === undefined
+        ? undefined
+        : { from: scope.kind.from, name: walked?.name ?? scope.kind.name, back: walked?.back },
+    groups: mentionGroups(sources, walked?.scope ?? scope, kinds),
+  };
 }

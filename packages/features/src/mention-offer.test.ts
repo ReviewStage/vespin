@@ -10,6 +10,7 @@ import {
   type MentionCandidate,
   machineCandidates,
   mentionOffer,
+  mentionPaths,
   pathCandidates,
 } from "./mention-offer.js";
 
@@ -31,7 +32,7 @@ describe("mentionOffer", () => {
     ),
     description: [],
     pages: [],
-    files: [],
+    files: mentionPaths([]),
     threads: [],
     automations: [],
     pullRequests: [],
@@ -153,12 +154,14 @@ describe("mentionOffer", () => {
   it("finds the repository's files and folders by their paths, each a pick writing its GitHub page at the default branch", () => {
     const place = { workspace: "acme", repository: "acme/checkout" };
 
-    const files = pathCandidates(
-      [
-        { path: "apps/web/server/auth", folder: true },
-        { path: "apps/web/server/auth/session.ts", folder: false },
-      ],
-      place,
+    const files = mentionPaths(
+      pathCandidates(
+        [
+          { path: "apps/web/server/auth", folder: true },
+          { path: "apps/web/server/auth/session.ts", folder: false },
+        ],
+        place,
+      ),
     );
 
     const offered = mentionOffer({ ...sources, files }, "files:auth");
@@ -186,14 +189,16 @@ describe("mentionOffer", () => {
   it("walks into a folder, which heads its own list to be named, and steps back out to the folder it stands in", () => {
     const place = { workspace: "acme", repository: "acme/checkout" };
 
-    const files = pathCandidates(
-      [
-        { path: "apps", folder: true },
-        { path: "apps/web", folder: true },
-        { path: "apps/web/index.ts", folder: false },
-        { path: "apps/README.md", folder: false },
-      ],
-      place,
+    const files = mentionPaths(
+      pathCandidates(
+        [
+          { path: "apps", folder: true },
+          { path: "apps/web", folder: true },
+          { path: "apps/web/index.ts", folder: false },
+          { path: "apps/README.md", folder: false },
+        ],
+        place,
+      ),
     );
 
     const offered = mentionOffer({ ...sources, files }, "files:apps/");
@@ -213,6 +218,43 @@ describe("mentionOffer", () => {
     expect(mentionOffer({ ...sources, files }, "files:apps/web/").narrowed?.back).toBe(
       "files:apps/",
     );
+  });
+
+  it("narrowed to paths with nothing typed, lists what the repository's root holds, its folders first, as the panel's picker does", () => {
+    const files = mentionPaths(
+      pathCandidates(
+        [
+          { path: "README.md", folder: false },
+          { path: "apps", folder: true },
+          { path: "apps/web/index.ts", folder: false },
+        ],
+        { workspace: "acme", repository: "acme/checkout" },
+      ),
+    );
+
+    expect(
+      mentionOffer({ ...sources, files }, "files:").groups.flatMap((group) =>
+        group.rows.map((each) => each.name),
+      ),
+    ).toEqual(["apps/", "README.md"]);
+  });
+
+  it("finds a path by the letters typed in order, as the panel's picker finds it", () => {
+    const files = mentionPaths(
+      pathCandidates(
+        [
+          { path: "apps/web/index.ts", folder: false },
+          { path: "README.md", folder: false },
+        ],
+        { workspace: "acme", repository: "acme/checkout" },
+      ),
+    );
+
+    expect(
+      mentionOffer({ ...sources, files }, "files:awi").groups.flatMap((group) =>
+        group.rows.map((each) => each.name),
+      ),
+    ).toEqual(["index.ts"]);
   });
 
   it("stands the reader's machines first, then the task's followers', then everyone else's", () => {
