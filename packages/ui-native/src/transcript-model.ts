@@ -31,6 +31,7 @@ import {
   CUT_PART_WORDS,
   computerAppsOf,
   cutPartText,
+  isTodos,
   messageWords,
   placedMessages,
   turnStretches,
@@ -44,6 +45,7 @@ import {
   recordedVideosOf,
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
+import { newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
@@ -52,6 +54,7 @@ import {
   type AgentOrigin,
   type AgentPullRequest,
   type AgentSender,
+  type AgentTodos,
   type AgentTranscriptMessage,
   agentMessageWords,
   PULL_REQUEST_STATE,
@@ -108,6 +111,7 @@ import {
   shownPageVersion,
   TOOL_TARGET,
   type ToolCallView,
+  todosSummary,
   toolCallView,
   toolTarget,
 } from "@repo/features/tool-call-model";
@@ -156,6 +160,8 @@ export const TRANSCRIPT_ITEM = {
   PULL_REQUEST: "pull-request",
   /** What GitHub said on the agent's pull request, as the panel's folding card: its head, opening on what it holds. */
   GITHUB: "github",
+  /** A call carrying the agent's to-do list, as one line saying how far it has got that opens on the checklist. */
+  TODOS: "todos",
   /** The quiet line a finished turn ends on: how long it worked and when it ended. */
   FOOT: "foot",
   /** The line the transcript ends on while its agent works. */
@@ -376,6 +382,21 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
   | {
+      readonly kind: typeof TRANSCRIPT_ITEM.TODOS;
+      /** The call's id, which opens and closes it. */
+      readonly callId: string;
+      /** How far the list has got, after the line's verb: "2 of 5 done" (`todosSummary`). */
+      readonly summary: string;
+      readonly standing: CallStanding;
+      readonly open: boolean;
+      /** The list as it stood after the call, which its open row draws as the checklist. */
+      readonly todos: AgentTodos["todos"];
+      /** Whether it is the list the agent is at now, its newest while it may still write, whose item in progress wears the working mark. */
+      readonly live: boolean;
+      /** What its open body holds under the list: the error the call ended in, as a call's body says it; empty where it ended well, or while it is closed. */
+      readonly body: readonly CallBodyBlock[];
+    }
+  | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOOT;
       readonly words: string;
       /** The turn's words, which its row's Copy and Share take, as the panel's turn foot copies them (`messageWords`). */
@@ -481,8 +502,28 @@ interface ChatReading extends Omit<TranscriptReading, "origin"> {
   readonly newOverOwn?: boolean | undefined;
 }
 
-/** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
-type ItemsReading = TranscriptReading & { readonly computerApps: ComputerApps };
+/** Where the transcript's to-do lists stand: the list as it stood after each of Claude Code's task calls, by the call (`taskTodos`), and the call whose list the agent is at, none once it can no longer write, as the panel's `todosPlace` reads them. */
+interface TodosReading {
+  readonly lists: ReadonlyMap<string, AgentTodos["todos"]>;
+  readonly live: string | undefined;
+}
+
+/** What the items are read with: the page's reading, the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`), and where its to-do lists stand. */
+type ItemsReading = TranscriptReading & {
+  readonly computerApps: ComputerApps;
+  readonly todos: TodosReading;
+};
+
+/** A page's reading with what is read once from its whole transcript. */
+function itemsReading(
+  reading: TranscriptReading,
+  messages: readonly AgentTranscriptMessage[],
+): ItemsReading {
+  const lists = taskTodos(messages);
+  const live = reading.writing ? newestTodos(messages, lists)?.callId : undefined;
+
+  return { ...reading, computerApps: computerAppsOf(messages), todos: { lists, live } };
+}
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
 const ORIGIN_WORDS = {
@@ -1020,12 +1061,47 @@ function wholeRead(
   };
 }
 
+/**
+ * A call carrying the agent's to-do list, a write of the whole list or a call
+ * on Claude Code's task list, as the panel's `TodosRow` draws it: the list as
+ * it stood after the call (`todosOfPart`), folded until pressed; none where
+ * no list reads from it, which stands as a call's row.
+ */
+function todosItems(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  base: ItemBase,
+  reading: ItemsReading,
+): readonly TranscriptItem[] {
+  const todos = todosOfPart(part, reading.todos.lists);
+
+  if (todos === undefined) return [];
+  const open = reading.toggles.calls.has(part.callId);
+
+  return [
+    {
+      ...base,
+      kind: TRANSCRIPT_ITEM.TODOS,
+      callId: part.callId,
+      summary: todosSummary(todos),
+      standing: standingOf(part.state, false),
+      open,
+      todos,
+      live: reading.todos.live === part.callId,
+      body:
+        open && part.errorText !== undefined ? [{ title: ERROR_TITLE, text: part.errorText }] : [],
+    },
+  ];
+}
+
 /** One tool call as its items: its line, then what it showed. */
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
   base: ItemBase,
   reading: ItemsReading,
 ): readonly TranscriptItem[] {
+  const todos = isTodos(part) ? todosItems(part, base, reading) : [];
+
+  if (todos.length > 0) return todos;
   const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
@@ -1377,7 +1453,7 @@ export function transcriptItems(
   // A turn a call's delegation opened folds its written words with its work, as the panel's does.
   const delegated = delegatedTurnsOf(placed);
   const { origin } = reading;
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(messages) };
+  const read = itemsReading(reading, messages);
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
   const head =
@@ -1749,7 +1825,7 @@ export function managerChatItems(
   transcript: readonly AgentTranscriptMessage[],
   reading: ChatReading,
 ): readonly TranscriptItem[] {
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
+  const read = itemsReading(reading, transcript);
   // Note that a turn's journal message stands under the turn's id, which a message's work names.
   const turns = new Map(transcript.map((message) => [message.id, message]));
 
@@ -1827,7 +1903,7 @@ export function managerThreadItems(
   );
 
   if (rootLine === undefined) return undefined;
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
+  const read = itemsReading(reading, transcript);
   const turns = new Map(transcript.map((message) => [message.id, message]));
   const replies = view.threads.get(root) ?? [];
   const sending = chatSendingItems(sendingTo(reading.sending, root), view.sending.channel, reading);
@@ -1883,7 +1959,11 @@ export function withWaitingLine(
 /** The calls the items draw a row for, by id, so a call the agent holds that none draws, such as a subagent's, is answered elsewhere. */
 export function drawnCallIds(items: readonly TranscriptItem[]): ReadonlySet<string> {
   return new Set(
-    items.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.CALL ? [item.callId] : [])),
+    items.flatMap((item) =>
+      item.kind === TRANSCRIPT_ITEM.CALL || item.kind === TRANSCRIPT_ITEM.TODOS
+        ? [item.callId]
+        : [],
+    ),
   );
 }
 
@@ -1892,7 +1972,7 @@ export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): Tra
   // Note that a Manager's working line turns the turn under way's work (Show work).
   if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
 
-  if (item.kind === TRANSCRIPT_ITEM.CALL) {
+  if (item.kind === TRANSCRIPT_ITEM.CALL || item.kind === TRANSCRIPT_ITEM.TODOS) {
     const calls = new Set(toggles.calls);
 
     if (!calls.delete(item.callId)) calls.add(item.callId);

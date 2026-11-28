@@ -3,6 +3,7 @@
 import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import { AGENT_TODO_STATUS, type AgentTodoStatus } from "@repo/features/agent-wire";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import {
   CHAT_EDIT_WORDS,
@@ -10,7 +11,7 @@ import {
   chatWorkWords,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
-import type { CallKind } from "@repo/features/turn-rows";
+import { CALL_KIND, CALL_WORDS, type CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
@@ -46,7 +47,7 @@ import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
-import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CardMenu,
@@ -212,6 +213,9 @@ const styles = StyleSheet.create({
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
+  todos: { gap: SPACE.TIGHT },
+  todo: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.ROW - 2 },
+  todoMark: { alignItems: "center", justifyContent: "center" },
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
@@ -721,6 +725,140 @@ function CallRow({
     </View>
   );
 }
+
+/** How each to-do is marked by where it stands, and heard, as the panel's checklist marks it (`TODO_LOOK`). */
+const TODO_LOOK = {
+  [AGENT_TODO_STATUS.PENDING]: { glyph: GLYPH.TODO_PENDING, heard: "Pending" },
+  [AGENT_TODO_STATUS.IN_PROGRESS]: { glyph: GLYPH.TODO_IN_PROGRESS, heard: "In progress" },
+  [AGENT_TODO_STATUS.DONE]: { glyph: GLYPH.TODO_DONE, heard: "Done" },
+} as const satisfies Record<AgentTodoStatus, { glyph: Glyph; heard: string }>;
+
+/**
+ * One to-do behind the glyph of where it stands, in the call glyph's column,
+ * its words wrapping under themselves rather than under the glyph; the item
+ * in progress in the ink and the rest in the muted one, a done item's words
+ * muted too, as the panel's `TodoItem` draws it. The item in progress wears
+ * the working mark only on the list the agent is at, since a list it wrote
+ * over or stopped at is a record. Heard as one element, its words and then
+ * where it stands.
+ */
+function TodoLine({
+  todo,
+  live,
+}: {
+  readonly todo: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.TODOS }>["todos"][number];
+  readonly live: boolean;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const look = TODO_LOOK[todo.status];
+  const taken = todo.status === AGENT_TODO_STATUS.IN_PROGRESS;
+  const done = todo.status === AGENT_TODO_STATUS.DONE;
+
+  return (
+    <View
+      accessible
+      accessibilityLabel={todo.content}
+      accessibilityValue={{ text: look.heard }}
+      style={styles.todo}
+    >
+      <View style={[styles.todoMark, { width: size, minHeight: PROSE_SIZE * 1.3 }]}>
+        {live && taken ? (
+          <TranscriptWorkingMark />
+        ) : (
+          <SymbolView
+            name={glyphSymbol(look.glyph)}
+            size={size}
+            tintColor={taken ? colors.TEXT : colors.TEXT_MUTED}
+            accessibilityElementsHidden
+          />
+        )}
+      </View>
+      <Text
+        selectable
+        style={{
+          flex: 1,
+          fontSize: ROLE_SIZE.ROW_LINE,
+          color: done ? colors.TEXT_MUTED : colors.TEXT_BODY,
+        }}
+      >
+        {todo.content}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * A call carrying the agent's to-do list, as the panel's `TodosRow` draws
+ * it: a call's line, the to-dos' glyph, its verb, and how far the list has
+ * got ("2 of 5 done"), with where it stands at its end; pressed, it opens on
+ * the checklist itself, set at the line's words as the panel hangs it under
+ * the call, and the error the call ended in under it, as a call's body says it.
+ */
+function TodosRow({
+  item,
+  onToggle,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.TODOS }>;
+  readonly onToggle: (item: TranscriptItem) => void;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+  const lines = large ? undefined : 1;
+  const words = CALL_WORDS[CALL_KIND.TODOS];
+  const standing = CALL_STANDING_HEARD[item.standing];
+
+  return (
+    <View style={[styles.row, inset(item.depth)]}>
+      <Press
+        onPress={() => onToggle(item)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: item.open }}
+        accessibilityLabel={`${words.verb} ${item.summary}`}
+        accessibilityValue={{
+          text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
+        }}
+        accessibilityHint={TODOS_HINT}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        <CallGlyph callKind={CALL_KIND.TODOS} provider={undefined} icon={undefined} />
+        <View style={[styles.callWords, large ? styles.wrapped : null]}>
+          <Text
+            numberOfLines={lines}
+            style={{ flexShrink: 0, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          >
+            {words.verb}
+          </Text>
+          <Text
+            numberOfLines={lines}
+            style={{ flexShrink: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_BODY }}
+          >
+            {item.summary}
+          </Text>
+        </View>
+        <StandingMark
+          running={item.standing === CALL_STANDING.RUNNING}
+          failed={item.standing === CALL_STANDING.FAILED}
+        />
+      </Press>
+      {item.open ? (
+        <View style={[styles.body, styles.todos]}>
+          {item.todos.map((todo, at) => (
+            // Note that an item's place is its identity, as the panel keys it, so a write that moves an item on draws that item changing where it stands.
+            <TodoLine key={at} todo={todo} live={item.live} />
+          ))}
+          {item.body.map((block) => (
+            <BodyBlock key={block.title} title={block.title} text={block.text} colors={colors} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** What a press on a to-do list's line is heard to do. */
+const TODOS_HINT = "Shows or hides the to-do list";
 
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
@@ -1380,6 +1518,8 @@ function TranscriptRow({
           placeCall={drawing.placeCall}
         />
       );
+    case TRANSCRIPT_ITEM.TODOS:
+      return <TodosRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.FOLD:
       // Note that a Manager's turn's work folded over the message that opens its run stands under the Manager's head, its words then going on the run under it, as the panel stands the fold under the name.
       if (item.channel !== undefined && drawing.channel !== undefined && item.depth === 0) {

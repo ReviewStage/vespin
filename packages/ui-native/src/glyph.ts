@@ -281,6 +281,10 @@ export const GLYPH = {
   WAKE_OFF: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_OFF),
   MESSAGE: lucide(LUCIDE_SYMBOL.SEND),
   TODOS: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
+  /** A to-do not yet taken up, in progress, and done, as the panel's checklist marks each (`TODO_LOOK`). */
+  TODO_PENDING: lucide(LUCIDE_SYMBOL.CIRCLE),
+  TODO_IN_PROGRESS: catalogLucide("CircleDotDashed"),
+  TODO_DONE: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
   LIST: lucide(LUCIDE_SYMBOL.LAYOUT_LIST),
   READ: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
   MODELS: lucide(LUCIDE_SYMBOL.CPU),

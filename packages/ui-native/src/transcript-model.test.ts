@@ -82,6 +82,51 @@ describe("transcriptItems", () => {
     });
   });
 
+  it("draws Claude Code's task calls as the to-do list each left, the newest live only while the agent writes", () => {
+    const work = {
+      id: "work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-TaskCreate",
+          toolCallId: "create",
+          state: "output-available",
+          input: { subject: "Resend the invite" },
+          output: "Task #1 created successfully: Resend the invite",
+        },
+        { type: "text", text: "Starting on it." },
+        {
+          type: "tool-TaskUpdate",
+          toolCallId: "update",
+          state: "output-available",
+          input: { taskId: "1", status: "in_progress" },
+          output: "Updated task #1 status",
+        },
+      ],
+      finishedAt: 1,
+    };
+
+    const reading = { readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] };
+    const writing = transcriptItems([work], { ...reading, writing: true });
+    const stopped = transcriptItems([work], { ...reading, writing: false });
+
+    expect(writing.filter((item) => item.kind === TRANSCRIPT_ITEM.TODOS)).toMatchObject([
+      {
+        callId: "create",
+        summary: "0 of 1 done",
+        todos: [{ content: "Resend the invite", status: "pending" }],
+        live: false,
+      },
+      {
+        callId: "update",
+        summary: "0 of 1 done",
+        todos: [{ content: "Resend the invite", status: "in_progress" }],
+        live: true,
+      },
+    ]);
+    expect(stopped.filter((item) => item.kind === TRANSCRIPT_ITEM.TODOS && item.live)).toEqual([]);
+  });
+
   it("stands a computer call's window in its body once opened, never under its row, and reads it only then", () => {
     const work = {
       id: "work",
