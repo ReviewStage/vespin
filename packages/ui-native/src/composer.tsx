@@ -143,6 +143,9 @@ const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
 /** How far the pill's field stands its words from the row's top and foot: a list row's, so one line stands a press tall, centered on the presses beside it, and a field grown past one line keeps its last line on their center. */
 const PILL_FIELD_INSET = ROW_INSET.VERTICAL;
 
+/** The least width the pill's field keeps beside its presses, three presses' worth, so a placeholder's first words and a typed line stay readable; what is picked, such as the model chip, is cut before the field goes under it. */
+const FIELD_LEAST_WIDTH = PRESS_SIZE * 3;
+
 /** A piece in the pill's row standing a press tall, so its words or capsule sit on the presses' center rather than the row's foot. */
 const ON_PRESS_LINE = frame({ minHeight: PRESS_SIZE });
 
@@ -778,6 +781,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 
   // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
   const span = frame({
+    minWidth: rowed ? 0 : FIELD_LEAST_WIDTH,
     minHeight: PRESS_SIZE,
     maxWidth: Number.POSITIVE_INFINITY,
     alignment: "leading",
@@ -834,11 +838,14 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 /**
  * The pill's pieces in one row along the field's last line, as Messages'
  * field stands: the +, the field, what is picked for the message (an agent's
- * model chip) at its whole width, Dictate while nothing is typed, a call's
- * presses, and the round button, Send, or Stop while the agent works; a
- * dictation under way stands its strip in Dictate's and the round's place.
- * Note that the model chip gives way at an accessibility size, where its
- * whole name left the field no room, and is cut rather than the field.
+ * model chip), Dictate while nothing is typed, and the round button, Send,
+ * or Stop while the agent works; a dictation under way stands its strip in
+ * Dictate's and the round's place. While a call into the agent stands, its
+ * three presses take the model chip's and Dictate's place, since the call
+ * holds the microphone and a phone's pill has no room for all of them.
+ * Note that the model chip is offered its whole width first, but the field
+ * keeps its least (`FIELD_LEAST_WIDTH`), so at a large text size the chip's
+ * name is cut rather than the field, with no width of ours measured.
  */
 function PillPieces({
   props,
@@ -848,27 +855,20 @@ function PillPieces({
   readonly parts: ComposerParts;
 }) {
   const { trailing, dictation } = props;
-  const whole = !useAccessibilitySize();
+  const calling = parts.call !== null;
 
   return (
     <>
       {parts.add}
       {parts.field}
-      {trailing === undefined ? null : (
-        <HStack
-          modifiers={[
-            ...(whole ? [fixedSize({ horizontal: true, vertical: false })] : []),
-            ON_PRESS_LINE,
-          ]}
-        >
-          {trailing}
-        </HStack>
+      {trailing === undefined || calling ? null : (
+        <HStack modifiers={[layoutPriority(1), ON_PRESS_LINE]}>{trailing}</HStack>
       )}
       {dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE ? (
         <PillDictation dictation={dictation} />
       ) : (
         <>
-          {dictation === undefined || !parts.empty ? null : (
+          {dictation === undefined || !parts.empty || calling ? null : (
             <DictationPress
               glyph={GLYPH.DICTATE}
               label={DICTATION_WORDS.DICTATE}
