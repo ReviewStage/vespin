@@ -65,7 +65,7 @@ env:
     env:
       TAB: Tasks
 - extendedWaitUntil:
-    visible: "Managers, [0-9]+"
+    visible: "View options"
     timeout: 30000
 - scrollUntilVisible:
     element: "High, [0-9]+"
