@@ -755,6 +755,14 @@ function olderRead(
   return answer;
 }
 
+/** Stages the document again once the run answered a page of the account's older Inbox items, which the staged Inbox then holds past its feed (`inboxAppState`), as the panel's run stages its own again (`tasks-fixture-loader.ts`); nothing for any other act. */
+function keepOlderInboxPage(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+): void {
+  if (kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) stageFixture(state);
+}
+
 /** What a read of the workspace's settled page answers, its tasks laid into the list at once; none for any other act or workspace. */
 function settledRead(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -882,7 +890,9 @@ function memberAt<Member>(
  * read is not heard back, so a flow sees Try again, and the next lays the
  * page before the transcript's first message. A read of the workspace's
  * settled page answers its one page and lays its tasks into the list, so
- * the Tasks tab's All draws tasks finished before the list's window. Note that a thread's read
+ * the Tasks tab's All draws tasks finished before the list's window, and a
+ * page of the account's older Inbox items stages the document again, so the
+ * Inbox's All lists it past the feed. Note that a thread's read
  * mark and a task's each move their row's dot (`keepInboxReadMark`,
  * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
@@ -962,6 +972,7 @@ export function fixtureActs(
         keepMachineAnswer(state, act);
         keepSentReply(state, act, staged.answer);
         keepCommentThread(state, act.kind, staged.answer);
+        keepOlderInboxPage(state, act.kind);
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
         keepSend(state, act, false);
         // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.

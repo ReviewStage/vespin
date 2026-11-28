@@ -164,9 +164,6 @@ const IOS = {
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
-  INBOX_OLDER: notYet(
-    "iOS's Inbox All lists the items its feed holds; reading older ones at its end comes with its own screen",
-  ),
   INBOX_SEARCH: notYet(
     "iOS's Inbox and Search tabs search the items the phone holds; asking the service for more comes with its own screens",
   ),
@@ -379,7 +376,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: panel(IOS.INBOX_OLDER),
+  [PORT_ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_SEARCH]: panel(IOS.INBOX_SEARCH),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,

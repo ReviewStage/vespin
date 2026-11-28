@@ -26,6 +26,7 @@
  * screen's own.
  */
 
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import {
   holderWorkspaceId,
   type InboxAnyHolder,
@@ -41,9 +42,15 @@ import {
   answerKeeper,
   inboxGroupsIn,
   selectInboxHoldings,
+  selectInboxOlder,
   selectInboxReader,
 } from "@repo/host/app-state-reads";
-import { INBOX_ATTENTION, type InboxReach, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
+import {
+  INBOX_ATTENTION,
+  type InboxReach,
+  inboxHoldingsAt,
+  inboxHoldingsOfRows,
+} from "@repo/host/inbox-rows";
 import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -74,11 +81,16 @@ const NO_HOLDERS: readonly string[] = [];
 /** The holders the Inbox's items stand under, each item as its row, and whether they were read: the document landed and, where the phone keeps the items on disk, the query of them answered. */
 interface InboxGroupsRead {
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
+  /** The same holders with the older items the reach draws beside their own (`inboxHoldingsAt`), which nothing counts; the very `groups` where none stands. */
+  readonly listed: readonly InboxGroup<InboxAnyHolder>[];
   readonly read: boolean;
 }
 
 /** None grouped, and none read yet. */
-const NOT_READ: InboxGroupsRead = { groups: NO_GROUPS, read: false };
+const NOT_READ: InboxGroupsRead = { groups: NO_GROUPS, listed: NO_GROUPS, read: false };
+
+/** An older item as a fixture run's whole holdings hold it: as it is. */
+const asWhole = (item: InboxItem): InboxItem => item;
 
 /** The tasks and agents `holdings` names as holding items, each read by its id from the task list's collections, as the grouping looks them up. */
 function useHoldersListed(
@@ -117,20 +129,29 @@ function useGroupsOf(
   reach: InboxReach | undefined,
 ): InboxGroupsRead {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
+  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxOlder });
   const stored = told?.stored === true;
   const rows = useInboxRows(stored ? reach : undefined);
 
-  // Note that a kept phone's items are its rows, and a fixture run's the document's whole, each grouped the same way.
+  // Note that a kept phone's items are its rows, the older ones laid in as rows too, and a fixture run's the document's whole, each grouped the same way, the older items listed alone and counted nowhere (`inboxHoldingsAt`).
   const kept = useMemo(
     () =>
-      reach === undefined || told?.stored !== true || rows === undefined
+      reach === undefined || told?.stored !== true || rows === undefined || older === undefined
         ? undefined
-        : inboxHoldingsOfRows(rows, told),
-    [reach, told, rows],
+        : inboxHoldingsAt(inboxHoldingsOfRows(rows, told), reach, older, inboxRowOf),
+    [reach, told, rows, older],
   );
 
-  const whole = reach === undefined || stored ? undefined : told;
-  const { listed, listedAgents } = useHoldersListed(kept ?? whole);
+  const whole = useMemo(
+    () =>
+      reach === undefined || told === undefined || stored || older === undefined
+        ? undefined
+        : inboxHoldingsAt(told, reach, older, asWhole),
+    [reach, told, stored, older],
+  );
+
+  // Note that the tasks and agents read are those the older items stand on too, which hold every one the feed's do.
+  const { listed, listedAgents } = useHoldersListed(kept?.listed ?? whole?.listed);
   const read = kept !== undefined || whole !== undefined;
 
   // Note that the launch notes when a screen first grouped the Inbox, so `app:ready` says how much of its wait came after.
@@ -139,13 +160,28 @@ function useGroupsOf(
   }, [read]);
 
   return useMemo(() => {
-    if (kept !== undefined)
-      return { groups: inboxGroupsIn(kept, listed, workspaceId, listedAgents), read: true };
+    if (kept !== undefined) {
+      const groups = inboxGroupsIn(kept.counted, listed, workspaceId, listedAgents);
+
+      return {
+        groups,
+        listed:
+          kept.listed === kept.counted
+            ? groups
+            : inboxGroupsIn(kept.listed, listed, workspaceId, listedAgents),
+        read: true,
+      };
+    }
 
     if (whole === undefined) return NOT_READ;
+    const groups = inboxRowGroups(inboxGroupsIn(whole.counted, listed, workspaceId, listedAgents));
 
     return {
-      groups: inboxRowGroups(inboxGroupsIn(whole, listed, workspaceId, listedAgents)),
+      groups,
+      listed:
+        whole.listed === whole.counted
+          ? groups
+          : inboxRowGroups(inboxGroupsIn(whole.listed, listed, workspaceId, listedAgents)),
       read: true,
     };
   }, [kept, whole, listed, workspaceId, listedAgents]);
@@ -184,7 +220,8 @@ function inWorkspaceOf(held: AttentionHeld, workspaceId: string | undefined): In
 
   const groups = held.all.groups.filter((group) => holderWorkspaceId(group.holder) === workspaceId);
 
-  const read = { groups, read: held.all.read };
+  // Note that what asks for attention lays no older item beside its own, so its listed holders are its groups.
+  const read = { groups, listed: groups, read: held.all.read };
   // Note that a workspace's share is made once, the first time a screen asks, and held beside the read it was made from.
   held.inWorkspace.set(workspaceId, read);
 
@@ -289,15 +326,26 @@ export function useInboxWaiting(workspaceId: string | undefined): InboxWaiting {
 
 /**
  * The same holders (`useInboxGroupsIn`) with their whole items, threads
- * and all, where the document holds them, as a fixture run's does; none
+ * and all, where the document holds them, as a fixture run's does, with the
+ * older items `reach` draws beside them, as the rows list them; none
  * where the phone keeps them on disk, whose threads are read from their
  * messages as one opens (`useThreadMessages`).
  */
 export function useInboxWholeGroupsIn(
   workspaceId: string | undefined,
+  reach: InboxReach = INBOX_ATTENTION,
 ): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
-  const holdings = told?.stored === true ? undefined : told;
+  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxOlder });
+
+  const holdings = useMemo(
+    () =>
+      told === undefined || told.stored === true || older === undefined
+        ? undefined
+        : inboxHoldingsAt(told, reach, older, asWhole).listed,
+    [told, reach, older],
+  );
+
   const { listed, listedAgents } = useHoldersListed(holdings);
 
   return useMemo(

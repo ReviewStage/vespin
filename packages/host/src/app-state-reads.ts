@@ -772,8 +772,46 @@ export function selectInboxHeldBeyondFeed(state: AppStateSnapshot): AppInboxItem
   );
 }
 
+/** Items by the task each stands on, and on no task by its agent, as `AppInboxItems` holds them, each item whole or as its row. */
+export type InboxItemsOf<Item> = {
+  readonly [INBOX_SCOPE_KIND.TASK]: Readonly<Record<string, readonly Item[]>>;
+  readonly agents?: Readonly<Record<string, readonly Item[]>>;
+};
+
+/** An item as a holder's list orders it: whole, or as its row. */
+type OrderedItem = Pick<InboxItem, "id" | "status" | "updatedAt">;
+
+/** Each slice of older items' items by their ids, made once a slice. */
+const olderById = new WeakMap<AppInboxItems, ReadonlyMap<string, InboxItem>>();
+
+/**
+ * The whole item `id` names among the older items All read past the feed
+ * (`selectInboxOlder`), threads and all; none where none is read. Note that
+ * the phone keeps no message of an older item, so a thread it opens or a
+ * search it reads takes the item's words from here.
+ */
+export function inboxOlderItem(
+  older: AppInboxItems | undefined,
+  id: string,
+): InboxItem | undefined {
+  if (older === undefined) return undefined;
+  let byId = olderById.get(older);
+
+  if (byId === undefined) {
+    const lists = [
+      ...Object.values(older[INBOX_SCOPE_KIND.TASK]),
+      ...Object.values(older.agents ?? {}),
+    ];
+
+    byId = new Map(lists.flatMap((items) => items.map((item) => [item.id, item] as const)));
+    olderById.set(older, byId);
+  }
+
+  return byId.get(id);
+}
+
 /** Whether `older` holds no item on any holder, as before All reads a page. */
-function holdsNone(older: AppInboxItems): boolean {
+function holdsNone<Item>(older: InboxItemsOf<Item>): boolean {
   return (
     Object.keys(older[INBOX_SCOPE_KIND.TASK]).length === 0 &&
     Object.keys(older.agents ?? {}).length === 0
@@ -781,7 +819,7 @@ function holdsNone(older: AppInboxItems): boolean {
 }
 
 /** Every id `lists` hold, of every holder. */
-function idsIn(lists: Iterable<readonly InboxItem[]>): ReadonlySet<string> {
+function idsIn(lists: Iterable<readonly OrderedItem[]>): ReadonlySet<string> {
   const ids = new Set<string>();
 
   for (const items of lists) for (const item of items) ids.add(item.id);
@@ -795,11 +833,11 @@ function idsIn(lists: Iterable<readonly InboxItem[]>): ReadonlySet<string> {
  * draws them; a holder only older items stand on holds those alone, and
  * every other list is the very one `live` holds.
  */
-function listsWithOlder(
-  live: ReadonlyMap<string, readonly InboxItem[]>,
-  older: Readonly<Record<string, readonly InboxItem[]>> | undefined,
+function listsWithOlder<Item extends OrderedItem>(
+  live: ReadonlyMap<string, readonly Item[]>,
+  older: Readonly<Record<string, readonly Item[]>> | undefined,
   liveIds: ReadonlySet<string>,
-): Map<string, readonly InboxItem[]> {
+): Map<string, readonly Item[]> {
   const lists = new Map(live);
 
   for (const [holder, items] of Object.entries(older ?? {})) {
@@ -847,10 +885,14 @@ export function inboxWithOlder(live: AppInboxItems, older: AppInboxItems): AppIn
  * the live list's alone; and the tasks only older items stand on after the
  * live holdings' own, the one whose item changed latest first. Both the
  * document's holdings and those the phone reads from its kept rows
- * (`inbox-rows.ts`'s `inboxHoldingsOfRows`) are laid over so. Note that
+ * (`inbox-rows.ts`'s `inboxHoldingsOfRows`) are laid over so, each with
+ * the older items as its own items stand, whole or as their rows. Note that
  * only All lists what this adds, and nothing counts it.
  */
-export function inboxHoldingsWithOlder(live: InboxHoldings, older: AppInboxItems): InboxHoldings {
+export function inboxHoldingsWithOlder<Item extends InboxFields & OrderedItem = InboxItem>(
+  live: InboxHoldings<Item>,
+  older: InboxItemsOf<Item>,
+): InboxHoldings<Item> {
   if (holdsNone(older)) return live;
   const liveIds = idsIn([...live.read.values(), ...Object.values(live.agents)]);
   const read = listsWithOlder(live.read, older[INBOX_SCOPE_KIND.TASK], liveIds);

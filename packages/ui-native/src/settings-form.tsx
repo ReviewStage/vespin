@@ -31,6 +31,7 @@ import {
   frame,
   lineLimit,
   listRowBackground,
+  listRowSeparator,
   listSectionSpacing,
   menuIndicator,
   menuStyle,
@@ -630,10 +631,11 @@ export function ToggleRow({
   );
 }
 
-/** How a row still waiting stands: the bare spinner alone, as a group's rows while they are read, or beside words the person must read, as a sign-in that waits on them. */
+/** How a row still waiting stands: the bare spinner alone, as a group's rows while they are read, or beside words the person must read, as a sign-in that waits on them, or alone at a plain list's end while its next page is read, as Mail stands one under its oldest message. */
 export const LOADING_ROW_LOOK = {
   BARE: "bare",
   SAID: "said",
+  LIST_END: "list-end",
 } as const;
 
 type LoadingRowLook = (typeof LOADING_ROW_LOOK)[keyof typeof LOADING_ROW_LOOK];
@@ -654,6 +656,21 @@ export function LoadingRow({
   readonly look?: LoadingRowLook | undefined;
 }) {
   const colors = useColors();
+
+  // Note that a plain list's end stands on the list's own ground with no hairline under it, since its rows stand plain rather than in a form's raised group.
+  if (look === LOADING_ROW_LOOK.LIST_END) {
+    return (
+      <ProgressView
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY }),
+          tint(colors.TEXT_MUTED),
+          accessibilityLabel(words),
+          listRowBackground("clear"),
+          listRowSeparator("hidden"),
+        ]}
+      />
+    );
+  }
 
   if (look === LOADING_ROW_LOOK.BARE) {
     return (
