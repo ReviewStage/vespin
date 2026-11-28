@@ -311,7 +311,7 @@ env:
           file: subflows/scroll-to.yaml
           env:
             ELEMENT: "Invite funnel"
-            BELOW: "relay › AL-42"
+            BELOW: ".*/relay › AL-42"
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
