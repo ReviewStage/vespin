@@ -4,6 +4,7 @@ import {
   DESCRIPTION_COMMENT_BOUNDS,
   type DescriptionCommentStart,
 } from "@repo/features/description-comment-wire";
+import { REVIEW_PANEL_WORDS } from "@repo/features/pull-request-model";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import {
@@ -24,7 +25,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { type AccountLines, keptLines } from "../composer-drafts.js";
 import { confirmFailure, failureShown } from "../failure-report.js";
 import { type LocalWrite, pressLocal } from "../undo-stack.js";
-import { REVIEW_PANEL_WORDS, ReviewPress, type ReviewWords } from "./review-panel.js";
+import { ReviewPress, type ReviewWords } from "./review-panel.js";
 
 /**
  * page-review.tsx -- a member's review of a page: comments gathered on it and held in this window, unsent, until they send them together from the page's Review press, as a pull request's review is finished from its tab's.

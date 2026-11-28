@@ -1,4 +1,9 @@
 import {
+  REVIEW_EVENT_WORDS,
+  REVIEW_PANEL_WORDS,
+  reviewPlaceholderOf,
+} from "@repo/features/pull-request-model";
+import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_BOUNDS,
   REVIEW_EVENT,
@@ -21,12 +26,7 @@ import { confirmFailure } from "../failure-report.js";
 import { overCommentBound } from "./comment-editor.js";
 import type { PendingReview } from "./line-comment.js";
 import { PullRequestWriteNote, type PullRequestWrites } from "./pull-request-writes.js";
-import {
-  type PendingItem,
-  REVIEW_PANEL_WORDS,
-  ReviewPress,
-  type ReviewWords,
-} from "./review-panel.js";
+import { type PendingItem, ReviewPress, type ReviewWords } from "./review-panel.js";
 import { TaskMentions } from "./task-mentions.js";
 
 /**
@@ -80,17 +80,10 @@ const DISCARD_QUESTION: DialogQuestion = {
 
 /** What the review may say, in the order GitHub's own review box offers it. */
 const EVENT_OPTIONS = [
-  { value: REVIEW_EVENT.COMMENT, label: "Comment" },
-  { value: REVIEW_EVENT.APPROVE, label: "Approve" },
-  { value: REVIEW_EVENT.REQUEST_CHANGES, label: "Request changes" },
+  { value: REVIEW_EVENT.COMMENT, label: REVIEW_EVENT_WORDS[REVIEW_EVENT.COMMENT] },
+  { value: REVIEW_EVENT.APPROVE, label: REVIEW_EVENT_WORDS[REVIEW_EVENT.APPROVE] },
+  { value: REVIEW_EVENT.REQUEST_CHANGES, label: REVIEW_EVENT_WORDS[REVIEW_EVENT.REQUEST_CHANGES] },
 ] as const satisfies readonly ChoiceOption<ReviewEvent>[];
-
-/** The field's prompt, by what the review says: changes asked for want their summary. */
-function placeholderOf(event: ReviewEvent): string {
-  return event === REVIEW_EVENT.REQUEST_CHANGES
-    ? "Summarize the requested changes"
-    : "Leave a summary comment (optional)";
-}
 
 /**
  * The tabs' row's Review press and the panel it opens, holding the review being
@@ -126,7 +119,7 @@ export function PullRequestReview({
     <TaskMentions value={undefined}>
       <ReviewPress
         className="pull-request-review"
-        words={{ ...REVIEW_WORDS, placeholder: placeholderOf(event) }}
+        words={{ ...REVIEW_WORDS, placeholder: reviewPlaceholderOf(event) }}
         count={pending?.comments ?? 0}
         open={open}
         onOpen={setOpen}

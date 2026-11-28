@@ -1,4 +1,4 @@
-// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; each file's diff on a screen of its own, drawn natively, stepping to the file before or after it, its review threads standing under their lines, each opening on its own screen, and a comment asked on any line from its long press; and a new comment on one line, added to the member's review or sent at once.
+// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; each file's diff on a screen of its own, drawn natively, stepping to the file before or after it, its review threads standing under their lines, each opening on its own screen, and a comment asked on any line from its long press; a new comment on one line, added to the member's review or sent at once; and the member's pending review, finished or discarded.
 
 import { DIFF_SIDE, type DiffSide } from "@repo/features/agent-wire";
 import {
@@ -14,20 +14,29 @@ import {
 import {
   iosPullRequestFileRoute,
   iosPullRequestLineCommentRoute,
+  iosPullRequestReviewRoute,
   iosPullRequestThreadRoute,
 } from "@repo/features/ios-app-links";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import {
+  REVIEW_EVENT_WORDS,
+  REVIEW_PANEL_WORDS,
+  reviewPlaceholderOf,
+} from "@repo/features/pull-request-model";
+import {
   PULL_REQUEST_ACTION,
   REVIEW_COMMENT_MODE,
   REVIEW_COMMENT_SIDE,
+  REVIEW_EVENT,
   type ReviewCommentMode,
+  type ReviewEvent,
 } from "@repo/features/pull-request-write-wire";
 import {
   BAR_TITLE,
   BUTTON_LOOK,
   ChangedFileRow,
   Composer,
+  ConfirmAsk,
   DiffView,
   diffLineText,
   EmptyState,
@@ -37,24 +46,30 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  MarkRow,
   MENU_CHIP_LOOK,
   MenuChip,
   RowList,
   Screen,
   ScriptRow,
+  STATUS_TONE,
   StackSubtitle,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
+  WordsRow,
   WriteNoteRow,
   wordsHandedBack,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { openInSafari } from "../open-link.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import { type PullRequestKey, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
-import { usePullRequestThreads } from "../pull-requests/use-pull-request-threads.js";
+import {
+  usePendingReview,
+  usePullRequestThreads,
+} from "../pull-requests/use-pull-request-threads.js";
 import { useFileViewed, usePullRequestViewed } from "../pull-requests/use-pull-request-viewed.js";
 import { useOnOwnTab } from "../tab-route.js";
 
@@ -130,7 +145,9 @@ function summaryOf(
  * (`filterFiles`), and Hide viewed in its ⋯ leaves out the files the
  * member marked viewed (`usePullRequestViewed`), each standing faded and
  * ticked otherwise, their count in the bar's summary; a mark GitHub would
- * not take says so in the list's footer. A press opens the file's diff on a screen of its own
+ * not take says so in the list's footer. Where the member holds a pending
+ * review, its ⋯ leads with Finish your review and how many comments it
+ * holds (`PullRequestReviewScreen`). A press opens the file's diff on a screen of its own
  * (`PullRequestFileScreen`). Where GitHub
  * listed more files than one read carries, the list's footer says so, in
  * the panel's words, as it says a read that failed after files were drawn,
@@ -144,6 +161,7 @@ export function PullRequestFilesScreen() {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
   const viewed = usePullRequestViewed(key);
+  const pending = usePendingReview(key);
   const [search, setSearch] = useState("");
   const [hideViewed, setHideViewed] = useState(false);
   const files = changes.files;
@@ -173,6 +191,14 @@ export function PullRequestFilesScreen() {
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILES_WORDS.MORE}>
           <Stack.Toolbar.Label>{FILES_WORDS.MORE}</Stack.Toolbar.Label>
+          {pending === undefined ? null : (
+            <Stack.Toolbar.MenuAction
+              icon={glyphSymbol(GLYPH.COMMENT)}
+              onPress={() => router.push(onOwnTab(iosPullRequestReviewRoute(key)))}
+            >
+              {`${REVIEW_PANEL_WORDS.TITLE} (${pending.comments})`}
+            </Stack.Toolbar.MenuAction>
+          )}
           <Stack.Toolbar.MenuAction isOn={hideViewed} onPress={() => setHideViewed(!hideViewed)}>
             {FILES_WORDS.HIDE_VIEWED}
           </Stack.Toolbar.MenuAction>
@@ -544,6 +570,183 @@ export function PullRequestLineCommentScreen() {
           </RowList>
         </Screen>
       </GlassDock>
+    </>
+  );
+}
+
+/** What the review screen's ⋯ and its Discard ask say, in the panel's words. */
+const FINISH_WORDS = {
+  MORE: "More",
+  SAYS: "The review says",
+  DISCARD_QUESTION: "Discard your pending review?",
+  DISCARD_WHY: "This deletes every pending comment you added to it.",
+  DISCARD_REVIEW: "Discard review",
+  NONE: "You have no pending review on this pull request.",
+  where: (path: string, line: number | null) =>
+    line === null ? folderAndName(path).name : `${folderAndName(path).name} · line ${line}`,
+} as const;
+
+/** What a review may say, in the order GitHub's own review box offers it. */
+const REVIEW_EVENTS: readonly ReviewEvent[] = [
+  REVIEW_EVENT.COMMENT,
+  REVIEW_EVENT.APPROVE,
+  REVIEW_EVENT.REQUEST_CHANGES,
+];
+
+/**
+ * The member's pending review on a pull request, finished from the phone as
+ * the desktop's Finish your review panel finishes it: its comments listed,
+ * each with the file and line it is on and its words, and the summary field
+ * docked at its foot, whose capsule says what the review says (Comment,
+ * Approve, or Request changes, as GitHub's own review box offers them) and
+ * whose Send submits it on GitHub as the member. Discard in the ⋯ asks
+ * first, then throws the review and its comments away. A review GitHub took
+ * closes the screen, the conversation read again behind it; one it would not
+ * take, such as an approval of the member's own pull request, says why.
+ */
+export function PullRequestReviewScreen() {
+  const key = usePullRequestKey();
+  const router = useRouter();
+  const colors = useColors();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const pending = usePendingReview(key);
+  const writes = usePullRequestWrites(key);
+  const openLink = useOpenLink(key.workspaceId);
+  const [body, setBody] = useState("");
+  const [event, setEvent] = useState<ReviewEvent>(REVIEW_EVENT.COMMENT);
+  const [discarding, setDiscarding] = useState(false);
+  const busy = writes.pending !== undefined;
+
+  // Note that asking for changes wants its summary, as GitHub's own box does; every other review may go with none.
+  const sendable = !busy && (event !== REVIEW_EVENT.REQUEST_CHANGES || body.trim() !== "");
+
+  // Note that Send hands the summary it took out of the field, which may stand empty but for a request for changes, and it goes back in the field where GitHub refused the review.
+  const submit = (typed: string) => {
+    if (busy || (event === REVIEW_EVENT.REQUEST_CHANGES && typed.trim() === "")) return false;
+
+    void writes
+      .write({ action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body: typed })
+      .then((went) => {
+        if (went) router.back();
+        else setBody((now) => wordsHandedBack(typed, now));
+      });
+
+    return true;
+  };
+
+  const discard = () => {
+    setDiscarding(false);
+    void writes.write({ action: PULL_REQUEST_ACTION.DISCARD_REVIEW }).then((went) => {
+      if (went) router.back();
+    });
+  };
+
+  const eventChip = (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={REVIEW_EVENT_WORDS[event]}
+      menu={{
+        groups: [
+          {
+            title: FINISH_WORDS.SAYS,
+            choices: REVIEW_EVENTS.map((each) => ({
+              label: REVIEW_EVENT_WORDS[each],
+              on: each === event,
+              onPress: () => setEvent(each),
+            })),
+          },
+        ],
+      }}
+    />
+  );
+
+  const bar = (
+    <>
+      <Stack.Screen
+        options={{
+          title: REVIEW_PANEL_WORDS.TITLE,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+        }}
+      />
+      <StackSubtitle
+        words={pending === undefined ? "" : REVIEW_PANEL_WORDS.pending(pending.comments)}
+        leading={regular}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FINISH_WORDS.MORE}>
+          <Stack.Toolbar.Label>{FINISH_WORDS.MORE}</Stack.Toolbar.Label>
+          <Stack.Toolbar.MenuAction
+            destructive
+            disabled={busy || pending === undefined}
+            onPress={() => setDiscarding(true)}
+          >
+            {REVIEW_PANEL_WORDS.DISCARD}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
+    </>
+  );
+
+  const list = (
+    <Screen>
+      <RowList
+        look={LIST_LOOK.PLAIN}
+        empty={
+          pending === undefined ? (
+            <EmptyState title={FINISH_WORDS.NONE} symbol={GLYPH.COMMENT} />
+          ) : undefined
+        }
+      >
+        {writes.note === undefined ? null : (
+          <ListSection>
+            <WriteNoteRow words={writes.note.words} said={writes.note.said} />
+          </ListSection>
+        )}
+        {(pending?.drafts ?? []).map((draft) => (
+          <ListSection key={draft.id}>
+            <MarkRow
+              id={draft.id}
+              mark={{ symbol: GLYPH.COMMENT, tone: STATUS_TONE.NEUTRAL }}
+              title={FINISH_WORDS.where(draft.path, draft.line)}
+            />
+            <WordsRow
+              words={draft.body}
+              repository={key.repository}
+              onOpenLink={openLink}
+              hidesHtml
+            />
+          </ListSection>
+        ))}
+      </RowList>
+    </Screen>
+  );
+
+  return (
+    <>
+      {bar}
+      <GlassDock
+        bar={
+          <Composer
+            placeholder={reviewPlaceholderOf(event)}
+            words={body}
+            onWords={setBody}
+            sendable={sendable}
+            onSend={submit}
+            tools={eventChip}
+          />
+        }
+      >
+        {list}
+      </GlassDock>
+      <ConfirmAsk
+        title={FINISH_WORDS.DISCARD_QUESTION}
+        message={FINISH_WORDS.DISCARD_WHY}
+        act={FINISH_WORDS.DISCARD_REVIEW}
+        destructive
+        presented={discarding}
+        onAct={discard}
+        onDismiss={() => setDiscarding(false)}
+      />
     </>
   );
 }

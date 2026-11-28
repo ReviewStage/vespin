@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, a search by path narrowing them, and a file's diff on its own screen, stepping to the next file, the 5,000-line generated file shown from its fold, a review thread under its line opened on its own screen, and a comment on a line from its long press.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, a search by path narrowing them, and a file's diff on its own screen, stepping to the next file, the 5,000-line generated file shown from its fold, a review thread under its line opened on its own screen, a comment on a line from its long press, and the pending review finished.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -147,3 +147,19 @@ env:
 - extendedWaitUntil:
     visible: ".*fresh expiry.*"
     timeout: 10000
+# The member's pending review is finished from the Files list's ⋯: its
+# comments listed, and Send submits it with what the review says.
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/files"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "resend.ts"
+    timeout: 15000
+- runFlow: subflows/more.yaml
+- tapOn: "Finish your review (1)"
+- extendedWaitUntil:
+    visible: "Could this also check the new expiry?"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-review

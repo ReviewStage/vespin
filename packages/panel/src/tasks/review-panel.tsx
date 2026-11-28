@@ -1,3 +1,4 @@
+import { REVIEW_PANEL_WORDS } from "@repo/features/pull-request-model";
 import {
   AnchoredPopover,
   BLOCK_LIST_ELEMENT,
@@ -55,17 +56,6 @@ export interface ReviewWords {
   readonly send: string;
   readonly sending: string;
 }
-
-/** The panel's words every review shares. */
-export const REVIEW_PANEL_WORDS = {
-  TITLE: "Finish your review",
-  CLOSE: "Close",
-  CANCEL: "Cancel",
-  DISCARD: "Discard",
-  BODY: "Review comment",
-  /** How many comments a review holds, as its lead says it. */
-  pending: (count: number) => `${count} pending ${count === 1 ? "comment" : "comments"}`,
-} as const;
 
 /** One pending comment the panel lists, each drawn as its review draws it, with its own acts. */
 export interface PendingItem {

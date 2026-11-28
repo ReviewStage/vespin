@@ -97,6 +97,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_FILE: "file",
   /** A new review comment on one line of a pull request's file, under its own route, the file, line, and side in the query. */
   PULL_REQUEST_LINE_COMMENT: "line-comment",
+  /** The member's pending review on a pull request, finished or discarded, under its own route. */
+  PULL_REQUEST_REVIEW: "review",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
   /** One thread of a Manager's chat, by the message it hangs on, under its agent's route. */
@@ -377,6 +379,15 @@ export function iosPullRequestLineCommentRoute(
   });
 
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_LINE_COMMENT}?${query}`;
+}
+
+/** The app's route for finishing the member's pending review on a pull request, by its workspace, repository, and number. */
+export function iosPullRequestReviewRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_REVIEW}`;
 }
 
 /**

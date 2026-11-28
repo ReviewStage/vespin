@@ -460,6 +460,23 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
           entry(128, ADA, "Thanks, merging once CI is green.", 10 * MINUTE),
         ],
         earlier: 0,
+        pendingReview: {
+          comments: 1,
+          drafts: [
+            {
+              id: "PRRC_fixture_pending",
+              by: ADA,
+              path: "test/invites/resend.test.ts",
+              line: 2,
+              startLine: null,
+              side: DIFF_SIDE.RIGHT,
+              startSide: null,
+              html: "<p>Could this also check the new expiry?</p>",
+              body: "Could this also check the new expiry?",
+              at: LANDED - 5 * MINUTE,
+            },
+          ],
+        },
       },
     },
   ],
