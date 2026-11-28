@@ -1362,13 +1362,13 @@ export function Picture({
         {boxWidth === undefined ? (
           <View style={well} accessible accessibilityLabel={heard} />
         ) : (
-          <HeldMenu acts={acts} width={boxWidth}>
-            <Press
-              onPress={show}
-              disabled={source == null}
+          <HeldMenu acts={acts} width={boxWidth} onTap={source == null ? undefined : show}>
+            <View
+              accessible
               accessibilityRole="imagebutton"
               accessibilityLabel={heard}
               accessibilityHint="Opens full screen"
+              onAccessibilityTap={source == null ? undefined : show}
               testID="markdown-picture"
             >
               <LoaderImage
@@ -1380,7 +1380,7 @@ export function Picture({
                 }}
                 style={well}
               />
-            </Press>
+            </View>
           </HeldMenu>
         )}
       </View>
