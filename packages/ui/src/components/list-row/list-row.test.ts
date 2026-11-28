@@ -247,6 +247,7 @@ test("metadata holding a press of its own stands beside the row's press: its con
   press(manager);
 
   const when = container.querySelector<HTMLElement>(".when");
+
   if (when === null) throw new Error("No metadata drawn");
   press(when);
 
