@@ -48,7 +48,6 @@ import {
   TextField,
   useConfirmDialog,
 } from "@repo/ui";
-import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -68,7 +67,7 @@ import {
 } from "../tasks/runs-on.js";
 import { useNewTaskShown } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { type FormDialog, useFormDialog } from "./use-form-dialog.js";
 
 /** The card's title, and what its + is named. */
@@ -206,9 +205,8 @@ function ManagerCard({
           description={face.value === undefined ? FACE_PICKED_FOR_YOU : undefined}
         >
           {() => (
-            <ManagerFaceWell
+            <RecentManagerFaceWell
               face={face.value}
-              recent={RECENT_MANAGER_FACES}
               open={facePicking}
               onOpenChange={setFacePicking}
               disabled={form.settling}

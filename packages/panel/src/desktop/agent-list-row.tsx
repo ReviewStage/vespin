@@ -35,7 +35,6 @@ import {
   Time,
   WorkingCount,
 } from "@repo/ui";
-import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
@@ -57,7 +56,7 @@ import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-s
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, FACE_IN, rowDoors, useAgentActions } from "./agent-actions.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
 import { moveToSectionEntry, type SectionDialogs, useSectionDialogs } from "./sidebar-sections.js";
 import { SIDEBAR_ROW_TIME } from "./task-card.js";
@@ -282,10 +281,9 @@ export function AgentListRow({
 
   const glyph =
     editing && face !== undefined ? (
-      <ManagerFaceWell
+      <RecentManagerFaceWell
         ref={well}
         face={agent.face}
-        recent={RECENT_MANAGER_FACES}
         open={face.picking}
         onOpenChange={(open, away) => {
           face.onPicking(open);

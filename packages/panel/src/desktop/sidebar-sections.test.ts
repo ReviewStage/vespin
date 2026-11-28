@@ -14,6 +14,7 @@ import { applySectionWrite } from "@repo/features/task-section-writes";
 import { sectionRows, sectionTaskIds, workspaceSections } from "@repo/features/task-sections-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -30,6 +31,7 @@ import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/c
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { type TasksControlOverrides, tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { ToastHost } from "../toast.js";
 
 /**
@@ -55,9 +57,6 @@ const WORKSPACE: Workspace = {
 };
 
 const LAUNCH = "0a1b2c3d-0000-4000-8000-000000000001";
-
-/** Where this Mac keeps the icons it chose last, as the picker keeps them. */
-const RECENT_ICONS = "app.recentSectionIcons";
 
 const roots: Root[] = [];
 
@@ -1517,9 +1516,10 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("a glyph found by searching asks its color in a flyout, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+test("a glyph found by searching asks its color in a flyout, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and the account's most recent", async () => {
   document.documentElement.setAttribute("data-ui-theme", "dark");
   onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
+  const chosen = keepViewChoices();
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -1548,7 +1548,8 @@ test("a glyph found by searching asks its color in a flyout, the text's own name
     glyph: "telescope",
     color: TASK_SECTION_ICON_COLOR.TEAL,
   });
-  assert.deepEqual(JSON.parse(window.localStorage.getItem(RECENT_ICONS) ?? "[]")[0], {
+  const recent = chosen.findLast((write) => write.key === VIEW_CHOICE_KEY.RECENT_SECTION_ICONS);
+  assert.deepEqual(Array.isArray(recent?.value) ? recent.value[0] : undefined, {
     kind: TASK_SECTION_ICON_KIND.GLYPH,
     glyph: "telescope",
     color: TASK_SECTION_ICON_COLOR.TEAL,
@@ -1786,17 +1787,21 @@ test("an emoji typed into the search is offered first, one the grid leaves out i
   assert.deepEqual(made.icon, { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: "🫩" });
 });
 
-test("a glyph this Mac chose last is offered first under Recent in the color it was chosen in, which its colors start on", async () => {
-  window.localStorage.setItem(
-    RECENT_ICONS,
-    JSON.stringify([
-      {
-        kind: TASK_SECTION_ICON_KIND.GLYPH,
-        glyph: "telescope",
-        color: TASK_SECTION_ICON_COLOR.RED,
-      },
-    ]),
-  );
+test("a glyph the account chose last is offered first under Recent in the color it was chosen in, which its colors start on", async () => {
+  keepViewChoices([
+    {
+      id: "0a1b2c3d-0000-4000-8000-0000000000e1",
+      key: VIEW_CHOICE_KEY.RECENT_SECTION_ICONS,
+      workspaceId: null,
+      value: [
+        {
+          kind: TASK_SECTION_ICON_KIND.GLYPH,
+          glyph: "telescope",
+          color: TASK_SECTION_ICON_COLOR.RED,
+        },
+      ],
+    },
+  ]);
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 

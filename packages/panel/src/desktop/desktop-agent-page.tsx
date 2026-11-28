@@ -90,7 +90,6 @@ import {
   useSideSplit,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import {
   agentTab,
   pageTab,
@@ -133,7 +132,7 @@ import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, FACE_IN, useAgentActions } from "./agent-actions.js";
 import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
@@ -435,9 +434,8 @@ function OwnAgentHead({
   // Note that while the name is edited, a Manager's face before it is the well its Change face picks it in, its picker open from the start there.
   const lead =
     editing && face !== undefined ? (
-      <ManagerFaceWell
+      <RecentManagerFaceWell
         face={agent.face}
-        recent={RECENT_MANAGER_FACES}
         open={face.picking}
         onOpenChange={(open, pressedAway) => {
           face.onPicking(open);

@@ -23,8 +23,11 @@ import { Option, Schema } from "effect";
 import { AUTOMATIONS_ORDER } from "./automation-list-model.js";
 import { AUTOMATION_LIST_GROUP } from "./automation-wire.js";
 import { INBOX_RUNS, INBOX_SHOW, INBOX_WHOSE } from "./inbox-list-model.js";
+import { managerFaceSchema } from "./manager-face.js";
+import { mergeMethodSchema } from "./pull-request-write-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
 import { ASSIGNED_TO, TASK_GROUPING } from "./task-list-model.js";
+import { taskSectionIconSchema } from "./task-section-wire.js";
 import {
   TASK_PRIORITY_ORDER,
   TASK_STATUS,
@@ -97,6 +100,16 @@ export const VIEW_CHOICE_KEY = {
   CONVERSATION_FILTERS: "conversationFilters",
   /** Whether Find in tab searches a transcript's details too. */
   FIND_DETAILS: "findDetails",
+  /** The merge method last chosen in each repository, newest first. */
+  MERGE_METHODS: "mergeMethods",
+  /** The people a task's follow offer was turned down for, by task, newest first. */
+  FOLLOW_OFFERS_DECLINED: "followOffersDeclined",
+  /** The newest failed run seen of each of the account's own automations, by the automation. */
+  FAILED_RUNS_SEEN: "failedRunsSeen",
+  /** The section icons chosen last, newest first, which the icon picker offers under Recent. */
+  RECENT_SECTION_ICONS: "recentSectionIcons",
+  /** The Manager faces picked last, newest first, which the face picker offers under Recent. */
+  RECENT_MANAGER_FACES: "recentManagerFaces",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -194,6 +207,28 @@ export const tasksListFoldsSchema = Schema.Struct({
   assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
   creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
 });
+
+/**
+ * How many entries a choice that keeps a list may hold, the newest kept
+ * first, so its JSON stands well inside `VIEW_CHOICE_BOUNDS.MAX_VALUE_CHARS`
+ * however long its names run: a repository's name is at most 140
+ * characters, and a task's and a person's id under 40.
+ */
+export const VIEW_CHOICE_LIST_BOUNDS = {
+  /** The repositories whose merge method is kept. */
+  MERGE_REPOSITORIES: 50,
+  /** The tasks whose turned-down follow offers are kept. */
+  DECLINED_TASKS: 30,
+  /** The people turned down on one task. */
+  DECLINED_PEOPLE: 10,
+  /** The icons or faces a picker offers under Recent. */
+  RECENT: 10,
+} as const;
+
+/** A list of `item`, holding at most `most`. */
+function listOf<S extends Schema.Top>(item: S, most: number) {
+  return Schema.Array(item).check(Schema.isMaxLength(most));
+}
 
 /** Every view choice, by its key. */
 export const VIEW_CHOICE = {
@@ -320,6 +355,40 @@ export const VIEW_CHOICE = {
     VIEW_CHOICE_KEY.FIND_DETAILS,
     VIEW_CHOICE_SCOPE.ACCOUNT,
     Schema.Boolean,
+  ),
+  [VIEW_CHOICE_KEY.MERGE_METHODS]: viewChoice(
+    VIEW_CHOICE_KEY.MERGE_METHODS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    listOf(
+      Schema.Struct({ repository: Schema.String, method: mergeMethodSchema }),
+      VIEW_CHOICE_LIST_BOUNDS.MERGE_REPOSITORIES,
+    ),
+  ),
+  [VIEW_CHOICE_KEY.FOLLOW_OFFERS_DECLINED]: viewChoice(
+    VIEW_CHOICE_KEY.FOLLOW_OFFERS_DECLINED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    listOf(
+      Schema.Struct({
+        taskId: Schema.String,
+        userIds: listOf(Schema.String, VIEW_CHOICE_LIST_BOUNDS.DECLINED_PEOPLE),
+      }),
+      VIEW_CHOICE_LIST_BOUNDS.DECLINED_TASKS,
+    ),
+  ),
+  [VIEW_CHOICE_KEY.FAILED_RUNS_SEEN]: viewChoice(
+    VIEW_CHOICE_KEY.FAILED_RUNS_SEEN,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Record(Schema.String, Schema.String),
+  ),
+  [VIEW_CHOICE_KEY.RECENT_SECTION_ICONS]: viewChoice(
+    VIEW_CHOICE_KEY.RECENT_SECTION_ICONS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    listOf(taskSectionIconSchema, VIEW_CHOICE_LIST_BOUNDS.RECENT),
+  ),
+  [VIEW_CHOICE_KEY.RECENT_MANAGER_FACES]: viewChoice(
+    VIEW_CHOICE_KEY.RECENT_MANAGER_FACES,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    listOf(managerFaceSchema, VIEW_CHOICE_LIST_BOUNDS.RECENT),
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 
