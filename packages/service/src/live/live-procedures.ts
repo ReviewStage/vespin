@@ -237,6 +237,7 @@ import {
   type LiveReadParams,
 } from "@repo/features/live-read";
 import {
+  LIVE_FIRST_PAGE,
   LIVE_POLL,
   LIVE_USER_QUERY,
   liveDigestOf,
@@ -258,7 +259,7 @@ import { accountMiddleware, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { type LiveTopics, ownMovedKeys, syncMovedOf } from "../sync/live-query.js";
 import { NO_TOPICS } from "../sync/watch.js";
 import { LIVE_ANSWER_ATTRIBUTE, WHOLE_REASON, type WholeReason } from "./answer-span.js";
-import { mayHoldFirstPage, pageParents, pageTokenOf, readsPages } from "./live-pages.js";
+import { mayHoldFirstPage, pageParents, pageTokenOf } from "./live-pages.js";
 import { type BoundLiveRead, type PartOf, WATCHED_LOOK } from "./live-read-binding.js";
 import { type LiveSealer, NO_ROWS_DIGEST, pollSealer } from "./poll-sealer.js";
 import { accountInboxRead } from "./reads/account-inbox.js";
@@ -971,20 +972,23 @@ const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
 /**
  * A bound live read's parts in delta mode, under the read's span as
  * `liveQueryParts` runs one: the page a reader names (`page`), or past its
- * sync id, a whole answer in pages to a build that reads them (`paged`).
+ * sync id, a whole answer in pages where it named the first
+ * (`LIVE_FIRST_PAGE`), and in one answer where it named none.
  */
 const liveDeltaParts = /* @__PURE__ */ Effect.fnUntraced(
   function* <Read extends AnyLiveRead>(
     query: BoundLiveRead<Read>,
     params: LiveReadParams<Read>,
     asked: { readonly sync: string | undefined; readonly page: string | undefined },
-    paged: boolean,
     firstPage: (past: number) => boolean,
     client: string,
   ) {
     const page = query.delta?.page;
 
-    if (asked.page === undefined) {
+    // Note that only a reader that named a page is answered one, so a build that never follows them, whatever version it sends, is answered whole in one answer.
+    if (asked.page === undefined || asked.page === LIVE_FIRST_PAGE) {
+      const paged = asked.page === LIVE_FIRST_PAGE;
+
       return yield* deltaParts(query, params, asked.sync ?? "", paged, firstPage, client);
     }
 
@@ -1015,8 +1019,8 @@ const UNNAMED_CLIENT = "unnamed";
  * read's past the reader's cursor where it names one (`liveCursorParts`);
  * and a delta read's past the reader's sync id where it names one, or the
  * page it names (`liveDeltaParts`), each answered as a snapshot's
- * otherwise; a whole answer in pages to a build that reads them
- * (`readsPages`, from the request's headers).
+ * otherwise; a whole answer in pages to a reader that names the first
+ * (`LIVE_FIRST_PAGE`).
  */
 function boundParts<Read extends AnyLiveRead>(
   read: BoundLiveRead<Read>,
@@ -1039,7 +1043,6 @@ function boundParts<Read extends AnyLiveRead>(
       read,
       bound,
       { sync, page },
-      readsPages(request),
       (past) => mayHoldFirstPage(request, past),
       client,
     );

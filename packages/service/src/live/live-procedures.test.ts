@@ -86,6 +86,7 @@ import { INTEGRATION_STATUSES_READ, integrationLiveRowsOf } from "@repo/features
 import { INTEGRATION_PROVIDER, INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import {
   ACCOUNT_INBOX_ITEMS,
+  LIVE_FIRST_PAGE,
   LIVE_POLL,
   LIVE_POLL_URL,
   LIVE_USER_QUERY,
@@ -2679,19 +2680,16 @@ const askHeld = (
     return body;
   });
 
-/** The headers of a build that reads a whole answer in pages: an iPhone's at the first hosted API version that does. */
-const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "12" };
+/** The headers of a build past every hosted API version, as one that reads pages sends. */
+const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "13" };
 
-/** The headers of a build at the newest hosted API version that follows no page, 11, as the desktop v0.44, the web app, the CLI, and the iOS builds before paged reads ship. */
-const SHIPPED_BUILD = {
-  [CLIENT_HEADER.CLIENT]: "desktop/1.0",
-  [CLIENT_HEADER.API_VERSION]: "11",
-};
+/** The headers of a build at a hosted API version answered first pages it never followed, as the desktop v0.44, the web app, the CLI, and the iOS builds at 10 and 11 were. */
+const SHIPPED_BUILD = { [CLIENT_HEADER.CLIENT]: "desktop/1.0", [CLIENT_HEADER.API_VERSION]: "11" };
 
-/** The task list asked as a build that reads pages, as `bearer`, past `sync`, or the page `page` names, its parts decoded. */
-const askTaskPage = (bearer: string, sync: string, page?: string) =>
+/** The task list asked as a reader that follows pages, as `bearer`, past `sync`, from the first page or the page `page` names, its parts decoded. */
+const askTaskPage = (bearer: string, sync: string, page: string = LIVE_FIRST_PAGE) =>
   Effect.map(
-    askHeld(bearer, "/api/live/tasks", sync, undefined, page === undefined ? {} : { page }),
+    askHeld(bearer, "/api/live/tasks", sync, undefined, { page }),
     (body) => Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body).queries,
   );
 
@@ -2841,7 +2839,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
   );
 
   it.effect(
-    "a build at a hosted API version that follows no page is answered the task list whole in one answer, past a page's length",
+    "a read that names no page is answered the task list whole in one answer, past a page's length, whatever hosted API version its build sends",
     () =>
       Effect.gen(function* () {
         const dana = yield* openUser;
@@ -2856,7 +2854,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         );
 
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
-          yield* askHeld(dana, "/api/live/tasks", "", undefined, { build: SHIPPED_BUILD }),
+          yield* askHeld(dana, "/api/live/tasks", "", undefined, { build: PAGED_BUILD }),
         ).queries;
 
         assert.equal(answer.tasks.sync?.page, undefined);
@@ -3141,7 +3139,7 @@ it.layer(getTestDB())("the account's inbox items' live read in delta mode", (it)
       const itemId = yield* openItem(dana);
 
       const answered = Schema.decodeUnknownSync(INBOX_ITEMS_READ.answer)(
-        yield* askHeld(dana, "/api/live/inbox-items", "", undefined, {}),
+        yield* askHeld(dana, "/api/live/inbox-items", "", undefined, { page: LIVE_FIRST_PAGE }),
       ).queries;
 
       assert.deepEqual(idsOf(answered.stamps), [itemId]);
