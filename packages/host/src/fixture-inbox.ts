@@ -206,7 +206,7 @@ import {
   RUN_PROFILE,
   WORKSPACE_OWN_MEMORIES,
 } from "./app-state.js";
-import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
+import type { PortActCall, PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
 import {
   fixtureAgentOlderMessages,
   fixtureAgentPicture,
@@ -2645,12 +2645,10 @@ function changedMessages(queue: AgentQueue, change: AgentQueueChange): readonly 
  */
 export function queueAfter(
   queues: KeptQueues,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): { readonly agentId: string; readonly queue: AgentQueue } | undefined {
-  if (kind !== ACT_KIND.AGENTS_QUEUE && kind !== ACT_KIND.AGENTS_STOP) return undefined;
-  // SAFETY: both kinds' payloads name the agent.
-  const { agentId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_STOP>;
+  if (act.kind !== ACT_KIND.AGENTS_QUEUE && act.kind !== ACT_KIND.AGENTS_STOP) return undefined;
+  const { agentId } = act.payload;
 
   const held =
     queues.get(agentId) ?? (agentId === AGENT.INVITES ? INVITES_TRANSCRIPT.word?.queue : undefined);
@@ -2658,12 +2656,11 @@ export function queueAfter(
   if (held === undefined) return undefined;
   const revision = held.revision + 1;
 
-  if (kind === ACT_KIND.AGENTS_STOP) {
+  if (act.kind === ACT_KIND.AGENTS_STOP) {
     return { agentId, queue: { ...held, paused: { because: QUEUE_PAUSE.STOPPED }, revision } };
   }
 
-  // SAFETY: the payload is the one its kind declares.
-  const { change } = payload as PortActPayload<typeof ACT_KIND.AGENTS_QUEUE>;
+  const { change } = act.payload;
   const { paused: _paused, ...resumed } = held;
   const messages = changedMessages(held, change);
   const queue = change.change === QUEUE_CHANGE.RESUME ? resumed : held;
@@ -3321,59 +3318,47 @@ export type AgentChoices = ReadonlyMap<string, AgentChange>;
 
 /** The change an act a fixture run takes makes to its agent, or none for an act that changes none. */
 export function agentChangeOf(
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): { readonly agentId: string; readonly change: AgentChange } | undefined {
-  switch (kind) {
+  switch (act.kind) {
     case ACT_KIND.AGENTS_CHOOSE: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, model, effort } = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHOOSE>;
+      const { agentId, model, effort } = act.payload;
 
       return { agentId, change: { model, effort } };
     }
 
     case ACT_KIND.AGENTS_PERMISSION_MODE: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, permissionMode } = payload as PortActPayload<
-        typeof ACT_KIND.AGENTS_PERMISSION_MODE
-      >;
+      const { agentId, permissionMode } = act.payload;
 
       return { agentId, change: { permissionMode } };
     }
 
     case ACT_KIND.AGENTS_FACE: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, face } = payload as PortActPayload<typeof ACT_KIND.AGENTS_FACE>;
+      const { agentId, face } = act.payload;
 
       return { agentId, change: { face } };
     }
 
     case ACT_KIND.AGENTS_SERVERS: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, disabledServers } = payload as PortActPayload<
-        typeof ACT_KIND.AGENTS_SERVERS
-      >;
+      const { agentId, disabledServers } = act.payload;
 
       return { agentId, change: { disabledServers } };
     }
 
     case ACT_KIND.AGENTS_RENAME: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, title } = payload as PortActPayload<typeof ACT_KIND.AGENTS_RENAME>;
+      const { agentId, title } = act.payload;
 
       return { agentId, change: { title } };
     }
 
     case ACT_KIND.AGENTS_PIN: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, pinned } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PIN>;
+      const { agentId, pinned } = act.payload;
 
       return { agentId, change: { pinned } };
     }
 
     case ACT_KIND.AGENTS_ARCHIVE: {
-      // SAFETY: the payload is the one its case's kind declares.
-      const { agentId, archived } = payload as PortActPayload<typeof ACT_KIND.AGENTS_ARCHIVE>;
+      const { agentId, archived } = act.payload;
 
       return { agentId, change: { archived } };
     }
@@ -3765,12 +3750,10 @@ export function inboxAutomationsAppState(
 
 /** The switch an automation's change turns, by the automation, where the change turns one; none for any other act. */
 export function automationSwitchOf(
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): { readonly automationId: string; readonly enabled: boolean } | undefined {
-  if (kind !== ACT_KIND.AUTOMATIONS_CHANGE) return undefined;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { automationId, change } = payload as PortActPayload<typeof ACT_KIND.AUTOMATIONS_CHANGE>;
+  if (act.kind !== ACT_KIND.AUTOMATIONS_CHANGE) return undefined;
+  const { automationId, change } = act.payload;
 
   return change.enabled === undefined ? undefined : { automationId, enabled: change.enabled };
 }
