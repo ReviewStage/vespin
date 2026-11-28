@@ -9,6 +9,8 @@ import type { DiffColumns } from "./diff-view-model.js";
 export interface NativeDiffLook {
   readonly fontSize: number;
   readonly wrap: boolean;
+  /** Whether the old side stands beside the new, where the view is wide enough for two halves of code. */
+  readonly split: boolean;
   readonly text: ColorValue;
   readonly muted: ColorValue;
   readonly ground: ColorValue;
@@ -35,8 +37,13 @@ interface NativeDiffViewProps {
   readonly onLineComment?:
     | ((event: NativeSyntheticEvent<{ readonly row: number }>) => void)
     | undefined;
-  /** What a code row's long press menu says: commenting on its line, which its number follows, and copying it. */
-  readonly words: { readonly comment: string; readonly copy: string };
+  /** What a code row says: its long press menu's commenting on its line, which its number follows, and copying it, and the words an added or a removed row is heard with. */
+  readonly words: {
+    readonly comment: string;
+    readonly copy: string;
+    readonly added: string;
+    readonly removed: string;
+  };
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;
 }

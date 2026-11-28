@@ -14,6 +14,13 @@
 // never holds the first frame. A diff handed again before its colors land
 // drops them.
 //
+// Where the look asks for a split diff and the view is wide enough for two
+// halves of code, the old side stands beside the new (`displayRows`, in the
+// package beside the highlighter): context on both halves, each run of
+// removed lines beside the added lines that follow it, and a hunk's header
+// or a thread's card across both. Narrower, it draws unified whatever the
+// look asks, as the desktop's diff does.
+//
 // Nothing here lays words out to measure them. The face is monospaced, so a
 // row's width is its count of characters times one advance, and with words
 // wrapped its height is the number of lines that count fills at the room the
@@ -54,6 +61,7 @@ public final class DiffViewModule: Module {
 
       Prop("path") { (view: DiffView, path: String) in
         view.language = DiffLanguage(path: path)
+        view.path = path
       }
 
       Prop("words") { (view: DiffView, words: WordsRecord) in
@@ -77,6 +85,7 @@ struct RowsRecord: Record {
 struct LookRecord: Record {
   @Field var fontSize: Double = 13
   @Field var wrap: Bool = true
+  @Field var split: Bool = false
   @Field var text: UIColor? = nil
   @Field var muted: UIColor? = nil
   @Field var ground: UIColor? = nil
@@ -88,10 +97,12 @@ struct LookRecord: Record {
   @Field var cardEdge: UIColor? = nil
 }
 
-/// What a code row's long press menu says, in the panel's words, which JavaScript hands: commenting on its line, which the line's number follows, and copying it.
+/// What a code row says, in the panel's words, which JavaScript hands: its long press menu's commenting on its line, which the line's number follows, and copying it, and the words an added or a removed row is heard with.
 struct WordsRecord: Record {
   @Field var comment: String = ""
   @Field var copy: String = ""
+  @Field var added: String = ""
+  @Field var removed: String = ""
 }
 
 // MARK: - The diff as the view holds it
@@ -156,6 +167,8 @@ struct DiffRows {
 struct DiffLook {
   let font: UIFont
   let wrap: Bool
+  /// Whether the old side stands beside the new where the view is wide enough.
+  let split: Bool
   let text: UIColor
   let muted: UIColor
   let ground: UIColor
@@ -173,6 +186,7 @@ struct DiffLook {
   init(_ record: LookRecord) {
     font = UIFont.monospacedSystemFont(ofSize: CGFloat(record.fontSize), weight: .regular)
     wrap = record.wrap
+    split = record.split
     text = record.text ?? .label
     muted = record.muted ?? .secondaryLabel
     ground = record.ground ?? .systemBackground
@@ -229,54 +243,86 @@ struct DiffGeometry {
   static let gutterGap: CGFloat = 6
   static let cardPadding: CGFloat = 6
   static let cardGap: CGFloat = 4
+  /// The narrowest a view is split at: two halves of about forty columns of code each beside their numbers, as the desktop's `SPLIT_MIN_WIDTH`.
+  static let splitMinWidth: CGFloat = 640
 
   let advance: CGFloat
   let lineHeight: CGFloat
   let gutterWidth: CGFloat
+  /// A split half's gutter, one column of numbers wide.
+  let halfGutterWidth: CGFloat
   let contentWidth: CGFloat
   /// Each row's top, and the whole diff's height last, so row `i` spans `tops[i]..<tops[i + 1]`.
   let tops: [CGFloat]
 
-  static let none = DiffGeometry(advance: 0, lineHeight: 0, gutterWidth: 0, contentWidth: 0, tops: [0])
+  static let none = DiffGeometry(
+    advance: 0,
+    lineHeight: 0,
+    gutterWidth: 0,
+    halfGutterWidth: 0,
+    contentWidth: 0,
+    tops: [0]
+  )
 
-  init(advance: CGFloat, lineHeight: CGFloat, gutterWidth: CGFloat, contentWidth: CGFloat, tops: [CGFloat]) {
+  init(
+    advance: CGFloat,
+    lineHeight: CGFloat,
+    gutterWidth: CGFloat,
+    halfGutterWidth: CGFloat,
+    contentWidth: CGFloat,
+    tops: [CGFloat]
+  ) {
     self.advance = advance
     self.lineHeight = lineHeight
     self.gutterWidth = gutterWidth
+    self.halfGutterWidth = halfGutterWidth
     self.contentWidth = contentWidth
     self.tops = tops
   }
 
-  init(rows: DiffRows, look: DiffLook, width: CGFloat) {
+  /// The geometry of `display`, the diff's rows laid out unified or split, at `width`.
+  init(rows: DiffRows, display: [DisplayRow], look: DiffLook, width: CGFloat) {
     let advance = ceil(("0" as NSString).size(withAttributes: [.font: look.font]).width)
     let lineHeight = ceil(look.font.lineHeight) + 2
-    // Two columns of numbers, the old side's and the new's, as the desktop's unified diff numbers a line.
+    // Two columns of numbers, the old side's and the new's, as the desktop's unified diff numbers a line; a split half numbers its own side alone.
     let gutterWidth = CGFloat(rows.digits * 2) * advance + DiffGeometry.gutterGap * 3
-    let room = max(width - gutterWidth - DiffGeometry.inset * 2, advance)
-    let perLine = max(Int(room / advance), 1)
+    let halfGutterWidth = CGFloat(rows.digits) * advance + DiffGeometry.gutterGap * 2
+    let perLine = max(Int(max(width - gutterWidth - DiffGeometry.inset * 2, advance) / advance), 1)
+    let perHalf = max(Int(max(width / 2 - halfGutterWidth - DiffGeometry.inset * 2, advance) / advance), 1)
+    let lines = { (row: Int, per: Int) -> Int in
+      look.wrap && rows.kinds[row] != .hunk ? max((rows.columns[row] + per - 1) / per, 1) : 1
+    }
     var tops = [CGFloat]()
-    tops.reserveCapacity(rows.count + 1)
+    tops.reserveCapacity(display.count + 1)
     var top: CGFloat = 0
+    var split = false
 
-    for row in 0..<rows.count {
+    for shown in display {
       tops.append(top)
 
+      switch shown {
       // Note that a thread's card stands two lines tall, its title and its detail each cut to one, with room around it.
-      if rows.kinds[row] == .thread {
+      case .single(let row) where rows.kinds[row] == .thread:
         top += lineHeight * 2 + DiffGeometry.cardPadding * 2 + DiffGeometry.cardGap * 2
-        continue
+      case .single(let row):
+        top += CGFloat(lines(row, perLine)) * lineHeight
+      case .pair(let old, let new):
+        split = true
+        let tallest = max(old.map { lines($0, perHalf) } ?? 1, new.map { lines($0, perHalf) } ?? 1)
+        top += CGFloat(tallest) * lineHeight
       }
-
-      let wrapped = look.wrap && rows.kinds[row] != .hunk ? (rows.columns[row] + perLine - 1) / perLine : 1
-      top += CGFloat(max(wrapped, 1)) * lineHeight
     }
 
     tops.append(top)
-    let unwrapped = gutterWidth + CGFloat(rows.widest) * advance + DiffGeometry.inset * 2
+    let unwrapped =
+      split
+      ? (halfGutterWidth + CGFloat(rows.widest) * advance + DiffGeometry.inset * 2) * 2
+      : gutterWidth + CGFloat(rows.widest) * advance + DiffGeometry.inset * 2
     self.init(
       advance: advance,
       lineHeight: lineHeight,
       gutterWidth: gutterWidth,
+      halfGutterWidth: halfGutterWidth,
       contentWidth: look.wrap ? width : max(width, unwrapped),
       tops: tops
     )
@@ -348,6 +394,13 @@ final class DiffLineCell: UICollectionViewCell {
 
   private let gutter = UILabel()
   private let words = UILabel()
+  // A split row's halves: each side's ground, number, and words, the old on the left.
+  private let leftGround = UIView()
+  private let rightGround = UIView()
+  private let rightGutter = UILabel()
+  private let rightWords = UILabel()
+  private var isPair = false
+  private var halfGutterWidth: CGFloat = 0
   private let card = UIView()
   private let title = UILabel()
   private let detail = UILabel()
@@ -365,8 +418,15 @@ final class DiffLineCell: UICollectionViewCell {
     card.layer.borderWidth = 1 / UIScreen.main.scale
     title.numberOfLines = 1
     detail.numberOfLines = 1
+    rightGutter.textAlignment = .right
+    rightGutter.numberOfLines = 1
+    rightWords.numberOfLines = 0
+    contentView.addSubview(leftGround)
+    contentView.addSubview(rightGround)
     contentView.addSubview(gutter)
     contentView.addSubview(words)
+    contentView.addSubview(rightGutter)
+    contentView.addSubview(rightWords)
     contentView.addSubview(card)
     card.addSubview(title)
     card.addSubview(detail)
@@ -374,13 +434,96 @@ final class DiffLineCell: UICollectionViewCell {
 
   required init?(coder: NSCoder) { nil }
 
-  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun]) {
+  /// Draws one display row: a split row's halves, or a row across the whole width.
+  func show(
+    display: DisplayRow,
+    rows: DiffRows,
+    look: DiffLook,
+    geometry: DiffGeometry,
+    runs: [[ColorRun]],
+    wording: WordsRecord
+  ) {
+    switch display {
+    case .single(let row):
+      show(row: row, rows: rows, look: look, geometry: geometry, runs: row < runs.count ? runs[row] : [], wording: wording)
+    case .pair(let old, let new):
+      showPair(old: old, new: new, rows: rows, look: look, geometry: geometry, runs: runs, wording: wording)
+    }
+  }
+
+  /// What a row of code is heard as: an added or a removed line says which with its own side's number, and a line of context both numbers, so a reader hears what changed, as GitHub's diff is read aloud.
+  private static func heard(_ row: Int, rows: DiffRows, wording: WordsRecord) -> String {
+    let line = rows.lines[row]
+
+    switch rows.kinds[row] {
+    case .added: return "\(wording.added), \(rows.newLines[row]) \(line)"
+    case .removed: return "\(wording.removed), \(rows.oldLines[row]) \(line)"
+    case .context: return "\(rows.oldLines[row]) \(rows.newLines[row]) \(line)"
+    case .hunk, .note, .thread: return String(line)
+    }
+  }
+
+  /// A split row: the old side's line on the left half, its number and words on its ground, and the new side's on the right; a half with no line stands blank on the gutter's gray.
+  private func showPair(
+    old: Int?,
+    new: Int?,
+    rows: DiffRows,
+    look: DiffLook,
+    geometry: DiffGeometry,
+    runs: [[ColorRun]],
+    wording: WordsRecord
+  ) {
+    isPair = true
+    isThread = false
+    halfGutterWidth = geometry.halfGutterWidth
+    card.isHidden = true
+    for view in [gutter, words, rightGutter, rightWords, leftGround, rightGround] as [UIView] { view.isHidden = false }
+    contentView.backgroundColor = look.ground
+
+    let half = { (row: Int?, numbers: [Int], ground: UIView, number: UILabel, text: UILabel) in
+      guard let row else {
+        ground.backgroundColor = look.muted.withAlphaComponent(0.06)
+        number.text = nil
+        text.text = nil
+        return
+      }
+
+      let kind = rows.kinds[row]
+      let line = String(rows.lines[row])
+      ground.backgroundColor = look.ground(of: kind)
+      number.font = look.font
+      number.textColor = look.muted
+      number.backgroundColor = look.gutter(of: kind)
+      number.text = String(numbers[row])
+      text.font = look.font
+      text.textColor = look.text
+      text.lineBreakMode = look.wrap ? .byCharWrapping : .byClipping
+      let colored = row < runs.count ? runs[row] : []
+
+      if colored.isEmpty { text.text = line } else { text.attributedText = look.colored(line, runs: colored) }
+    }
+
+    half(old, rows.oldLines, leftGround, gutter, words)
+    half(new, rows.newLines, rightGround, rightGutter, rightWords)
+
+    // Note that a split row is heard as each side's line, the old side first, as a screen reader reads GitHub's split diff, and a line of context, standing on both sides, once.
+    let sides = old == new ? [old] : [old, new]
+    isAccessibilityElement = true
+    accessibilityTraits = .staticText
+    accessibilityLabel = sides.compactMap { $0 }.map { DiffLineCell.heard($0, rows: rows, wording: wording) }.joined(separator: ", ")
+    setNeedsLayout()
+  }
+
+  func show(row: Int, rows: DiffRows, look: DiffLook, geometry: DiffGeometry, runs: [ColorRun], wording: WordsRecord) {
     let kind = rows.kinds[row]
+    isPair = false
     isThread = kind == .thread
     gutterWidth = geometry.gutterWidth
     gutter.isHidden = isThread
     words.isHidden = isThread
     card.isHidden = !isThread
+    for view in [rightGutter, rightWords, leftGround, rightGround] as [UIView] { view.isHidden = true }
+    gutter.backgroundColor = .clear
 
     if isThread {
       showThread(String(rows.lines[row]), look: look)
@@ -409,9 +552,8 @@ final class DiffLineCell: UICollectionViewCell {
 
     if runs.isEmpty || kind == .hunk { words.text = line } else { words.attributedText = look.colored(line, runs: runs) }
     gutterWidth = geometry.gutterWidth
-    // Note that a row is heard as its line numbers and its words, as a screen reader reads GitHub's.
     isAccessibilityElement = true
-    accessibilityLabel = kind == .hunk ? line : "\(numbers.trimmingCharacters(in: .whitespaces)) \(line)"
+    accessibilityLabel = DiffLineCell.heard(row, rows: rows, wording: wording)
     setNeedsLayout()
   }
 
@@ -438,6 +580,26 @@ final class DiffLineCell: UICollectionViewCell {
   override func layoutSubviews() {
     super.layoutSubviews()
     let bounds = contentView.bounds
+
+    if isPair {
+      let half = bounds.width / 2
+      let textHeight = bounds.height - 2
+      let numberHeight = min(textHeight, (gutter.font?.lineHeight ?? 0) + 2)
+
+      for (side, ground, number, text) in [(0, leftGround, gutter, words), (1, rightGround, rightGutter, rightWords)] {
+        let x = half * CGFloat(side)
+        ground.frame = CGRect(x: x, y: 0, width: half, height: bounds.height)
+        number.frame = CGRect(x: x, y: 1, width: halfGutterWidth - DiffGeometry.gutterGap, height: numberHeight)
+        text.frame = CGRect(
+          x: x + halfGutterWidth + DiffGeometry.inset,
+          y: 1,
+          width: max(half - halfGutterWidth - DiffGeometry.inset * 2, 0),
+          height: textHeight
+        )
+      }
+
+      return
+    }
 
     if isThread {
       let x = gutterWidth + DiffGeometry.inset
@@ -490,6 +652,8 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
   }
 
   private var rows = DiffRows.empty
+  /// The rows as they are drawn, unified or split, laid out again as the rows, the look, or the width change.
+  private var display: [DisplayRow] = []
   /// Each row's runs of color, by row, once they land; none before, or for a file of no language the highlighter knows.
   private var runs: [[ColorRun]] = []
   /// How many diffs have been handed, so colors worked out for an older one are dropped.
@@ -507,6 +671,19 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
       if language != oldValue { color() }
     }
   }
+
+  /// The file the diff is of; another file opens at its first row, as the arrows step to it, where the same file's rows handed again, or a change of width, keep the reader's place.
+  var path = "" {
+    didSet {
+      if path != oldValue {
+        opensAtTop = true
+        relayout()
+      }
+    }
+  }
+
+  /// Whether the next layout scrolls to the diff's first row.
+  private var opensAtTop = false
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -565,7 +742,28 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
 
   /// A press on a thread's card tells JavaScript its row, which knows the thread; any other row takes no press.
   func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-    indexPath.item < rows.count && rows.kinds[indexPath.item] == .thread
+    threadRow(at: indexPath) != nil
+  }
+
+  /// The thread's row a display row draws, where it draws a thread's card.
+  private func threadRow(at indexPath: IndexPath) -> Int? {
+    guard indexPath.item < display.count, case .single(let row) = display[indexPath.item] else { return nil }
+
+    return rows.kinds[row] == .thread ? row : nil
+  }
+
+  /// The row of the diff a press at `point` stands on: a whole-width row's own, or the half of a split row it fell on, where that half holds a line.
+  private func lineRow(at indexPath: IndexPath, point: CGPoint) -> Int? {
+    guard indexPath.item < display.count else { return nil }
+
+    switch display[indexPath.item] {
+    case .single(let row):
+      return row
+    case .pair(let old, let new):
+      guard let frame = list.layoutAttributesForItem(at: indexPath)?.frame else { return new ?? old }
+
+      return point.x - frame.minX < frame.width / 2 ? old : new
+    }
   }
 
   /// A long press on a line of code opens the system's menu over it: Comment on its line, which tells JavaScript the row to comment on, and Copy, as GitHub's mobile diff offers a line's acts; a header, a note, or a thread's card opens none.
@@ -574,7 +772,9 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
     contextMenuConfigurationForItemsAt indexPaths: [IndexPath],
     point: CGPoint
   ) -> UIContextMenuConfiguration? {
-    guard let row = indexPaths.first?.item, row < rows.count else { return nil }
+    guard let indexPath = indexPaths.first, let row = lineRow(at: indexPath, point: point), row < rows.count else {
+      return nil
+    }
     let kind = rows.kinds[row]
 
     guard kind == .added || kind == .removed || kind == .context else { return nil }
@@ -597,7 +797,8 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
 
   func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
     collectionView.deselectItem(at: indexPath, animated: true)
-    onThreadPress(["row": indexPath.item])
+
+    if let row = threadRow(at: indexPath) { onThreadPress(["row": row]) }
   }
 
   private func relayout() {
@@ -612,9 +813,20 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
 
     if bounds.width != laidWidth, bounds.width > 0 {
       laidWidth = bounds.width
-      layout.geometry = DiffGeometry(rows: rows, look: look, width: bounds.width)
+      let split = look.split && bounds.width >= DiffGeometry.splitMinWidth
+      display = displayRows(sides: rows.kinds.map(DiffView.side(of:)), split: split)
+      layout.geometry = DiffGeometry(rows: rows, display: display, look: look, width: bounds.width)
       layout.invalidateLayout()
       list.reloadData()
+
+      if opensAtTop {
+        opensAtTop = false
+        // Note that the top sits under the bar, so it is the inset the system adjusted, not zero.
+        list.setContentOffset(
+          CGPoint(x: -list.adjustedContentInset.left, y: -list.adjustedContentInset.top),
+          animated: false
+        )
+      }
     }
 
     guard let held = pending, bounds.width > 0 else { return }
@@ -632,8 +844,15 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
 
   func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
     let cell = collectionView.dequeueReusableCell(withReuseIdentifier: DiffLineCell.reuse, for: indexPath)
-    let colored = indexPath.item < runs.count ? runs[indexPath.item] : []
-    (cell as? DiffLineCell)?.show(row: indexPath.item, rows: rows, look: look, geometry: layout.geometry, runs: colored)
+    guard indexPath.item < display.count else { return cell }
+    (cell as? DiffLineCell)?.show(
+      display: display[indexPath.item],
+      rows: rows,
+      look: look,
+      geometry: layout.geometry,
+      runs: runs,
+      wording: words
+    )
 
     return cell
   }

@@ -88,10 +88,10 @@ env:
 # The generated table of 5,000 lines starts folded, as the desktop folds a
 # large file, and Show diff draws it; its first frame's time is logged for
 # the timing lane ("DiffView first frame").
-- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Fgenerated%2Finvite-messages.ts"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Fgenerated%2Finvite-messages.ts"
 - extendedWaitUntil:
     visible: "Show diff"
     timeout: 15000
@@ -111,10 +111,10 @@ env:
 - takeScreenshot: pull-request-diff-long
 # A review thread stands as a card under the line it is on, and a press on
 # it opens the thread whole, each comment with its writer.
-- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Finvites%2Fresend.ts"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Finvites%2Fresend.ts"
 - extendedWaitUntil:
     visible: ".*Should a renewed invite keep its original sender.*"
     timeout: 15000
@@ -128,10 +128,10 @@ env:
 - takeScreenshot: pull-request-thread
 # A long press on a line offers Comment on line, which opens the comment
 # field on that line, added to the member's review by default.
-- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Finvites%2Fresend.ts"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Finvites%2Fresend.ts"
 - extendedWaitUntil:
     visible: ".*fresh expiry.*"
     timeout: 15000
@@ -149,10 +149,10 @@ env:
     timeout: 10000
 # The member's pending review is finished from the Files list's ⋯: its
 # comments listed, and Send submits it with what the review says.
-- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/files"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128/files"
 - extendedWaitUntil:
     visible: "resend.ts"
     timeout: 15000

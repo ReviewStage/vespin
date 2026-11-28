@@ -10,8 +10,13 @@ import { useColors } from "./tokens/colors.js";
 import { SYNTAX_COLORS } from "./tokens/syntax-colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
-/** What a code row's long press menu says, in the panel's words. */
-const LINE_MENU_WORDS = { comment: "Comment on line", copy: "Copy line" } as const;
+/** What a code row says, in the panel's words: its long press menu's acts, and what an added or a removed row is heard as before its number. */
+const LINE_WORDS = {
+  comment: "Comment on line",
+  copy: "Copy line",
+  added: "Added",
+  removed: "Removed",
+} as const;
 
 /** A line of the file a comment is asked on: its number, and the side it counts on. */
 export interface DiffLineTarget {
@@ -39,13 +44,16 @@ const styles = StyleSheet.create({
  * review thread on the file stands as a card under the line it is on, as
  * GitHub's diff stands it, saying who started it, their first line, and
  * how many replies follow; a press on it opens the thread. A long press on
- * a line of code offers Comment on line and Copy line, the system's own menu. A patch that does not read as a unified
+ * a line of code offers Comment on line and Copy line, the system's own menu.
+ * Where `split` asks and the view is wide enough, the old side stands beside
+ * the new, each run of removed lines beside the added lines after it. A patch that does not read as a unified
  * diff draws nothing, which its screen says in words (`fileNotice`).
  */
 export function DiffView({
   patch,
   path,
   wrap = true,
+  split = false,
   threads = NO_THREADS,
   onThreadPress,
   onLineComment,
@@ -55,6 +63,8 @@ export function DiffView({
   /** The file's path, whose extension names the language its code is colored in. */
   readonly path: string;
   readonly wrap?: boolean | undefined;
+  /** Whether the old side stands beside the new, as a regular window offers it; the view draws unified where it is too narrow for two halves of code, whatever this says. */
+  readonly split?: boolean | undefined;
   /** The pull request's review threads, those on `path` drawn as cards under the lines they are on. */
   readonly threads?: readonly ReviewThread[] | undefined;
   /** Opens a review thread whose card was pressed. */
@@ -71,6 +81,7 @@ export function DiffView({
   const look: NativeDiffLook = {
     fontSize,
     wrap,
+    split,
     text: colors.TEXT_BODY,
     muted: colors.TEXT_MUTED,
     ground: colors.GROUND,
@@ -103,7 +114,7 @@ export function DiffView({
           onLineComment?.({ line, side: removed ? DIFF_SIDE.LEFT : DIFF_SIDE.RIGHT });
         }
       }}
-      words={LINE_MENU_WORDS}
+      words={LINE_WORDS}
       style={styles.fill}
       testID={testID}
     />
