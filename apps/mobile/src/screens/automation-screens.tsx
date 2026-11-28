@@ -72,6 +72,7 @@ import {
   createContext,
   type ReactNode,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -376,13 +377,24 @@ function AutomationsList({
   const switcher = useWorkspaceSwitcher();
   // Note that the folds are the account's, as the desktop's list keeps them, and Finished stands folded until one is chosen, since a one-time automation that ran is done with.
   const folds = useViewChoice(VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED, null, FOLDS_REFUSED);
-  const folded = Option.getOrElse(folds.value, () => FOLDED_AT_FIRST);
+  const kept = Option.getOrElse(folds.value, () => FOLDED_AT_FIRST);
+  const [waiting, setWaiting] = useState<readonly FoldPress[]>([]);
+  const folded = waiting.reduce(foldedWith, kept);
+
+  // Note that a fold pressed before the account's folds were read waits for them and is laid over them, so a press built on the default never writes over the folds another device kept.
+  useEffect(() => {
+    if (!folds.answered || waiting.length === 0) return;
+    setWaiting([]);
+    folds.choose(waiting.reduce(foldedWith, kept));
+  }, [folds, kept, waiting]);
 
   const fold = (group: AutomationListGroup) => ({
     foldable: true,
     folded: folded.includes(group),
     onFold: (next: boolean) =>
-      folds.choose(next ? [...folded, group] : folded.filter((each) => each !== group)),
+      folds.answered
+        ? folds.choose(foldedWith(folded, { group, folded: next }))
+        : setWaiting((was) => [...was, { group, folded: next }]),
   });
 
   const tokens = searchTokens(search);
@@ -594,6 +606,22 @@ function sectionOwner(
   return switcher.account === undefined
     ? undefined
     : { person: { name: switcher.account.name, picture: switcher.account.picture } };
+}
+
+/** A press on a group's header: the group, and whether it now stands folded. */
+interface FoldPress {
+  readonly group: AutomationListGroup;
+  readonly folded: boolean;
+}
+
+/** `folds` with a press's group folded or opened, each group named once. */
+function foldedWith(
+  folds: readonly AutomationListGroup[],
+  press: FoldPress,
+): readonly AutomationListGroup[] {
+  const others = folds.filter((each) => each !== press.group);
+
+  return press.folded ? [...others, press.group] : others;
 }
 
 /** An automation's row id in the list. */
