@@ -15,7 +15,7 @@ catalog:
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.183
+  ai: 7.0.184
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
   vitest: 5.1.2
@@ -84,7 +84,7 @@ catalog:
   react-native-safe-area-context: 5.11.1
   react-native-screens: 4.30.1
   react-native-webview: 14.0.1
-  recharts: 3.11.1
+  recharts: 3.11.2
   tailwindcss: 4.3.5
   vite: 7.3.8
   zod: 4.6.7
