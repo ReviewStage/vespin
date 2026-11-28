@@ -20,10 +20,15 @@ env:
     file: ../subflows/tab.yaml
     env:
       TAB: Tasks
+# Note that the groups stand under Managers, Pinned and the sections, so
+# Todo may lie below the fold; In progress, the first, is waited for, then
+# the list is scrolled to Todo.
 - extendedWaitUntil:
-    visible: "Todo, [0-9]+"
+    visible: "In progress, [0-9]+"
     timeout: 30000
-- assertVisible: "In progress, [0-9]+"
+- scrollUntilVisible:
+    element: "Todo, [0-9]+"
+    direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: tasks-view-default
 - scrollUntilVisible:
@@ -60,8 +65,11 @@ env:
     env:
       TAB: Tasks
 - extendedWaitUntil:
-    visible: "High, [0-9]+"
+    visible: "Managers, [0-9]+"
     timeout: 30000
+- scrollUntilVisible:
+    element: "High, [0-9]+"
+    direction: DOWN
 - assertNotVisible: "Todo, [0-9]+"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-view-relaunch
@@ -71,5 +79,5 @@ env:
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Todo, [0-9]+"
-    direction: UP
+    direction: DOWN
 - takeScreenshot: tasks-view-reset
