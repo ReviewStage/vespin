@@ -76,21 +76,26 @@ function fetched(address: string, file: File): Promise<string> {
 }
 
 /**
- * The picture's file: the one already written while it's fresh, the
- * download under way, or one begun now, which writes over a stale file. A
- * download that fails keeps the stale file where there is one, counted fresh
- * from now so it's tried again only after another lifetime, and answers none
- * where there isn't.
+ * The picture's file: the download under way, the one already written while
+ * it's fresh, or one begun now, which writes over a stale file. A download
+ * that fails keeps the stale file where there is one, counted fresh from now
+ * so it's tried again only after another lifetime, and answers none where
+ * there isn't. Note that the download under way is asked first, because it
+ * owns the file: an idempotent download deletes the stale file before it
+ * moves the new one in. And note that the file is read through
+ * `lastModified`, which answers null for a file gone, since iOS may clear
+ * the app's caches at any moment; `info()` checks the file stands, then
+ * throws where it vanished before its attributes were read.
  */
 function downloaded(address: string): Promise<HeldPhoto | undefined> {
   const file = photoFile(address);
-  const written = file.exists ? file.info().modificationTime : undefined;
-
-  if (freshSince(written)) return Promise.resolve({ uri: file.uri, at: written });
   const under = downloading.get(file.uri);
 
   if (under !== undefined) return under;
-  const kept = file.exists ? file.uri : undefined;
+  const written = file.lastModified ?? undefined;
+
+  if (freshSince(written)) return Promise.resolve({ uri: file.uri, at: written });
+  const kept = written === undefined ? undefined : file.uri;
 
   const download = fetched(address, file)
     .then((uri) => ({ uri, at: Date.now() }))

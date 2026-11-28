@@ -1,10 +1,11 @@
-# tab.yaml -- opens the tab `TAB` names (Inbox, Tasks, or Search): by its id, which the iPhone's tab bar carries, or on an iPad by its name, last in the tree, in its floating bar or tab sidebar, which carry no id.
+# tab.yaml -- opens the place `TAB` names (Inbox, Tasks, Automations, or Search): by its tab's id, which the iPhone's tab bar carries, or on an iPad by its row in the sidebar, as a reader picks it, the sidebar shown first where it is hidden.
 #
 # Note that a tab is never tapped by its name alone where an id stands,
 # because a list's title and a back button share the name and come first in
 # the tree: a tap meant for the Tasks tab lands on the Tasks list's title.
 # Note too that the way is chosen by the device, `FLOATING_TABS` that
-# `scripts/simulator-screenshots.sh` sets for an iPad, rather than by
+# `scripts/simulator-screenshots.sh` sets for an iPad, which stands no tabs
+# but the places of its sidebar, the first column of its split view, rather than by
 # whether the id stands on screen, because the tab bar draws seconds after a
 # cold launch and is out of the tree while a sheet goes, so a check of the
 # screen found neither way and tapped nothing. Each way waits for its tab
@@ -51,14 +52,44 @@ env:
           timeout: 30000
       - tapOn:
           id: "${TAB.toLowerCase()}-tab"
+# Note that on an iPad the place already standing is left as it stands,
+# known by its list's title, because a pick of the place already picked is
+# no change of the sidebar's selection, which SwiftUI reports nothing of, so
+# an upright window's sidebar, shown to pick it, stood over the list after it
+# (vjipadmain's failure-notice lane).
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
       - extendedWaitUntil:
-          visible: "${TAB}"
+          visible: "(Show|Hide) Sidebar"
+          timeout: 30000
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+      notVisible: "${TAB}"
+    commands:
+      - runFlow:
+          file: show-sidebar.yaml
+      - extendedWaitUntil:
+          visible:
+            id: "place-row"
+            text: "${TAB}"
           timeout: 30000
       - tapOn:
+          id: "place-row"
           text: "${TAB}"
-          index: -1
+# A window wide enough stands its sidebar beside the list, the place's row
+# among the names on screen, so there the row is picked as it stands.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+      visible:
+        id: "place-row"
+        text: "${TAB}"
+    commands:
+      - tapOn:
+          id: "place-row"
+          text: "${TAB}"
 - waitForAnimationToEnd

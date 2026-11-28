@@ -36,6 +36,13 @@ export const MANAGER_SORT = {
 
 export type ManagerSort = (typeof MANAGER_SORT)[keyof typeof MANAGER_SORT];
 
+/** What each sort is called among a Managers list's Sort by choices, in the order they are offered, on every client. */
+export const MANAGER_SORT_WORDS = {
+  [MANAGER_SORT.RECENT_ACTIVITY]: "Recent activity",
+  [MANAGER_SORT.NAME]: "Name",
+  [MANAGER_SORT.CREATED]: "Date created",
+} as const satisfies Record<ManagerSort, string>;
+
 /** What a list of Managers is sorted by where the reader chose nothing: newest started first, as it always stood. */
 export const DEFAULT_MANAGER_SORT: ManagerSort = MANAGER_SORT.CREATED;
 

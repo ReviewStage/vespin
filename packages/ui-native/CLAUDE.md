@@ -147,10 +147,10 @@ builds a control of its own.
   offers (`TurnActs`), since a phone has no hover to show the panel's; the
   app answers them through `KeepingProvider`. A
   mention's chip, which stands inside a line of words where no SwiftUI menu
-  can wrap it, is held for the system's sheet of Open link and Copy link
-  instead, as the panel's link menu offers them, a popover from the chip in
-  a regular window, its hold a little shorter than the system's so it wins
-  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
+  can wrap it, opens UIKit's own context menu instead (`ContextMenu`, from
+  the same tree), Open link and Copy link, as the panel's link menu offers
+  them; UIKit gives a hold to the innermost menu, so the chip's wins over
+  the message's own, as a link held in a Messages bubble does. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
@@ -223,23 +223,36 @@ builds a control of its own.
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
   folder), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
-- **Every glyph is the panel's own Lucide glyph for the same place** (the
-  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
-  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
-  button, and a composer's button alike. `@repo/brand`'s generator outlines
-  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
-  the app's config writes into the asset catalog as a symbol set, so it
-  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
-  glyph is a branded `Glyph`, minted only in that table, so no component
-  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
-  items, which expo-router types as plain names, take `GLYPH.X` too
-  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, a sheet's close, the chevron
-  at the end of a Settings row that goes on, the small arrow out at the end
-  of one that leaves the app, and the up-and-down chevron at the end of one
-  whose press opens a menu) or where the panel draws a
-  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
-  server, the panel's product mark). A task's status ring is the panel's own
+- **A standard act is the system's symbol; our own things are the panel's glyph**
+  (the developer, Nov 27, 2026, refining the Nov 12 rule that every glyph
+  is the panel's). Every glyph is named once in `glyph.ts`'s `GLYPH`, by
+  what it marks: a tab, a row's and a status's mark, a menu's item, a
+  toolbar's button, and a composer's button alike. A standard act iOS has
+  its own symbol for (⋯ `ellipsis`, compose `square.and.pencil`, search,
+  +, copy, delete, rename, pin, mark read or unread, archive, move, a
+  reminder's time, the composer's and a call's buttons) is the SF Symbol
+  Apple's own apps draw for the same job, as Mail, Files, Notes and
+  Reminders draw it, so a bar, a menu, and a swipe read as theirs do; so
+  are Share, a sheet's close, the chevron at the end of a Settings row that
+  goes on, the small arrow out at the end of one that leaves the app, and
+  the up-and-down chevron at the end of one whose press opens a menu. Our
+  own places and things, which the brand draws the same on every client
+  (the Inbox, Tasks and Automations, the tab bar's included, an
+  automation's runs and triggers, an agent, a Manager, a task, a pull
+  request, a branch, an ask's kind, a skill, a memory), and an act SF
+  Symbols has no symbol for (Unlink), is the panel's own Lucide glyph for
+  the same place:
+  `@repo/brand`'s generator outlines each, at the `lucide-react` `@repo/ui`
+  pins, into a custom symbol template the app's config writes into the
+  asset catalog as a symbol set, so it sizes with Dynamic Type and weighs
+  with its words as an SF Symbol does. Where the panel draws a mark of its
+  own rather than a Lucide glyph (a check box, a face, an MCP server, the
+  panel's product mark), its drawing is SF Symbols' nearest. A glyph is a
+  branded `Glyph`, minted only in that table, so no component takes a bare
+  SF Symbol's name; `apps/mobile`'s tab icons and toolbar items, which
+  expo-router types as plain names, take `GLYPH.X` too (`glyphSymbol` where
+  a symbol's name is asked for, `glyphIcon` where the bottom bar or the tab
+  bar asks for `sf` or `xcasset`). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
   (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
   holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
@@ -467,8 +480,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and files changed as rows counting them as the panel's tabs
-  do ("✓ 5", "4"), each glyph the panel's own (`pull-request-look.ts`), the
+  its checks, chapters, and files changed as rows counting them as the
+  panel's tabs do ("✓ 5", "3", "4"), each pushing a page of its own, the
+  chapters' told from `@repo/features/pull-request-chapters-shown` as the
+  panel's Chapters view tells them, each glyph the panel's own (`pull-request-look.ts`), the
   lines it changes after its branches; its reviewers as faces in its heading after who
   opened it, each wearing where they stand at its corner, as the panel's
   people line draws them; its Description and Conversation folding under
@@ -487,9 +502,22 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   the Inbox count in copper, and Search on the system's own round glass,
   with no round + for New task, which each tab root's bar offers as its
   compose instead; a regular window's
-  bar is
-  `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
-  tab guidance has it. A compact window hides it while a
+  bar, on an iPhone, is `sidebarAdaptable`, so the unfolded Duo stands it as
+  a sidebar rail. An iPad stands no tabs: the system's own three-column
+  split view stands at the app's root (UISplitViewController, expo-router's
+  `SplitView`), as Mail's does: its sidebar column the app's sidebar
+  (`SidebarColumn`, the system's sidebar list, `LIST_LOOK.SIDEBAR`, headed
+  by the workspace switcher with New task's glyph at its end,
+  `WorkspaceSwitcherRow`, whose menu holds the account and Settings, then a
+  `PlaceRow` for each place and the tasks), then the list of the place
+  picked (`ListColumn`, reading what the place holds above the split view,
+  as its page does), then the picked
+  row's page with every page pushed over it, standing bare in its screen's
+  host under the screen's own native-stack header, as an iPhone's pushed page
+  stands, since a SwiftUI column around it left its hosted React Native views
+  undrawn there; the system draws
+  the sidebar's glass, selection, toggle and swipe, and the columns' edges a
+  person drags, the list's never folding away. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).

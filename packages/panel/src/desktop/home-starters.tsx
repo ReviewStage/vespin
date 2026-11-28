@@ -12,12 +12,12 @@ import { useTaskCountUpTo } from "../task-list-collections.js";
 import { useRepositoryMend } from "../tasks/no-repositories-banner.js";
 import { useNewTaskRunsOn } from "../tasks/runs-on.js";
 import {
+  draftWithStarter,
   type OfferedStarter,
   STARTER,
   STARTER_BOUNDS,
   STARTER_NEED,
   type Starter,
-  draftWithStarter,
   startersFor,
 } from "../tasks/starter-tasks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -71,7 +71,7 @@ export function HomeStarters({
   const repositories = useQuery(repositoryListsQuery(workspaceId)).data?.repositories;
   const mend = useRepositoryMend(tasks.newTask.repositoriesIn(workspaceId));
   const offered = devices ?? [];
-  const [, chooseDevice] = useNewTaskRunsOn(offered);
+  const chooseDevice = useNewTaskRunsOn(offered).choose;
   const writer = useDraftWriter();
   const mac = offered.find((device) => devicePlatformOf(device) === DEVICE_PLATFORM.DARWIN);
 

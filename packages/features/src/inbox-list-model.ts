@@ -58,8 +58,10 @@ import {
   optionsCarryMedia,
   recommendedLabels,
 } from "./inbox-wire.js";
+import type { ReadLink } from "./link-grammar.js";
 import type { ManagerFace } from "./manager-face.js";
 import { insideCode } from "./mention-link.js";
+import { namedPlainLinks, type PlainLinkNames, placesSpelledIn } from "./place-chip-model.js";
 import { plainWords } from "./plain-words.js";
 import { matchesTokens } from "./search-tokens.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -78,6 +80,12 @@ export const SEARCH_INBOX = "Search inbox";
 
 /** What the Inbox says while the account's feed of its threads is first read. */
 export const READING_INBOX = "Reading your inbox…";
+
+/** What the placeholder row under All's rows says while the next page of older items is read. */
+export const READING_OLDER_INBOX = "Reading older items…";
+
+/** What the placeholder rows a search has found nothing in yet say while the service is still asked for older items it finds. */
+export const SEARCHING_OLDER_INBOX = "Searching older items…";
 
 /** What the Inbox, the window's or a task's own, says where a read of its items did not answer. */
 export const INBOX_NOT_READ = "The inbox could not be read.";
@@ -258,6 +266,11 @@ function closedByMember(item: InboxFields): boolean {
 /** A member named on an item, as an answer's or a message's writer. */
 type InboxMember = NonNullable<InboxItem["answeredBy"]>;
 
+/** A preview's plain words with each place of ours spelled bare said by its chip's name (`namedPlainLinks`), where the client hands what it holds; as written where it hands nothing. */
+function linksNamed(words: string, links: PlainLinkNames | undefined): string {
+  return links === undefined ? words : namedPlainLinks(words, links);
+}
+
 /** What parts a preview's words, as a menu's detail parts them. */
 const PREVIEW_PART = " · ";
 
@@ -291,10 +304,11 @@ export function inboxPreview(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.words);
+  return linksNamed(previewOf(line, nameOf, ticked, line.words), links);
 }
 
 /**
@@ -307,10 +321,11 @@ export function inboxPreviewHeard(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.heard);
+  return linksNamed(previewOf(line, nameOf, ticked, line.heard), links);
 }
 
 /** What an item's second line leads with, as its glyph says it: the kind of ask that waits, an answer that settled it, a member's resolve, or words alone. */
@@ -508,12 +523,28 @@ export function inboxPreviewPieces(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): readonly InboxLinePiece[] {
   const line = itemLine(item);
 
-  if (line.ask !== undefined) return [previewOf(line, nameOf, ticked, line.words)];
+  if (line.ask !== undefined) {
+    return [linksNamed(previewOf(line, nameOf, ticked, line.words), links)];
+  }
 
-  return line.byAgent ? line.pieces : [`${nameOf(line.member)}: `, ...line.pieces];
+  const pieces = line.pieces.map((piece) =>
+    Predicate.isString(piece) ? linksNamed(piece, links) : piece,
+  );
+
+  return line.byAgent ? pieces : [`${nameOf(line.member)}: `, ...pieces];
+}
+
+/**
+ * Every place of ours an item's line spells bare (`placesSpelledIn`), which
+ * a client reads the names of before it says the line, by `inboxPreview`'s
+ * reading with no links named.
+ */
+export function inboxPreviewPlaces(item: InboxRow): readonly ReadLink[] {
+  return placesSpelledIn(itemLine(item).words);
 }
 
 /** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
@@ -880,6 +911,14 @@ export type InboxWhose =
   | { readonly kind: typeof INBOX_WHOSE.MINE }
   | { readonly kind: typeof INBOX_WHOSE.PERSON; readonly userId: string; readonly name: string };
 
+/** What the Inbox's view menu calls its choices beside its scopes: whom the items are addressed to, its people, and the switch that stands the pinned tasks' items first, on every client. */
+export const INBOX_VIEW_WORDS = {
+  WHOSE: "Addressed to",
+  ANYONE: "Anyone",
+  ME: "Me",
+  PINNED_FIRST: "Pinned tasks first",
+} as const;
+
 /** Anyone's items, as a task's own Inbox lists them. */
 export const EVERYONES: InboxWhose = { kind: INBOX_WHOSE.EVERYONE };
 
@@ -1061,6 +1100,131 @@ export function waitsOnReaderNow(
   now: number,
 ): boolean {
   return needsReader(item, readerId) && !remindsLater(item, now);
+}
+
+/** How many of the reader's threads wait on them in one workspace, by the task holding them, by the agent that posted them, and in all. */
+export interface InboxWaiting {
+  readonly byTask: ReadonlyMap<string, number>;
+  readonly byAgent: ReadonlyMap<string, number>;
+  readonly total: number;
+}
+
+/** No thread waits. */
+export const NO_INBOX_WAITING: InboxWaiting = { byTask: new Map(), byAgent: new Map(), total: 0 };
+
+/** What waits on the reader at one moment, in each workspace and across them, and when that next changes with no write to say so. */
+export interface InboxWaitingAt {
+  readonly waiting: ReadonlyMap<string | undefined, InboxWaiting>;
+  /** The soonest reminder still ahead of that moment, when an item it put away comes back; none where no reminder stands ahead. */
+  readonly nextReminderDue: number | undefined;
+}
+
+/**
+ * How many of the reader's threads wait on them at `now` (`waitsOnReaderNow`)
+ * in each workspace their holders stand in, by task, by agent, and in all;
+ * and, under no workspace (`undefined`), across every workspace. A
+ * Manager's thread, on no task, counts toward its agent and the total alone.
+ */
+function inboxWaitingIn(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  const counts = new Map<
+    string | undefined,
+    { byTask: Map<string, number>; byAgent: Map<string, number>; total: number }
+  >();
+
+  const countIn = (workspaceId: string | undefined) => {
+    const held = counts.get(workspaceId) ?? { byTask: new Map(), byAgent: new Map(), total: 0 };
+    counts.set(workspaceId, held);
+
+    return held;
+  };
+
+  for (const { holder, items } of groups) {
+    const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
+
+    if (waiting.length === 0) continue;
+    const task = holderTask(holder);
+
+    for (const held of [countIn(holderWorkspaceId(holder)), countIn(undefined)]) {
+      held.total += waiting.length;
+
+      if (task !== undefined) held.byTask.set(task.id, waiting.length);
+
+      for (const item of waiting)
+        held.byAgent.set(item.agentId, (held.byAgent.get(item.agentId) ?? 0) + 1);
+    }
+  }
+
+  return counts;
+}
+
+/** The soonest reminder among `groups` still ahead at `now`, when what waits must be counted again since an item comes back; none where no reminder stands ahead. */
+function inboxNextReminderDue(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  now: number,
+): number | undefined {
+  let next: number | undefined;
+
+  for (const { items } of groups) {
+    for (const { remindAt } of items) {
+      if (remindAt !== undefined && remindAt > now && (next === undefined || remindAt < next)) {
+        next = remindAt;
+      }
+    }
+  }
+
+  return next;
+}
+
+/**
+ * What waits on the reader at `now` (`inboxWaitingIn`), and the next
+ * reminder due after that same moment (`inboxNextReminderDue`). Note that
+ * both are read at the one `now`, because a reminder that came due between
+ * a count and a later look for the next would be passed over, its item left
+ * uncounted until some write.
+ */
+export function inboxWaitingAt(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): InboxWaitingAt {
+  return {
+    waiting: inboxWaitingIn(groups, readerId, now),
+    nextReminderDue: inboxNextReminderDue(groups, now),
+  };
+}
+
+/** Whether two counts of what waits say the same. */
+function sameWaiting(one: InboxWaiting, other: InboxWaiting): boolean {
+  const sameCounts = (a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>) =>
+    a.size === b.size && [...a].every(([key, count]) => b.get(key) === count);
+
+  return (
+    one.total === other.total &&
+    sameCounts(one.byTask, other.byTask) &&
+    sameCounts(one.byAgent, other.byAgent)
+  );
+}
+
+/**
+ * `next`'s counts of what waits in each workspace, each the very object
+ * `previous` held where it says the same, so a reader of one workspace's
+ * counts draws again only where they moved.
+ */
+export function inboxWaitingKept(
+  previous: ReadonlyMap<string | undefined, InboxWaiting>,
+  next: ReadonlyMap<string | undefined, InboxWaiting>,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  return new Map(
+    [...next].map(([workspaceId, counts]) => {
+      const held = previous.get(workspaceId);
+
+      return [workspaceId, held !== undefined && sameWaiting(held, counts) ? held : counts];
+    }),
+  );
 }
 
 /** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */

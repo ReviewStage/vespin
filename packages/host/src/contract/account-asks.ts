@@ -42,6 +42,8 @@ import {
   soundStateViewSchema,
   subscriptionLabelParamsSchema,
   subscriptionOrderParamsSchema,
+  viewChoiceWriteParamsSchema,
+  viewChoiceWrittenViewSchema,
   voiceSessionAnswerViewSchema,
   voiceSessionParamsSchema,
 } from "@repo/features/agent-view";
@@ -220,6 +222,14 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
   }),
+  VIEW_CHOICE_WRITE: hostAct({
+    input: viewChoiceWriteParamsSchema,
+    output: viewChoiceWrittenViewSchema,
+    refusal: "Could not keep your view choice on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
+  }),
   SOUND_CHOOSE: hostAct({
     input: soundChoiceParamsSchema,
     output: soundChoiceAnswerViewSchema,
@@ -312,6 +322,16 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
 
 /** A workspace's memories, followed for Settings › Memory while it holds them, and the account's provider keys, GitHub token, and always-allowed commands, each held once for the account signed in while Settings draws them. */
 export const ACCOUNT_ASK_FOLLOWS = liveFollows({
+  VIEW_CHOICES_FOLLOW: liveFollow({
+    slice: LIVE_READ.VIEW_CHOICES,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your view choices on this system.",
+    panelOnly: true,
+    retry: {
+      name: "VIEW_CHOICES_RETRY",
+      refusal: "Could not read your view choices again on this system.",
+    },
+  }),
   MEMORIES_FOLLOW: liveFollow({
     slice: LIVE_READ.MEMORIES,
     hold: HOLD.WINDOW,

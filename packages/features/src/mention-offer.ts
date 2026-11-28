@@ -483,7 +483,7 @@ export function automationCandidate(
   };
 }
 
-/** A machine a workspace owns, as an `@` offers it: its id, its name, who connected it, and what it runs. */
+/** A workspace member's machine, as an `@` offers it: its id, its name, whose it is, and what it runs. */
 export interface OfferedMachine {
   readonly id: string;
   readonly name: string;

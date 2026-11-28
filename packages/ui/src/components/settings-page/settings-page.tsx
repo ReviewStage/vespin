@@ -39,8 +39,7 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar, type ToolbarLook } from "../toolb
  * (`SettingsSectionsSkeleton`), so the page is never blank under its title
  * and what lands takes the place its blocks stood in. An empty state that is the
  * page's whole content fills the room under the title and stands in its
- * middle. Rows scrolled up dissolve into the page's top edge rather than
- * being sliced against it, and a page at rest at its top is left whole.
+ * middle.
  *
  * A long list on a page draws only the rows near the view (`VirtualRows`),
  * in the page's own scroller, which the page hands its sections
@@ -88,8 +87,8 @@ export const SETTINGS_PAGE_WIDTH = {
 export type SettingsPageWidth = (typeof SETTINGS_PAGE_WIDTH)[keyof typeof SETTINGS_PAGE_WIDTH];
 
 /**
- * A settings page's column, the part under its bar: its own scroller, which
- * dissolves rows scrolled up into its top edge, at the page's inset, around
+ * A settings page's column, the part under its bar: its own scroller, at
+ * the page's inset, around
  * a column at the page's measure holding the head (the title, its line
  * under it, and what acts on the whole page at the title's end) over the
  * sections a page's gap apart, handing its sections the page's scroller (`usePageScroll`). A

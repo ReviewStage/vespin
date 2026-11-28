@@ -704,7 +704,7 @@ export function fakeService(tasks: Task[]): FakeService {
     history: undefined,
     olderHistory: {},
     revisions: {},
-    find: () => Effect.succeed(undefined),
+    find: () => Effect.succeed({ ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND } as const),
     readRevisions: (_taskId, before) =>
       Effect.sync(() => (before === undefined ? service.history : service.olderHistory[before])),
     readRevision: (_taskId, seq) => Effect.sync(() => service.revisions[seq]),

@@ -102,6 +102,26 @@ export function useHeldMembers(workspaceId: string | undefined): HeldMembers {
   );
 }
 
+/** No members by id, before their list is read. */
+const NO_MEMBER_INDEX: ReadonlyMap<string, WorkspaceMember> = new Map();
+
+/** Each list of members read, by id, built once per list, so every caller of one list, as each chip in a transcript, shares one index. */
+const memberIndexes = new WeakMap<
+  readonly WorkspaceMember[],
+  ReadonlyMap<string, WorkspaceMember>
+>();
+
+/** The members of `members` by their id, the one index every caller of that list shares. */
+function memberIndexOf(members: readonly WorkspaceMember[]): ReadonlyMap<string, WorkspaceMember> {
+  const held = memberIndexes.get(members);
+
+  if (held !== undefined) return held;
+  const index = new Map(members.map((member) => [member.userId, member]));
+  memberIndexes.set(members, index);
+
+  return index;
+}
+
 /**
  * Each member's name and picture by their id, of the workspace
  * `workspaceId` names, or of the one the phone works in where none is
@@ -114,7 +134,7 @@ export function useMemberFaces(workspaceId?: string): MemberOf {
   const members = useMembers(workspaceId ?? chosenId);
 
   return useMemo(() => {
-    const byId = new Map((members ?? []).map((member) => [member.userId, member]));
+    const byId = members === undefined ? NO_MEMBER_INDEX : memberIndexOf(members);
 
     return (userId) => {
       const member = byId.get(userId);

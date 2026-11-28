@@ -28,6 +28,7 @@ import {
   PULL_REQUEST_WRITE_OUTCOME,
   REVIEW_COMMENT_MODE,
 } from "@repo/features/pull-request-write-wire";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
@@ -94,6 +95,7 @@ import { handSettings } from "../testing/app-state.js";
 import { restOn } from "../testing/hint-rest.js";
 import { chooseMenuItem } from "../testing/phone-head.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { windowRouter } from "../testing/window-router.js";
 import { PullRequestTab } from "./agent-pull-request-tab.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
@@ -2085,10 +2087,19 @@ test("a thread on a line no hunk shows, and one a later push outdated, land on t
 });
 
 test("a link to a thread opens a folded Conversation to land on it, centering it in the room under the heading stuck at the top, and a card taller than that room landing with its top just under the heading", async () => {
-  window.localStorage.setItem(
-    "app.conversation-filters",
-    JSON.stringify({ hideBots: false, hideResolved: false, conversationOpen: false }),
-  );
+  keepViewChoices([
+    {
+      id: "0a1b2c3d-0000-4000-8000-0000000000c2",
+      key: VIEW_CHOICE_KEY.CONVERSATION_FILTERS,
+      workspaceId: null,
+      value: {
+        hideBots: false,
+        hideResolved: false,
+        descriptionOpen: true,
+        conversationOpen: false,
+      },
+    },
+  ]);
   const heard: ReadLink[] = [];
 
   const tab = await drawn(
@@ -2253,7 +2264,6 @@ test("every review thread's head leads with its chevron and ends with its ⋯, i
 });
 
 test("a thread's ⋯ in Files changed shows it in the Conversation in the tab itself, standing through Hide resolved, ringed and focused there", async () => {
-  window.localStorage.clear();
   const heard: ReadLink[] = [];
   const resolved = thread({ id: JUMPED, resolved: true });
 
@@ -2379,6 +2389,57 @@ test("a link in the pull request's words to one of its own comments on GitHub op
     [`${PAGE}#issuecomment-99`],
     "only the note the read did not reach leaves for GitHub",
   );
+});
+
+test("a folded Conversation opens for each link that lands in it, a comment's after a thread's", async () => {
+  const links = [
+    `<a href="${PAGE}#discussion_r1">the thread</a>`,
+    `<a href="${PAGE}#issuecomment-2">the note</a>`,
+  ].join(" ");
+
+  const conversation = reviewWith([thread({ id: JUMPED })]);
+
+  const tab = await drawn(
+    createElement(Routed, {
+      control: controlAnswering({
+        pullRequest: () =>
+          Promise.resolve({ pullRequest: { ...PULL_REQUEST, html: `<p>See ${links}.</p>` } }),
+        conversation: () =>
+          Promise.resolve({
+            pullRequest: {
+              ...conversation,
+              conversation: [...conversation.conversation, ...CONVERSATION.conversation.slice(-1)],
+            },
+          }),
+      }),
+      heard: [],
+    }),
+  );
+
+  const opened = () => sectionHead(tab, "Conversation").getAttribute("aria-expanded");
+
+  const press = async (words: string) => {
+    const link =
+      [...tab.querySelectorAll<HTMLElement>(".pull-request-words a")].find(
+        (each) => each.textContent === words,
+      ) ?? assert.fail(`the description links ${words}`);
+
+    await act(async () => link.click());
+    await settle();
+    await frames();
+  };
+
+  act(() => sectionHead(tab, "Conversation").click());
+  assert.equal(opened(), "false");
+  await press("the thread");
+  assert.equal(opened(), "true", "the thread's link opens it");
+  ringEnds(tab.querySelector(".pull-request-thread") ?? assert.fail("the thread is drawn"));
+  await settle();
+
+  act(() => sectionHead(tab, "Conversation").click());
+  assert.equal(opened(), "false");
+  await press("the note");
+  assert.equal(opened(), "true", "the note's link opens it too");
 });
 
 test("a thread on a changed image a filter left out lands above its picture once the filter is cleared, the list scrolled to the file's header rather than a line the picture draws none of", async () => {

@@ -2,9 +2,9 @@ import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   agentFailureSchema,
+  agentRunsOnRequestSchema,
   agentStatusSchema,
   disabledServersSchema,
-  personalRunsOnSchema,
 } from "./agent-wire.js";
 import { AUTOMATION_PRESET } from "./automation-preset-name.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
@@ -359,6 +359,15 @@ export const AUTOMATION_SCOPE = {
 
 export type AutomationScope = (typeof AUTOMATION_SCOPE)[keyof typeof AUTOMATION_SCOPE];
 
+/** The groups the list stands its rows in, each folding as the sidebar's groups do: each owner's, then Finished. */
+export const AUTOMATION_LIST_GROUP = {
+  ...AUTOMATION_SCOPE,
+  FINISHED: "finished",
+} as const;
+
+export type AutomationListGroup =
+  (typeof AUTOMATION_LIST_GROUP)[keyof typeof AUTOMATION_LIST_GROUP];
+
 export const automationScopeSchema = EffectSchema.Literals(Object.values(AUTOMATION_SCOPE));
 
 /** Where an automation's run lands. */
@@ -603,12 +612,10 @@ const automationSummarySchema = EffectSchema.Struct({
   preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /**
    * The machine its runs start on, the cloud or one of its creator's devices
-   * by id, as `create_automation` named it, never a workspace's machine,
-   * since every build reads it and one before `HOSTED_API_VERSION` 7 reads
-   * none; null where none was named, which
+   * by id, as `create_automation` named it; null where none was named, which
    * places a run as a Start naming none is, and absent from a service before it.
    */
-  runsOn: EffectSchema.optionalKey(EffectSchema.NullOr(personalRunsOnSchema)),
+  runsOn: EffectSchema.optionalKey(EffectSchema.NullOr(agentRunsOnRequestSchema)),
   /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the

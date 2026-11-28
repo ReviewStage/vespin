@@ -611,7 +611,7 @@ it.effect(
 );
 
 it.effect(
-  "reads an inbox item's attachment as base64 under the type it was kept as, an answer's PDF or text file as much as a picture, any other type as unanswered, and a call that never reached the service as unanswered with its fault",
+  "reads an inbox item's attachment as base64 under the type it was kept as, an answer's PDF or text file as much as a picture, a type it does not know as a file of any other kind, and a call that never reached the service as unanswered with its fault",
   () =>
     Effect.gen(function* () {
       const itemId = "5d2b8f0e-1a3c-4e6f-9b7d-2c4e6a8b0d1f";
@@ -633,8 +633,10 @@ it.effect(
         contentType: "text/plain",
         base64: "JVBERg==",
       });
-      assert.deepEqual(yield* read("text/html"), {
-        failure: AGENT_CALL_FAILURE.UNANSWERED,
+      // Note that a type this build does not know, one a later build serves, comes as a file to save.
+      assert.deepEqual(yield* read("application/vnd.later-type"), {
+        contentType: "application/octet-stream",
+        base64: "JVBERg==",
       });
       const dropped = recordingHttpClient(() => Promise.reject(new TypeError("Load failed")));
 
@@ -679,7 +681,7 @@ it.effect(
 );
 
 it.effect(
-  "reads an agent's picture, or its worker's, as base64 under the type the service named, and anything else as unanswered",
+  "reads an agent's picture, or its worker's, as base64 under the type the service named, and one of a type it does not draw as a file to save, never under its own type",
   () =>
     Effect.gen(function* () {
       const pictureId = "3ea06f44-b05d-4182-ad94-6f7a8b9cadb4";
@@ -714,7 +716,7 @@ it.effect(
       );
       assert.deepEqual(read, { contentType: "image/png", base64: "iVBORw==" });
       assert.deepEqual(worker, read);
-      assert.deepEqual(unexpected, { failure: AGENT_CALL_FAILURE.UNANSWERED });
+      assert.deepEqual(unexpected, { contentType: "application/octet-stream", base64: "PHN2Zy8+" });
     }),
 );
 

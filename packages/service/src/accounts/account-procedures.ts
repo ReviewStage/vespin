@@ -59,6 +59,7 @@ import { allowedCommandsProcedures } from "./allowed-commands-procedures.js";
 import { memoriesProcedures } from "./memories-procedures.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 import { soundsProcedures } from "./sounds-procedures.js";
+import { viewChoicesProcedures } from "./view-choices-procedures.js";
 
 export interface AccountProcedureSeams extends AccountPreferenceSeams {
   resolveUserId: UserIdResolver;
@@ -119,6 +120,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     ...providerKeysProcedures(seams),
     ...memoriesProcedures(seams),
     ...soundsProcedures(seams),
+    ...viewChoicesProcedures(seams),
     ...allowedCommandsProcedures(seams),
   };
 }

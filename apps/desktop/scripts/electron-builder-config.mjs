@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DMG_WINDOW } from "@repo/brand/dmg-window";
 import {
+  assertPackagedMinimumSystemVersion,
   finalizeElectronBuilderArtifacts,
   notarizeElectronBuilderApp,
   signElectronBuilderApp,
@@ -119,6 +120,7 @@ export function createElectronBuilderConfig(env = process.env) {
       { from: packageAssets.host.node, to: BUNDLED_HOST.nodePath },
       { from: packageAssets.host.plist, to: BUNDLED_HOST.plistPath },
     ],
+    afterPack: assertPackagedMinimumSystemVersion,
     afterSign: notarizeElectronBuilderApp,
     afterAllArtifactBuild: finalizeElectronBuilderArtifacts,
     mac: {

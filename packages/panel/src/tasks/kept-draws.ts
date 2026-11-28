@@ -2,6 +2,7 @@
  * kept-draws.ts -- what keeps a value or a press the same from draw to draw while what it says is unchanged, so what is drawn with it is not drawn again.
  */
 
+import type { ComputerApp, ComputerApps } from "@repo/features/agent-parts";
 import { useCallback, useRef } from "react";
 
 /**
@@ -77,6 +78,54 @@ export function sameEntries<V>(
   if (a === undefined || b === undefined || a.size !== b.size) return false;
 
   for (const [key, value] of a) if (!b.has(key) || !Object.is(b.get(key), value)) return false;
+
+  return true;
+}
+
+/** Whether two of a conversation's `computer` apps say the same of the app: its name, its icon, its window, and its machine. */
+function sameApp(a: ComputerApp, b: ComputerApp): boolean {
+  return (
+    a === b ||
+    (a.id === b.id &&
+      a.name === b.name &&
+      a.bundleId === b.bundleId &&
+      a.icon === b.icon &&
+      a.window === b.window &&
+      sameFields(a.machine, b.machine))
+  );
+}
+
+/** Whether two maps of apps hold the same apps under the same keys. */
+function sameApps(
+  a: ReadonlyMap<string, ComputerApp>,
+  b: ReadonlyMap<string, ComputerApp>,
+): boolean {
+  if (a === b) return true;
+
+  if (a.size !== b.size) return false;
+
+  for (const [key, app] of a) {
+    const theirs = b.get(key);
+
+    if (theirs === undefined || !sameApp(app, theirs)) return false;
+  }
+
+  return true;
+}
+
+/** Whether two readings of a conversation's `computer` apps (`computerAppsOf`) say the same of every app, by its call, its spelling, and its machine. */
+export function sameComputerApps(a: ComputerApps, b: ComputerApps): boolean {
+  if (a === b) return true;
+
+  if (!sameApps(a.byCall, b.byCall) || !sameApps(a.bySpelling, b.bySpelling)) return false;
+
+  if (a.byMachine.size !== b.byMachine.size) return false;
+
+  for (const [machine, apps] of a.byMachine) {
+    const theirs = b.byMachine.get(machine);
+
+    if (theirs === undefined || !sameApps(apps, theirs)) return false;
+  }
 
   return true;
 }

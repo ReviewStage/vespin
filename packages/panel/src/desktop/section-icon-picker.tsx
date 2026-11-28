@@ -7,6 +7,13 @@ import {
   type TaskSectionIconColor,
   taskSectionIconSchema,
 } from "@repo/features/task-section-wire";
+import {
+  REMOVE_SECTION_ICON,
+  SECTION_ICON_COLOR_WORDS,
+  sectionGlyphWords,
+  textInkWords,
+} from "@repo/features/task-sections-model";
+import { VIEW_CHOICE_KEY, VIEW_CHOICE_LIST_BOUNDS } from "@repo/features/view-choice-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
   BUTTON_SIZE,
@@ -34,7 +41,6 @@ import {
   findGlyphs,
   glyphChoices,
   glyphKey,
-  glyphLabel,
   isSuggestedGlyph,
   recentIcons,
 } from "@repo/ui/section-icon-model";
@@ -57,18 +63,20 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { memo, type RefObject, useCallback, useId, useMemo, useRef, useState } from "react";
-import { readKept, writeKept } from "../kept-storage.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 
 /**
- * section-icon-picker.tsx -- how a sidebar section's icon is drawn, and the icon well that changes it: a button wearing the icon, hanging a picker of every Lucide glyph, each asked its color once pressed, and every emoji, the icons this Mac picked last and the suggested ones first, under one search.
+ * section-icon-picker.tsx -- how a sidebar section's icon is drawn, and the icon well that changes it: a button wearing the icon, hanging a picker of every Lucide glyph, each asked its color once pressed, and every emoji, the icons the account picked last and the suggested ones first, under one search.
  *
  * A glyph travels by its Lucide name (`task-section-wire.ts`). The few the
  * picker suggests are drawn from the bundle every window parses, so a
  * section wearing one draws it at once; any other is drawn from the whole
  * of Lucide, a chunk of its own loaded the first time a section or the
  * picker needs it, and a name this Mac's Lucide does not know draws an
- * empty cell rather than failing. The emoji, `unicode-emoji-json`'s, load
+ * empty cell rather than failing. The emoji, `@repo/features/emoji-data`'s, load
  * the first time the picker's Emoji tab is shown or a search is typed;
  * `@repo/ui`'s `IconPickerEmoji` draws them and the emoji a search finds,
  * and its `IconPickerColors` draws a glyph's colors.
@@ -77,7 +85,7 @@ import { QUERY_ROOT } from "../query-keys.js";
  * none, and hangs the picker in a popover of its own, so neither a sidebar's
  * column nor a dialog's card cuts it. The picker opens on its search. With
  * nothing searched it shows the tab chosen: Icons offers Recent, the icons
- * this Mac chose last (kept in this window's storage, the newest first),
+ * the account chose last (kept on the account, the newest first),
  * each glyph among them in the color it was chosen in, then Suggested, then
  * every other glyph by name, in the text's own ink but the one chosen, in
  * its color; Emoji offers every emoji by category. A search finds glyphs and
@@ -135,18 +143,6 @@ const COLOR_INK = {
 function inkOf(color: TaskSectionIconColor | undefined): string {
   return color === undefined ? "text-foreground" : COLOR_INK[color];
 }
-
-/** What each color of the palette is called. */
-const COLOR_LABEL = {
-  [TASK_SECTION_ICON_COLOR.RED]: "Red",
-  [TASK_SECTION_ICON_COLOR.ORANGE]: "Orange",
-  [TASK_SECTION_ICON_COLOR.YELLOW]: "Yellow",
-  [TASK_SECTION_ICON_COLOR.GREEN]: "Green",
-  [TASK_SECTION_ICON_COLOR.TEAL]: "Teal",
-  [TASK_SECTION_ICON_COLOR.BLUE]: "Blue",
-  [TASK_SECTION_ICON_COLOR.PURPLE]: "Purple",
-  [TASK_SECTION_ICON_COLOR.PINK]: "Pink",
-} as const satisfies Record<TaskSectionIconColor, string>;
 
 /** The picker's two tabs. */
 const ICON_TAB = {
@@ -260,23 +256,37 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): React.JSX.Eleme
   return drawnGlyph(icon.glyph, icon.color);
 }
 
-/** Where this Mac keeps the icons it chose last, newest first. */
-const RECENT_KEY = "app.recentSectionIcons";
+/** Where an earlier build kept the icons this Mac chose last, newest first, moved up to the account once. */
+const KEPT_RECENT = keptKey(
+  "app.recentSectionIcons",
+  Schema.fromJsonString(Schema.Array(taskSectionIconSchema)),
+);
 
-/** The icons kept as chosen last. */
-const keptRecent = Schema.fromJsonString(Schema.Array(taskSectionIconSchema));
+/** No icon chosen yet, one list for every draw. */
+const NO_RECENT: readonly TaskSectionIcon[] = [];
 
-/** How many icons Recent offers. */
-const RECENT_MOST = 10;
-
-/** The icons this Mac chose last, newest first, none where storage holds none or refuses the read. */
-function readRecent(): readonly TaskSectionIcon[] {
-  return readKept(RECENT_KEY, keptRecent, []);
+/** The icons chosen last, newest first, which Recent offers, and the door that keeps one more among them. */
+interface RecentIcons {
+  readonly recent: readonly TaskSectionIcon[];
+  readonly keep: (icon: TaskSectionIcon) => void;
 }
 
-/** Keeps `icon` as the one this Mac chose last. */
-function keepRecent(icon: TaskSectionIcon): void {
-  writeKept(RECENT_KEY, keptRecent, recentIcons(readRecent(), icon, RECENT_MOST));
+/** The icons the account chose last, kept on the account (`VIEW_CHOICE_KEY.RECENT_SECTION_ICONS`) so every device offers them, Recent's worth of them. */
+function useRecentIcons(): RecentIcons {
+  const [left, forgetLeft] = useKeptLeaving(KEPT_RECENT);
+
+  const { value, change } = useAccountChoice(
+    VIEW_CHOICE_KEY.RECENT_SECTION_ICONS,
+    null,
+    NO_RECENT,
+    useAppStateSlice(selectFixtureStaged) === true,
+    [left?.slice(0, VIEW_CHOICE_LIST_BOUNDS.RECENT), forgetLeft],
+  );
+
+  return {
+    recent: value,
+    keep: (icon) => change((held) => recentIcons(held, icon, VIEW_CHOICE_LIST_BOUNDS.RECENT)),
+  };
 }
 
 /** Whether a glyph is the icon chosen, a name Lucide draws alike (`flask` and `flask-conical`) being the same glyph. */
@@ -312,7 +322,7 @@ function glyphIcon(glyph: string, color: TaskSectionIconColor | undefined): Task
 
 /** What an icon is called for a reader. */
 function iconLabel(icon: TaskSectionIcon): string {
-  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
+  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : sectionGlyphWords(icon.glyph);
 }
 
 /** A glyph whose colors stand open over the grid: the group it was pressed in, and the color they start on. */
@@ -330,7 +340,7 @@ const GLYPH_COLORS: readonly (TaskSectionIconColor | undefined)[] = [
 
 /** What the text's own ink is called as the window draws it: white over a dark ground, black over a light one. */
 function textInkLabel(): string {
-  return drawnDark() ? "White" : "Black";
+  return textInkWords(drawnDark());
 }
 
 /**
@@ -346,7 +356,10 @@ function glyphColors(
   onColor: (color: TaskSectionIconColor | undefined) => void,
 ): React.JSX.Element {
   const colors: readonly IconPickerColor<TaskSectionIconColor | undefined>[] = GLYPH_COLORS.map(
-    (value) => ({ value, label: value === undefined ? textInkLabel() : COLOR_LABEL[value] }),
+    (value) => ({
+      value,
+      label: value === undefined ? textInkLabel() : SECTION_ICON_COLOR_WORDS[value],
+    }),
   );
 
   return (
@@ -713,16 +726,19 @@ const FoundPanel = memo(function FoundPanel(
  * so the popover opens on it, and Icons and Emoji over what it offers. An
  * emoji pressed is chosen at once; a glyph pressed opens its colors under
  * its row, asked every time, and the color pressed there chooses the glyph
- * in it. A choice is handed to `onIcon` and kept among this Mac's recent
- * ones; Remove icon hands on none.
+ * in it. A choice is handed to `onIcon` and kept among the account's recent
+ * ones (`kept`), which Recent offers as they stood when the picker opened;
+ * Remove icon hands on none.
  */
 function SectionIconPicker({
   icon,
   search,
+  kept,
   onIcon,
 }: {
   icon: TaskSectionIcon | undefined;
   search?: RefObject<HTMLInputElement | null> | undefined;
+  kept: RecentIcons;
   onIcon: (icon: TaskSectionIcon | undefined) => void;
 }): React.JSX.Element {
   const [tab, setTab] = useState<IconTab>(
@@ -730,7 +746,7 @@ function SectionIconPicker({
   );
 
   const [query, setQuery] = useState("");
-  const [recent] = useState(readRecent);
+  const [recent] = useState(kept.recent);
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
   const panelId = useId();
 
@@ -740,11 +756,11 @@ function SectionIconPicker({
   } satisfies Record<IconTab, string>;
 
   // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
-  const latest = useRef({ onIcon, opened });
-  latest.current = { onIcon, opened };
+  const latest = useRef({ onIcon, opened, keep: kept.keep });
+  latest.current = { onIcon, opened, keep: kept.keep };
 
   const choose = useCallback((next: TaskSectionIcon) => {
-    keepRecent(next);
+    latest.current.keep(next);
     latest.current.onIcon(next);
   }, []);
 
@@ -808,7 +824,7 @@ function SectionIconPicker({
             />
             {icon === undefined ? null : (
               <Button variant={BUTTON_VARIANT.SUBTLE} onClick={() => onIcon(undefined)}>
-                Remove icon
+                {REMOVE_SECTION_ICON}
               </Button>
             )}
           </div>
@@ -856,6 +872,8 @@ export function SectionIconWell({
   title?: string | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
+  // Note that the icons chosen last are read while the well stands, so the picker opens on them.
+  const kept = useRecentIcons();
   const label = icon === undefined ? "Add icon" : "Change icon";
 
   return (
@@ -873,6 +891,7 @@ export function SectionIconWell({
       <SectionIconPicker
         icon={icon}
         search={search}
+        kept={kept}
         onIcon={(next) => {
           onIcon(next);
           onOpenChange(false, false);

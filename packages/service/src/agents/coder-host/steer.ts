@@ -55,12 +55,6 @@ import { Clock, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { MESSAGE_CHANNEL, TURN_STATUS } from "../../core.js";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
-import type { GitHubApp } from "../../github/github-app.js";
-import {
-  agentMember,
-  agentWorkspace,
-  workspaceRepository,
-} from "../../github/workspace-repository.js";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
@@ -116,21 +110,18 @@ import { TURN_PUBLISH, TurnQueue } from "./turn-delivery.js";
  * automation's run, which hands only those its automation's own prompt
  * mentions; the writer fences the write against the caller
  * going away between the two. A send repeated under its key finds the line
- * it already wrote and hands the harness nothing again: read once here, before
- * GitHub is asked, and once more by the writer under the lock, so two
- * sends racing under one key still send once. A hand-over that answered
- * nothing past its deadline, or whose store write failed after the harness took
- * the message, withdrew a line the harness may still hand a turn, which is why the
- * row is kept rather than deleted. The turn's checkout and
- * its credential renewals run on the developer's standing with GitHub, so
- * a sign-in that lapsed is refused here rather than failing the turn's
- * first step; a GitHub that could not be asked refuses nothing, since an
- * outage or a rate limit says nothing of that standing. The caller is any
- * member who reaches the agent and, for an agent on a task, its task too,
- * which together gate the send, and whose standing with GitHub is asked
- * (the starter alone, for an agent on its starter's own GitHub token),
- * while the line
- * lands in the agent's conversation under the member who started it,
+ * it already wrote and hands the harness nothing again: read once here, and
+ * once more by the writer under the lock, so two sends racing under one key
+ * still send once. A hand-over that answered nothing past its deadline, or
+ * whose store write failed after the harness took the message, withdrew a
+ * line the harness may still hand a turn, which is why the row is kept
+ * rather than deleted. GitHub is asked nothing here: a repository the
+ * workspace no longer reaches is refused where it is used, by the turn's
+ * launch (`checkout.ts`'s `CheckoutRefused`, failing the turn as GitHub's)
+ * or by GitHub at the runner's next push, never by a read of every send.
+ * The caller is any member who reaches the agent and, for an agent on a
+ * task, its task too, which together gate the send, while the line lands in
+ * the agent's conversation under the member who started it,
  * naming what sent it: the member, the app from a call, or an automation's run.
  * A teammate's words, a member's other than the starter, are handed to the harness
  * behind a label naming them by their mention link (`attached-files.ts`'s
@@ -590,7 +581,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 ): Effect.fn.Return<
   SteerWritten,
   HostedRefusal,
-  DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
+  DatabaseServices | HttpClient.HttpClient | Sandbox
 > {
   // Note that a delegation goes under its newest line's key, so the row it adopts is the line the harness names back as its turn takes it.
   const newest = asked.adopts?.at(-1);
@@ -620,7 +611,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
       ),
       // The sender reaches the agent, as the routing read holds, and its task too, read as the sender.
       task: Effect.result(hostedStoreOrUnavailable(heldTaskOf(userId, agent))),
-      workspace: Effect.result(hostedStoreOrUnavailable(agentWorkspace(userId, agent))),
       sessionId: Effect.result(hostedStoreOrUnavailable(recordedRuntimeSession(target))),
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.
       running: Effect.result(runningTurnOf(agent)),
@@ -645,9 +635,6 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   // An archived agent names nothing.
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  const workspace = yield* Effect.fromResult(read.workspace);
-
-  if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
     // Note that a held delegation waits under the send's own key, never its newest line's, because an edit in the
@@ -675,46 +662,16 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
       ? withoutMemberLinks(line.text)
       : line.text);
 
-  // GitHub is asked beside the mentions' read, each judged in turn as above. Note that a Start's own first line is
-  // never asked of GitHub again as its queue hands it on, since its Start reached the repository as it made the agent.
-  const started = line.metadata?.channel === MESSAGE_CHANNEL.START;
-
-  const reached = yield* Effect.all(
-    {
-      repository: Effect.result(
-        agent.repository === null || started
-          ? Effect.void
-          : workspaceRepository(
-              workspace.value,
-              agent.repository,
-              agentMember(agent),
-              task?.ownerId === userId ? userId : undefined,
-            ),
-      ),
-      reads: Effect.result(
-        reviewers
-          ? Effect.succeed(NO_MENTIONED_READS)
-          : hostedStoreOrUnavailable(
-              readMentioned(userId, pointed, {
-                task,
-                workspaceId: agent.organizationId,
-              }),
-            ),
-      ),
-    },
-    { concurrency: "unbounded" },
+  const mentionedRead = yield* Effect.result(
+    reviewers
+      ? Effect.succeed(NO_MENTIONED_READS)
+      : hostedStoreOrUnavailable(
+          readMentioned(userId, pointed, { task, workspaceId: agent.organizationId }),
+        ),
   );
 
-  // Note that a GitHub that did not answer, or that holds our calls for its rate limit, lets the words through,
-  // because the agent's checkout already stands and only GitHub's definite no is a reason to keep them from it.
-  yield* Effect.fromResult(reached.repository).pipe(
-    Effect.catch((refusal) =>
-      refusal.error === HOSTED_REFUSAL.GITHUB_UNANSWERED.error ? Effect.void : Effect.fail(refusal),
-    ),
-  );
-
-  // Note that a session found unclaimed is read again now that GitHub has answered, because a Start's session
-  // may have claimed its record meanwhile, and the stale read would refuse a send it now takes.
+  // Note that a session found unclaimed is read again now that the lost lines went and the mentions were read,
+  // because a Start's session may have claimed its record meanwhile, and the stale read would refuse a send it now takes.
   const sessionId =
     (yield* Effect.fromResult(read.sessionId)) ??
     (yield* hostedStoreOrUnavailable(recordedRuntimeSession(target)));
@@ -723,7 +680,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
   }
 
-  const reads = yield* Effect.fromResult(reached.reads);
+  const reads = yield* Effect.fromResult(mentionedRead);
 
   const experiments = reviewers ? undefined : yield* experimentsOnIn(agent);
 

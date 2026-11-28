@@ -2457,7 +2457,8 @@ test("under All, a query nothing else matches says the repository's files are st
   await settle();
 
   assert.deepEqual(rows(), []);
-  assert.equal(emptyLine(), "Reading the repository's files");
+  // Note that the Inbox's search of the service is out until typing pauses and it lands, which says the Inbox is read first.
+  await vi.waitFor(() => assert.equal(emptyLine(), "Reading the repository's files"));
   assert.equal(document.querySelector(".ui-note-line")?.getAttribute("role"), "status");
 
   await act(async () =>
@@ -2474,7 +2475,14 @@ test("under All, a query nothing else matches says the repository's files are st
   await vi.waitFor(() => assert.deepEqual(rows(), ["zqx.ts · src"]));
 
   type("nothing-at-all");
-  assert.equal(emptyLine(), "No results match", "once every source answered, it says so");
+  assert.equal(
+    emptyLine(),
+    "Reading your inbox",
+    "the service is still asked what the Inbox holds not",
+  );
+  await vi.waitFor(() =>
+    assert.equal(emptyLine(), "No results match", "once every source answered, it says so"),
+  );
 });
 
 test("Files says a failed read with a Retry that reads the repository's files again", async () => {

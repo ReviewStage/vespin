@@ -166,7 +166,11 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
         yield* joinWorkspace(workspaceId, teammate);
         const sealed = (yield* readGitHubTokenRow(teammate))?.sealedToken ?? "";
         const now = new Date(yield* Clock.currentTimeMillis);
-        const teammateTopic: SyncTopic = [TOPIC.ACCOUNT, teammate];
+
+        const teammateTopics: readonly SyncTopic[] = [
+          [TOPIC.ACCOUNT, teammate],
+          [TOPIC.ACCOUNT_INBOX, teammate],
+        ];
 
         yield* wakesTheSidebar(
           recordRepositoryReads(
@@ -175,13 +179,18 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
             [{ repository: "acme/side", readable: true }],
             now,
           ),
-          [teammateTopic],
+          teammateTopics,
           teammate,
         );
-        yield* wakesTheSidebar(removeGitHubToken(teammate), [teammateTopic], teammate);
+        yield* wakesTheSidebar(removeGitHubToken(teammate), teammateTopics, teammate);
         yield* wakesTheSidebar(
           leaveWorkspace(workspaceId, teammate),
-          [teammateTopic, [TOPIC.WORKSPACE, workspaceId]],
+          [
+            ...teammateTopics,
+            [TOPIC.WORKSPACE, workspaceId],
+            [TOPIC.WORKSPACE_PEOPLE, workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, workspaceId],
+          ],
           teammate,
         );
       }),

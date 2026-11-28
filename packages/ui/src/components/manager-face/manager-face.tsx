@@ -22,16 +22,18 @@ import { Backpack, Cat, Ghost, type KawaiiProps, Mug, Planet, SpeechBubble } fro
  * Its body takes the color's fill from the theme (`text-manager-face-*`
  * through `currentColor`), and its own features stay Kawaii's near black,
  * which each fill is light enough to hold. An emoji stands centered on a
- * disc of that fill, sized to its seat (`manager-face.css`).
+ * disc of that fill, sized to its seat (`manager-face.css`). In the light
+ * theme the body's edge and the disc's wear a hairline, since the soft fills
+ * nearly vanish on white.
  *
  * At rest a character smiles (`happy`). While the Manager works the same
  * character turns `excited`, and in a row's or a message's seat a small
  * speech bubble at its top end corner lights three dots in turn, so working
  * changes how the face looks and never which face it is; the face itself
  * never moves. Among words, too small to hold the bubble, the mood says it
- * alone. The dots are an endless loop held by `--ui-loop-motion`, so
- * reduced motion and a capture run hold them on a frame with the first dot
- * lit. The face is a picture its caller's words beside it name, so it is
+ * alone. The dots are an endless loop, an animated image the compositor
+ * steps (`manager-face.css`), held by `--ui-loop-motion`, so reduced motion
+ * and a capture run hold them on a frame with the first dot lit. The face is a picture its caller's words beside it name, so it is
  * hidden from a reader.
  *
  * It sits on a subpath of its own (`@repo/ui/manager-face`), out of the
@@ -122,7 +124,7 @@ export function ManagerFace({
     >
       {face.emoji === undefined ? (
         <Drawing
-          className={`block size-full ${fill}`}
+          className={`ui-manager-face-body block size-full ${fill}`}
           mood={working ? MOOD.WORKING : MOOD.RESTING}
           color="currentColor"
           size="100%"
@@ -132,7 +134,7 @@ export function ManagerFace({
         />
       ) : (
         <span
-          className={`flex size-full items-center justify-center rounded-disc bg-current ${fill}`}
+          className={`ui-manager-face-disc flex size-full items-center justify-center rounded-disc bg-current ${fill}`}
         >
           <span className="ui-manager-face-emoji">{face.emoji}</span>
         </span>

@@ -26,6 +26,14 @@ export const RowPickContext = createContext<(() => void) | undefined>(undefined)
 export const RowSelectedContext = createContext<string | undefined>(undefined);
 
 /**
+ * Whether its list is the system's sidebar list, as an iPad's own sidebar
+ * is, whose own selection highlight, metrics and pointer hover each row
+ * keeps rather than drawing its own fill over a cleared ground. False
+ * elsewhere.
+ */
+export const RowSystemLookContext = createContext(false);
+
+/**
  * The words a search typed, read into the words each row's title marks in
  * bold where they stand in it, as ⌘K marks in each row what found it and
  * Mail's search results set the words searched in bold. None outside a
