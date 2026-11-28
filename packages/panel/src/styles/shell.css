@@ -59,7 +59,12 @@
      buttons stand at the window's edge, as in full screen; the desktop
      profile sets both by the traffic lights (desktop.css). */
   --title-bar-middle: calc(var(--ui-control-height) / 2 + var(--ui-title-bar-inset));
-  --title-bar-left: var(--column-inset);
+  --title-bar-left: var(--title-bar-edge);
+  /* Where the first button stands with no window chrome beside it (the web
+     profile, or a Mac's full screen): on the sidebar's rail's center line,
+     over its tiles (`SidebarRail`). A narrow room draws no rail, so there it
+     stands at the column's inset. */
+  --title-bar-edge: calc((var(--ui-rail-width) - var(--ui-control-height)) / 2);
   /* Where the work column's toolbar starts its tab while the sidebar is
      folded: clear of where the title bar starts and both buttons there, by a
      row's own gap between its items. */
@@ -855,25 +860,47 @@
 
 /* Drawn as a rail of places beside its list (`SidebarRail`), the sidebar
    stands the rail at its start, the column's whole height under the title
-   row, on a ground a step deeper than the column's, and its head, its list,
-   and its buttons past it (`data-rail`). A phone's tree draws no rail. */
+   row, and its head, its list, and its buttons past it (`data-rail`). A phone's tree draws no rail. */
 .desktop-sidebar[data-rail] {
   position: relative;
   padding-inline-start: calc(var(--ui-rail-width) + var(--column-inset));
 }
 
-/* Note that a window too short for the rail's tiles and foot scrolls the rail
-   alone, with no bar of its own, so Send feedback and Settings stay in reach. */
+/* The rail stands on the column's own ground, its tiles' fills reading on it
+   as a row's do, parted from the list by a hairline at its end, which its
+   shadow draws outside its box so the hairline neither moves its center line
+   nor scrolls with it. It stands under the title row, so the hairline never
+   runs beneath the traffic lights or the sidebar's toggle, and takes the
+   column's bottom start corner, so a floating column's rounding is the
+   rail's too. Note that a window too short for the rail's tiles and foot
+   scrolls the rail alone, with no bar of its own, so the account stays in
+   reach. */
 .desktop-sidebar .sidebar-rail {
   position: absolute;
-  inset-block: 0;
+  inset-block: var(--desktop-bar-height) 0;
   inset-inline-start: 0;
   overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  padding-top: var(--desktop-bar-height);
-  background: var(--ui-color-fill-hover);
+  border-end-start-radius: inherit;
+  box-shadow: 1px 0 0 var(--ui-color-border);
+}
+
+/* At the rail's foot the account is a tile like the rest: its face centered
+   in the square, and the rail's own room under it, rather than the row's
+   inset and the foot's pull toward the sheet's edge. */
+.desktop-sidebar .sidebar-rail .sidebar-foot {
+  margin-bottom: 0;
+}
+
+.desktop-sidebar .sidebar-rail .sidebar-account-row > .ui-nav-item {
+  gap: 0;
+  padding-inline: 0;
+}
+
+:where(:root)[data-ui-room="narrow"] {
+  --title-bar-edge: var(--column-inset);
 }
 
 /* Work column ------------------------------------------------------------- */

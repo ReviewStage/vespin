@@ -46,7 +46,7 @@ const AVATAR_OF = {
   [TILE_SIZE.HEAD]: AVATAR_SIZE.CARD,
   [TILE_SIZE.NESTED]: AVATAR_SIZE.STACK,
   [TILE_SIZE.BAR]: AVATAR_SIZE.ACCOUNT,
-  [TILE_SIZE.RAIL]: AVATAR_SIZE.CARD,
+  [TILE_SIZE.RAIL]: AVATAR_SIZE.ACCOUNT,
 } as const satisfies Record<TileSize, (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE]>;
 
 /** The workspace's photo as a `data:` URL, as the host holds it at the version the list names; nothing where it has none, while it loads, or where it could not be read. */

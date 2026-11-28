@@ -144,7 +144,7 @@ export function SidebarAccountRow({
     <div
       className={
         look === SIDEBAR_FOOT_LOOK.RAIL
-          ? "sidebar-account-row @container/sidebar-foot flex w-rail-tile flex-col items-center gap-ui-4"
+          ? "sidebar-account-row @container/sidebar-foot flex w-rail-tile flex-col items-center gap-rail-gap"
           : "sidebar-account-row @container/sidebar-foot flex items-center gap-ui-4"
       }
     >
@@ -156,9 +156,11 @@ export function SidebarAccountRow({
 /**
  * The sidebar's rail: a narrow column of places at the column's start, each a
  * `NavItem` tile, under the `head` (whose the sidebar is) and over the `foot`
- * (the account's), which stands at the rail's end. The places are a
- * navigation landmark named `label`. The column beside it, and where the rail
- * stands in it, stay the shell's.
+ * (the account's), which stands at the rail's end. Every tile, the head's and
+ * the foot's included, is one square on the rail's one center line, one gap
+ * from the next, and the rail keeps as much room at its end as at its sides.
+ * The places are a navigation landmark named `label`. The column beside it,
+ * and where the rail stands in it, stay the shell's.
  */
 export function SidebarRail({
   label,
@@ -172,16 +174,22 @@ export function SidebarRail({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="sidebar-rail flex w-rail flex-none flex-col items-center gap-ui-8 pb-ui-12">
-      {head === undefined ? null : <div className="sidebar-rail-head flex-none">{head}</div>}
+    <div className="sidebar-rail flex w-rail flex-none flex-col items-center gap-rail-gap pb-rail-inset">
+      {head === undefined ? null : (
+        <div className="sidebar-rail-head flex w-rail-tile flex-none flex-col items-center">
+          {head}
+        </div>
+      )}
       <nav
         aria-label={label}
-        className="sidebar-places flex flex-none flex-col items-center gap-ui-8"
+        className="sidebar-places flex w-rail-tile flex-none flex-col items-center gap-rail-gap"
       >
         {children}
       </nav>
       {foot === undefined ? null : (
-        <div className="sidebar-rail-foot mt-auto flex-none">{foot}</div>
+        <div className="sidebar-rail-foot mt-auto flex w-rail-tile flex-none flex-col items-center">
+          {foot}
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import {
   ComposeIcon,
   GearIcon,
   IconButton,
+  InboxIcon,
   NAV_CURRENT,
   NAV_ITEM_VARIANT,
   NavItem,
@@ -17,6 +18,7 @@ import {
   SidebarPlaces,
   SidebarRail,
   SidebarRule,
+  STATUS_TONE,
 } from "@repo/ui";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -71,11 +73,25 @@ function SidebarParts(): React.JSX.Element {
       <CatalogSection id="sidebar-rail" title="Rail of tiles">
         <SidebarRail
           label="Sidebar places"
-          head={<Avatar name="Acme" size={AVATAR_SIZE.CARD} decorative />}
+          head={
+            <NavItem
+              variant={NAV_ITEM_VARIANT.TILE}
+              hint="Acme"
+              icon={<Avatar name="Acme" size={AVATAR_SIZE.ACCOUNT} decorative />}
+            >
+              Acme
+            </NavItem>
+          }
           foot={
             <SidebarFoot look={SIDEBAR_FOOT_LOOK.RAIL}>
               <SidebarAccountRow look={SIDEBAR_FOOT_LOOK.RAIL}>
-                <IconButton icon={<GearIcon />} label="Settings" />
+                <NavItem
+                  variant={NAV_ITEM_VARIANT.TILE}
+                  hint="Ada Lovelace"
+                  icon={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.ACCOUNT} decorative />}
+                >
+                  Ada Lovelace
+                </NavItem>
               </SidebarAccountRow>
             </SidebarFoot>
           }
@@ -88,9 +104,16 @@ function SidebarParts(): React.JSX.Element {
             hint="New task"
             icon={<ComposeIcon />}
             current={NAV_CURRENT.PAGE}
-            count={{ value: 3, noun: "waiting on you" }}
           >
             New task
+          </NavItem>
+          <NavItem
+            variant={NAV_ITEM_VARIANT.TILE}
+            hint="Inbox"
+            icon={<InboxIcon />}
+            count={{ value: 11, noun: "waiting on you", tone: STATUS_TONE.ATTENTION }}
+          >
+            Inbox
           </NavItem>
         </SidebarRail>
       </CatalogSection>

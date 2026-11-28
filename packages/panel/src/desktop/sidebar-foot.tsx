@@ -71,7 +71,10 @@ import { OfflineMark } from "./offline-mark.js";
  * between them as a small pill while they hold, and take no room while they
  * do not. The menu offers what the menu bar's Help menu offers, by the same
  * commands, with Settings at its head, the ways to reach the people who make
- * the app under it, and Sign out last, which acts on the press.
+ * the app under it, and Sign out last, which acts on the press. At the foot
+ * of the sidebar's rail the account is the one tile, the Mac offline and a
+ * release standing over it, and its menu holds Settings and Send feedback
+ * at its head in place of their buttons.
  */
 
 /** Where Contact us > GitHub leads: our own issues, where CONTRIBUTING.md sends bugs and feature requests. */
@@ -238,19 +241,28 @@ export function AccountHeading({
   );
 }
 
+/** Where the account's menu is the one way in to Settings: what opens it. */
+interface AccountMenuPlaces {
+  readonly onSettings: () => void;
+}
+
 /**
- * The account's menu: the reader's own page where the window offers one; the
+ * The account's menu: Settings and Send feedback at its head where nothing
+ * beside the account offers them, as at the rail's foot, whose one tile is
+ * the account; the reader's own page where the window offers one; the
  * changelog, the Keyboard shortcuts page, and the ways to write to the people
  * who make the app; then Sign out, while anyone is signed in to leave. Note
- * that Settings and Send feedback are left to the gear and the button beside
- * the account, which already stand one press away, and that Keyboard
- * shortcuts is left out where a finger works the window, which has no keys
- * to press them with.
+ * that the foot's row leaves Settings and Send feedback to the gear and the
+ * button beside the account, which already stand one press away, and that
+ * Keyboard shortcuts is left out where a finger works the window, which has
+ * no keys to press them with.
  */
 function accountMenuGroups(
   signedIn: boolean,
   finger: boolean,
   acts: {
+    /** Opens Settings and the feedback dialog, where the menu is their one way in; none where the foot draws their buttons. */
+    places: AccountMenuPlaces | undefined;
     /** Opens the reader's own page; none outside the window, or before the account's id is known. */
     onProfile: (() => void) | undefined;
     onOpenChangelog: () => void;
@@ -264,7 +276,25 @@ function accountMenuGroups(
       ? []
       : [{ label: "Your profile", icon: <UserRoundIcon />, onSelect: acts.onProfile }];
 
+  const places =
+    acts.places === undefined
+      ? []
+      : [
+          {
+            label: "Settings",
+            icon: <GearIcon />,
+            command: APP_COMMAND.SETTINGS,
+            onSelect: acts.places.onSettings,
+          },
+          {
+            label: "Send feedback",
+            icon: <MessageSquareIcon />,
+            onSelect: () => runAppCommand(APP_COMMAND.SEND_FEEDBACK),
+          },
+        ];
+
   const groups: MenuEntry[][] = [
+    ...(places.length === 0 ? [] : [places]),
     ...(profile.length === 0 ? [] : [profile]),
     [
       { label: "Changelog", icon: <NewspaperIcon />, onSelect: acts.onOpenChangelog },
@@ -308,6 +338,7 @@ function accountMenuGroups(
 export function useAccountMenuGroups(
   account: AccountSnapshot,
   onSignOut: () => Promise<void>,
+  places?: AccountMenuPlaces | undefined,
 ): MenuEntry[][] {
   const { mutate: openChangelog } = useMutation(pressMutation(ACT_KIND.UPDATE_OPEN_CHANGELOG));
   const { mutate: sendEmail } = useMutation(pressMutation(ACT_KIND.CONTACT_EMAIL));
@@ -316,6 +347,7 @@ export function useAccountMenuGroups(
   const finger = useCoarsePointer();
 
   return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, finger, {
+    places,
     onProfile:
       openPerson === undefined || accountId === undefined ? undefined : () => openPerson(accountId),
     onOpenChangelog: () => openChangelog(),
@@ -337,17 +369,19 @@ function AccountMenu({
   account,
   tiled,
   shown,
+  onSettings,
   onSignOut,
 }: {
   account: AccountSnapshot;
-  /** Whether it stands as a tile at the rail's foot, its name its hint. */
+  /** Whether it stands as a tile at the rail's foot, its name its hint, and its menu the one way in to Settings. */
   tiled: boolean;
   shown: boolean;
+  onSettings: () => void;
   onSignOut: () => Promise<void>;
 }): React.JSX.Element {
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
   const { drawn, close, trigger } = useMenu(shown);
-  const groups = useAccountMenuGroups(account, onSignOut);
+  const groups = useAccountMenuGroups(account, onSignOut, tiled ? { onSettings } : undefined);
 
   return (
     <>
@@ -408,19 +442,37 @@ export function SidebarFoot({
 }): React.JSX.Element {
   const railed = look === SIDEBAR_FOOT_LOOK.RAIL;
 
+  const accountMenu = (
+    <AccountMenu
+      account={account}
+      tiled={railed}
+      shown={shown}
+      onSettings={onSettings}
+      onSignOut={onSignOut}
+    />
+  );
+
+  // At the rail's foot the account is the one tile, its menu holding Settings and Send feedback, and what holds a while stands over it.
+  if (railed)
+    return (
+      <SidebarFootBox look={look}>
+        <SidebarAccountRow look={look}>
+          <OfflineMark />
+          <SidebarUpdate updates={updates} />
+          {accountMenu}
+        </SidebarAccountRow>
+      </SidebarFootBox>
+    );
+
   return (
     <SidebarFootBox look={look}>
       <CallCardDock docked={callDocked} surface={CALL_CARD_SURFACE.SIDEBAR} />
       <SidebarAccountRow look={look}>
-        <AccountMenu account={account} tiled={railed} shown={shown} onSignOut={onSignOut} />
+        {accountMenu}
         <OfflineMark />
         <SidebarUpdate updates={updates} />
-        {/* Edge to edge, as Back meets Forward over them, so each stands under its partner at the column's head; at the rail's foot, one over the other. */}
-        <span
-          className={
-            railed ? "sidebar-foot-end flex flex-none flex-col" : "sidebar-foot-end flex flex-none"
-          }
-        >
+        {/* Edge to edge, as Back meets Forward over them, so each stands under its partner at the column's head. */}
+        <span className="sidebar-foot-end flex flex-none">
           <Tooltip label="Send feedback">
             <IconButton
               icon={<MessageSquareIcon />}

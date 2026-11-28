@@ -7,6 +7,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
+import { SIDEBAR_FOOT_LOOK, type SidebarFootLook } from "@repo/ui";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -108,6 +109,7 @@ function mount(
     update?: UpdateSnapshot;
     settingsOpen?: boolean;
     onSettings?: () => void;
+    look?: SidebarFootLook;
     /** Whether the window's release-ready toast is mounted beside its toasts, as `App` mounts it. */
     readyToast?: boolean;
   } = {},
@@ -126,6 +128,7 @@ function mount(
             "div",
             null,
             createElement(SidebarFoot, {
+              look: options.look,
               account,
               updates: {
                 update: options.update ?? {
@@ -246,6 +249,44 @@ test("the account opens its menu: who is signed in, then the changelog, Keyboard
     "—",
     "Sign out",
   ]);
+});
+
+test("at the rail's foot the account is the one press, and its menu opens Settings and Send feedback at its head", async () => {
+  const ran: string[] = [];
+  let settings = 0;
+
+  const button = mount(DEAN, {
+    look: SIDEBAR_FOOT_LOOK.RAIL,
+    ran,
+    onSettings: () => {
+      settings += 1;
+    },
+  });
+
+  await stateArrived();
+
+  assert.deepEqual(
+    [...document.querySelectorAll(".sidebar-foot button")].map((press) =>
+      press.getAttribute("aria-label"),
+    ),
+    ["Dean Stratakos"],
+  );
+
+  act(() => button.click());
+  assert.deepEqual(accountMenuLines().slice(0, 5), [
+    "Dean Stratakos dean@example.com",
+    "—",
+    "Settings ⌘,",
+    "Send feedback",
+    "—",
+  ]);
+
+  await act(async () => accountItem("Settings").click());
+  act(() => button.click());
+  await act(async () => accountItem("Send feedback").click());
+
+  assert.equal(settings, 1);
+  assert.deepEqual(ran, [APP_COMMAND.SEND_FEEDBACK]);
 });
 
 test("the account's menu opens Keyboard shortcuts and the changelog, each closing the menu", async () => {
