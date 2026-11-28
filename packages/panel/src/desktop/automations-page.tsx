@@ -136,8 +136,8 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
-import { keptKey, useKept } from "../use-kept.js";
+import { appStateQuery, selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
 import { type KeptEarlier, useAccountChoice } from "../view-choices.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
@@ -248,7 +248,7 @@ const ORDER_ICON = {
   [AUTOMATIONS_ORDER.NEXT_RUN]: <CalendarClockIcon />,
 } as const satisfies Record<AutomationsOrder, React.JSX.Element>;
 
-/** Where the list's order is kept on this Mac. */
+/** Where an earlier build kept the list's order on this Mac, moved up to the account once. */
 const KEPT_ORDER = keptKey(
   "app.automationsOrder",
   Schema.fromJsonString(Schema.Literals(Object.values(AUTOMATIONS_ORDER))),
@@ -1188,7 +1188,14 @@ function ListPage({
   const workspacesRead = useWorkspacesRead();
   const { read, reload } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
-  const [order, onOrder] = useKept(KEPT_ORDER, DEFAULT_AUTOMATIONS_ORDER);
+
+  const { value: order, choose: onOrder } = useAccountChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+    null,
+    DEFAULT_AUTOMATIONS_ORDER,
+    useAppStateSlice(selectFixtureStaged) === true,
+    useKeptLeaving(KEPT_ORDER),
+  );
 
   const managersListed =
     useWorkspaceExperiment(workspace?.id, EXPERIMENT.MANAGERS) && tasks.signedIn;

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
+import { AUTOMATIONS_ORDER } from "@repo/features/automation-list-model";
 import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@repo/features/automation-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { relayout } from "@repo/ui/testing/resize-observer";
@@ -58,6 +60,7 @@ import { layContainersAt } from "../testing/container-width.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 
 /**
  * automations-page.test.ts -- the Automations page as the window draws it: the listed workspace's automations, the workspace's before the personal ones, each naming its owner, an automation turned off saying so, a failed run marked, a switch's write taken in place, a read that did not land said with a retry, and an automation's editor, its schedule, its prompt, and the agent its runs go to.
@@ -372,8 +375,8 @@ test("the list's title is its bar's heading, and View options, Create with an ag
   );
 });
 
-test("View options orders each owner's automations by name, and the order is kept on this Mac", async () => {
-  window.localStorage.clear();
+test("View options orders each owner's automations by name, and the order is kept on the account", async () => {
+  const written = keepViewChoices();
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
@@ -394,13 +397,24 @@ test("View options orders each owner's automations by name, and the order is kep
   ];
 
   assert.deepEqual(rows(page), byName);
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+      [
+        {
+          key: VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+          workspaceId: null,
+          value: AUTOMATIONS_ORDER.NAME,
+        },
+      ],
+    ),
+  );
   act(() => world.root?.unmount());
   document.body.innerHTML = "";
 
   const again = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
   assert.deepEqual(rows(again), byName, "kept as it was left");
-  window.localStorage.clear();
 });
 
 test("with no workspace chosen the bar's two acts stay reachable by keyboard, press nothing, and say why on hover", async () => {
