@@ -59,12 +59,6 @@ function settingStore(setting: Setting) {
       };
     },
     read: () => on,
-    /** The setting as it stands, for a reader outside React's render, which starts the store if nothing subscribed yet. */
-    peek() {
-      if (!started) start();
-
-      return on;
-    },
   };
 }
 
@@ -97,14 +91,9 @@ export function useIncreaseContrast(): boolean {
   return useSetting(SETTING.INCREASE_CONTRAST);
 }
 
-/** Whether the reader asked for Bold Text: `font` sets the app's own faces a weight heavier where it is on, as the system's faces thicken on their own. */
+/** Whether the reader asked for Bold Text: `NativeText` sets React Native's words a weight heavier where it is on, as the system's faces thicken on their own; SwiftUI's words take it natively (`font`). */
 export function useBoldText(): boolean {
   return useSetting(SETTING.BOLD_TEXT);
-}
-
-/** Bold Text as it stands, for `font`, a modifier built outside a hook; every SwiftUI host builds its content anew on a change (`host.tsx`). */
-export function boldTextOn(): boolean {
-  return STORES[SETTING.BOLD_TEXT].peek();
 }
 
 /** Whether VoiceOver is running: a row then offers its acts as its Actions alone, rather than also behind swipes it cannot make. */

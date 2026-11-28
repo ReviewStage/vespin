@@ -1,7 +1,6 @@
 // inline-host.tsx -- a SwiftUI host standing inside React Native content that scrolls, such as a transcript's row, drawn where its row lays it.
 
-import type { HostProps } from "@expo/ui/swift-ui";
-import { Host } from "./host.js";
+import { Host, type HostProps } from "@expo/ui/swift-ui";
 
 /**
  * SwiftUI drawn inside a React Native row: a transcript's message under its

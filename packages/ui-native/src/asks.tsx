@@ -3,6 +3,7 @@
 import {
   Alert,
   ConfirmationDialog,
+  Host,
   Button as SwiftUIButton,
   TextField,
   useNativeState,
@@ -23,7 +24,6 @@ import {
   useState,
 } from "react";
 import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
-import { Host } from "./host.js";
 import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { Text } from "./text.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";

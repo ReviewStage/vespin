@@ -3,6 +3,7 @@
 import {
   BottomSheet,
   Group,
+  Host,
   HStack,
   Image,
   ScrollView,
@@ -31,7 +32,6 @@ import { type ReactNode, useEffect, useState } from "react";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { Host } from "./host.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";

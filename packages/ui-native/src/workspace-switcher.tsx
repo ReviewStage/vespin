@@ -2,6 +2,7 @@
 
 import {
   Circle,
+  Host,
   HStack,
   Image,
   Menu,
@@ -35,7 +36,6 @@ import { useScaledSize } from "./accessibility.js";
 import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
-import { Host } from "./host.js";
 import { useRowInset } from "./layout-margin.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";
 import { Text } from "./text.js";

@@ -1,9 +1,8 @@
 // screen.tsx -- a screen's SwiftUI host, filling the screen on the brand's ground in the brand's ink, and the space a row's pieces stand apart by.
 
-import { Spacer } from "@expo/ui/swift-ui";
+import { Host, Spacer } from "@expo/ui/swift-ui";
 import { tint } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
-import { Host } from "./host.js";
 import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { useColors } from "./tokens/colors.js";
 

@@ -2,6 +2,7 @@
 
 import {
   Divider,
+  Host,
   HStack,
   Image,
   Menu,
@@ -46,7 +47,6 @@ import { BarContent } from "./bar-content.js";
 import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { Host } from "./host.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import type { MenuLead } from "./row-menu-model.js";

@@ -1,7 +1,6 @@
 // font.ts -- the one way a SwiftUI word is set: @expo/ui's `font` modifier, in Geist for words and Geist Mono for code, the faces the desktop and the web draw in.
 
 import { font as systemFont } from "@expo/ui/swift-ui/modifiers";
-import { boldTextOn } from "./accessibility.js";
 
 type FontParams = Parameters<typeof systemFont>[0];
 
@@ -47,33 +46,16 @@ const STYLE_WEIGHT: Partial<Record<TextStyle, Weight>> = { headline: "semibold" 
 const LEADING = "tight";
 
 /**
- * Each weight a step heavier, which Bold Text asks of a custom face as it
- * thickens the system's own, so the embedded medium, semibold and bold
- * faces stand in for regular, medium and semibold.
- */
-const BOLDER: Record<Weight, Weight> = {
-  ultraLight: "light",
-  thin: "regular",
-  light: "regular",
-  regular: "medium",
-  medium: "semibold",
-  semibold: "bold",
-  bold: "bold",
-  heavy: "black",
-  black: "black",
-};
-
-/**
  * Sets a word in the app's face. A text style keeps its Dynamic Type scaling
  * (`Font.custom(_:size:relativeTo:)`), its size and weight given as the
  * system's style would set them; `design: "monospaced"` is code, in Geist
  * Mono. Note that a font sized alone keeps the system's face, since
  * `Font.custom` would scale it with Dynamic Type where the caller already
  * scaled it (a reviewer's badge on its disc), and so does a rounded or serif
- * design, a letter's avatar, since Geist has neither. Bold Text sets each
- * weight a step heavier (`BOLDER`), as it thickens the system's faces; it is
- * read as the modifier is built, and every host builds its content anew when
- * it changes (`host.tsx`).
+ * design, a letter's avatar, since Geist has neither. Bold Text sets a
+ * family a weight heavier natively, where SwiftUI reads the setting
+ * (`@expo/ui`'s patched `FontModifier`), since it never thickens an embedded
+ * face on its own.
  */
 export function font(params: FontParams): ReturnType<typeof systemFont> {
   const { design, textStyle } = params;
@@ -88,11 +70,11 @@ export function font(params: FontParams): ReturnType<typeof systemFont> {
     family: design === "monospaced" ? FACE.CODE : FACE.TEXT,
   };
 
-  const weight = params.weight ?? STYLE_WEIGHT[textStyle] ?? "regular";
+  const weight = params.weight ?? STYLE_WEIGHT[textStyle];
 
   custom.size = params.size ?? STYLE_POINTS[textStyle];
 
-  custom.weight = boldTextOn() ? BOLDER[weight] : weight;
+  if (weight !== undefined) custom.weight = weight;
 
   return systemFont(custom);
 }
