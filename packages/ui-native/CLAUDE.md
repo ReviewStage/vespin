@@ -25,11 +25,11 @@ builds a control of its own.
   `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the list shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
-  `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
+  `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's rows (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, each with no press handed it standing as an answer left
   it, its picks checked, at the head of the reply that answered it, as the
-  panel's answered card, `ResolvableAsk` standing an open card's × Resolve at
+  panel's answered card, `ResolvableAsk` standing an open ask's × Resolve at
   its top end, as the panel's question stands it, and `AskNote` for what a
   send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
@@ -97,7 +97,10 @@ builds a control of its own.
   and Delete, under the row, held open while one is edited), the row
   scrolling sideways where it outruns the column and stepping aside while
   a `/` or an `@` offers its list; and its head, inside the same glass,
-  holds the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
+  holds a thread's open ask (its `ChoiceList`, `StepList`, or
+  `AnswerFields`), as the panel's box holds an ask's controls as its body
+  over the field, stepping aside while an `@` offers its list, the
+  `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
   offers (the panel's groups and words, each row led by the mark its pill
   wears, a bare `@` listing Suggested then Browse, a row per kind with
   iOS's chevron, and a list narrowed to one kind, `@people:`, standing
@@ -452,7 +455,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   red row never shares a group with the page's other rows: it stands alone
   at the page's foot, centered, as Leave does, or behind a menu, as a
   photo's Delete stands under Change photo.
-- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
+- **An ask's rows** stand in the composer's head over its field, on its
+  glass with no card of their own, as the panel's box holds them (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag before the check, and a detail line, its
   label and detail drawn as Markdown so a link of ours stands as its chip,
@@ -461,21 +465,26 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   Mark done filled as the card's one act and Couldn't do it its words
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
-  card and prompting "Required" or "Optional" while empty, a number field's
-  pad standing one Done over it for the card, a select's options as rows
+  rows and prompting "Required" or "Optional" while empty, a number field's
+  pad standing one Done over it for the rows, a select's options as rows
   under its label, the recommended one tagged as a decide's is and none
   picked until the reader picks, as the panel's pills stand, and a yes or
   no's round check beside its name, as a step's, never the system's switch,
   since the panel's form draws a checkbox (the developer, Nov 27, 2026), the
-  rows a SwiftUI `Form` holds, drawn in a card because
-  a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
-  start where its rows' words do, as iOS insets a list's separator) and the pull request
+  rows a SwiftUI `Form` holds, drawn as rows because a `Form` scrolls on its
+  own inside the head's scroll; the rows' words line up with the field's,
+  and their hairlines start where the words do, as iOS insets a list's
+  separator; and `ResolvableAsk`'s × at their top end, muted, which
+  resolves the thread without an answer, as the panel's question stands
+  it); an answered or held ask's rows, which take no press, stand in a
+  thread's message in the bordered card on `CARD` instead (`AskRows`'
+  `carded`), as the panel's answered card and held ask stand there (the
+  developer, Nov 27, 2026). **Cards** are kept for those and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills; a press on it opens its own page). An ask's
-  card and a file's chip stand on `CARD`, the soft gray in light, so they
-  read off the page's white as iOS's own cards do rather than by a faint
-  hairline alone; the pull request card stands on `SURFACE`; each inside a
-  hairline.
+  red, and its acts as pills; a press on it opens its own page). A file's
+  chip stands on `CARD`, the soft gray in light, so it reads off the page's
+  white as iOS's own cards do rather than by a faint hairline alone; the
+  pull request card stands on `SURFACE`; each inside a hairline.
 - **A pull request's page** reads as the panel's Pull request tab, from the
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place

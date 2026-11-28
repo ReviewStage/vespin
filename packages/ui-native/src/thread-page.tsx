@@ -218,8 +218,6 @@ type ThreadPageProps = {
   readonly now?: number | undefined;
   /** How a settled thread ended, in one word under its heading, as the panel's card says it: "Answered", "Resolved", "Withdrawn"; none while it stands open. */
   readonly standing?: string | undefined;
-  /** The open ask's card, such as its options, steps, or fields, under the messages. */
-  readonly ask?: ReactNode | undefined;
   /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
   readonly acts?: readonly BarFootItem[] | undefined;
   /** The thread's ⋯ menu, such as Copy link, in a split view's detail bar; a compact window's stack holds it in its own bar. */
@@ -483,7 +481,6 @@ function MessageView({
   | "pathInHead"
   | "title"
   | "messages"
-  | "ask"
   | "menu"
   | "foot"
 > & {
@@ -663,7 +660,8 @@ function MessageView({
  * over its title, as a split view's detail column does, so its narrow bar
  * holds the thread's acts with the path's words uncut. It opens at its
  * newest message, as Messages and the panel's board do. A message that lands while it is open is drawn at its foot, as the
- * thread's document moves, and the open ask's card stands under the last.
+ * thread's document moves; the open ask's controls stand in the box under
+ * it (`foot`, or the composer the screen docks), as the panel's box holds them.
  */
 export function ThreadPage(props: ThreadPageProps) {
   const {
@@ -676,7 +674,6 @@ export function ThreadPage(props: ThreadPageProps) {
     quoted,
     messages,
     opening,
-    ask,
     acts = [],
     menu,
     foot,
@@ -726,7 +723,7 @@ export function ThreadPage(props: ThreadPageProps) {
                 frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
                 frame({ maxWidth: Number.POSITIVE_INFINITY }),
                 padding({ bottom: SPACE.PAGE + footRoom }),
-                // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do, and the ask's card it answered steps away on the same one, since it goes as the reply lands; with Reduce Motion on they stand at once.
+                // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do; with Reduce Motion on it stands at once.
                 ...(reduceMotion ? [] : [animation(Animation.default, messages.length)]),
               ]}
             >
@@ -752,15 +749,6 @@ export function ThreadPage(props: ThreadPageProps) {
                   ))}
                 </VStack>
               ))}
-              {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
-              {ask === undefined ? null : (
-                <VStack
-                  alignment="leading"
-                  modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
-                >
-                  {ask}
-                </VStack>
-              )}
             </VStack>
           </ScrollView>
           {foot}

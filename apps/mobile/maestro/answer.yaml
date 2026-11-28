@@ -1,4 +1,4 @@
-# answer.yaml -- a thread's ask answered from the phone, each kind once: a decide's pick, an unanswered approval standing Not delivered with Retry, Edit and Delete, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
+# answer.yaml -- a thread's ask answered from the phone in the box under it, its controls over the field as the panel's box holds them, each kind once: a decide's pick, an unanswered approval standing Not delivered with Retry, Edit and Delete, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -23,10 +23,11 @@ appId: dev.vespin.ios
     visible: "Who can withdraw an invite?"
     timeout: 30000
 - waitForAnimationToEnd
-# A decide: the options as a card of rows, the recommended tagged; a
-# pick lights Send, which sends it with the note typed, and the thread reads
-# it answered at once: the card standing at the head of the reply under
-# "You", its pick checked and taking no press, as the panel's answered card.
+# A decide: the options as rows in the box over its field, the recommended
+# tagged; a pick lights Send, which sends it with the note typed, and the
+# thread reads it answered at once: the options gone from the box and
+# standing at the head of the reply under "You", the pick checked and taking
+# no press, as the panel's answered card.
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -48,11 +49,11 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-decide-sent
 
 # An answer no reply came back for: the approval is drawn answered at once,
-# then, as the fixture leaves it unanswered, the card stands open again and
-# the answer stays at the thread's foot marked Not delivered, never back on
-# the card, as the panel keeps it. Its mark's menu says why, with Retry,
-# which goes again under the same key and is left unanswered again, Edit,
-# which takes the pick back onto the card, and Delete.
+# then, as the fixture leaves it unanswered, its options stand in the box
+# again and the answer stays at the thread's foot marked Not delivered, never
+# back in the box, as the panel keeps it. Its mark's menu says why, with
+# Retry, which goes again under the same key and is left unanswered again,
+# Edit, which takes the pick back into the box, and Delete.
 - launchApp:
     clearState: true
     arguments:
@@ -92,7 +93,7 @@ appId: dev.vespin.ios
     enabled: true
 - waitForAnimationToEnd
 - takeScreenshot: answer-undelivered-edited
-# Sent again from the card, it stands Not delivered once more, and Delete
+# Sent again from the box, it stands Not delivered once more, and Delete
 # lets it go.
 - tapOn: "Send"
 - extendedWaitUntil:
@@ -122,20 +123,39 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
 - tapOn: "Every member, Recommended"
+- assertVisible:
+    text: "Every member, Recommended"
+    selected: true
+# Note that the select's options stand as rows in the box's head, which
+# scrolls in place once tall, so the head is dragged from an option until
+# the yes or no shows; a swipe at the window's middle would scroll the
+# thread instead.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Email the sender when an invite is accepted, Optional"
+    commands:
+      - swipe:
+          from:
+            text: "Every member.*|Admins"
+          direction: UP
 - tapOn: "Email the sender when an invite is accepted, Optional"
 - assertVisible: "Email the sender when an invite is accepted, Optional, ticked"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
-# without them. At accessibility sizes the card runs taller than the screen and
-# stands scrolled to its foot after the toggle, so the field is scrolled back to first.
+# without them. Note that the fields stand in the box's head, which scrolls in
+# place once tall, so the field is scrolled back to first where it ran out of sight.
 - scrollUntilVisible:
     element:
       id: "answer-field-Invites a member may send a day"
     direction: UP
 - tapOn:
     id: "answer-field-Invites a member may send a day"
-- waitForAnimationToEnd
+# The decimal pad stands before anything is typed, its Delete key found.
+- extendedWaitUntil:
+    visible: "space|[Dd]elete"
+    timeout: 15000
 - inputText: "."
 - assertVisible:
     text: "Send"
@@ -282,21 +302,39 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: resolve-sent
 
-# The decide card at an accessibility size (AX3, Accessibility XL), from a
-# fresh launch: each option's label keeps its lines, and the Recommended tag
-# stands under its label rather than beside it.
+# The decide's options at an accessibility size (AX3, Accessibility XL), from
+# a fresh launch: each option's label keeps its lines, and the Recommended tag
+# stands under its label rather than beside it. Note that the Inbox is known
+# by its first row, the do ask under Pinned, because the pinned tasks' threads
+# stand first and at this size push the decide's row below the window's foot,
+# so its row is reached through `open-row.yaml`, which draws an iPad's list
+# column rather than the page beside it and clears the row of the tab bar.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
-    visible: "Who can withdraw an invite?"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
-- tapOn: "Who can withdraw an invite?"
-# Note that at this size the card may stand below the thread's first screen, so the flow scrolls to the recommended option rather than asserting it at once.
-- scrollUntilVisible:
-    element: "Both, Recommended.*"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Who can withdraw an invite\\?"
+# Note that at this size the options run past the box's head, which scrolls in place, so the head is dragged from the first option until the recommended one, the last, shows; a swipe at the window's middle would scroll the thread instead.
+- extendedWaitUntil:
+    visible: "The member who sent it.*"
+    timeout: 5000
+- repeat:
+    times: 3
+    while:
+      notVisible: "Both, Recommended.*"
+    commands:
+      - swipe:
+          from:
+            text: "The member who sent it.*|Any admin.*"
+          direction: UP
+- assertVisible: "Both, Recommended.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: answer-decide-ax3
