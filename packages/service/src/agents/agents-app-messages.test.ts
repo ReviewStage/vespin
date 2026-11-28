@@ -87,7 +87,6 @@ import {
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { READ_MARK } from "@repo/features/read-mark";
-import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import {
   heldTaskListAnswerSchema,
   TASK_STATUS,
@@ -1509,52 +1508,22 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a message to an agent whose plan's workspace holds no installation any more is refused, saying nothing is connected, and sends nothing",
+    "a message to an agent whose workspace holds no installation any more still reaches the agent, and GitHub is asked nothing on the way",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
-        const { owner, task, agent, ask } = yield* messagedAgent(agentSessions, { running: true });
+        const opened = yield* openTask({ agentSessions });
+
+        const { owner, agent, ask } = yield* agentStartedOn(opened, agentSessions, {
+          running: true,
+        });
+
         yield* Database.use((db) =>
           db
             .delete(githubInstallation)
-            .where(eq(githubInstallation.organizationId, task.workspaceId)),
+            .where(eq(githubInstallation.organizationId, opened.task.workspaceId)),
         );
-
-        const sent = yield* ask(
-          messageAs(owner, agent.id, { text: "Rebase on main.", clientKey: randomUUID() }),
-        );
-
-        assert.deepEqual(sent, {
-          status: HOSTED_HTTP_STATUS.FORBIDDEN,
-          body: {
-            error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
-            unreached: { reason: REPOSITORY_UNREACHED.NOT_CONNECTED, repository: RELAY_FULL_NAME },
-          },
-        });
-        assert.deepEqual(agentSessions.sent, []);
-      }),
-  );
-
-  it.effect(
-    "a message while GitHub does not answer still reaches the agent, since only GitHub's definite no keeps the words from it",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        let githubDown = false;
-
-        const { owner, ask, agent } = yield* agentStartedOn(
-          yield* openTask({
-            agentSessions,
-            github: (sent) =>
-              githubDown && new URL(sent.url).pathname.startsWith("/app/installations/")
-                ? Response.json({ message: "Service Unavailable" }, { status: 503 })
-                : undefined,
-          }),
-          agentSessions,
-          { running: true },
-        );
-
-        githubDown = true;
+        const asked = opened.github.sent.length;
 
         readAnswer(
           agentMessageAnswerSchema,
@@ -1565,6 +1534,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(agentSessions.sent.length, 1);
+        assert.deepEqual(opened.github.sent.slice(asked), []);
       }),
   );
 

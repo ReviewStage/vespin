@@ -9,13 +9,11 @@ import {
 import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import { workspaceIntegrationInstallations } from "@repo/database/models/integration-installation-store";
 import { workspaceSlackInstallation } from "@repo/database/models/slack-installation-store";
-import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
-  AGENT_KIND,
   AGENT_MACHINE,
+  type AgentRunsOnRequest,
   disabledServersSchema,
-  type PersonalRunsOn,
 } from "@repo/features/agent-wire";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
@@ -72,8 +70,8 @@ import {
   type AgentReadCall,
   AUTOMATION_RUNS_ON,
   agentToolRejected,
+  askingMember,
   callerAgent,
-  callerUserId,
   callerWorkspace,
   choiceRefusal,
   orStoreRefusal,
@@ -93,7 +91,7 @@ import { workspaceAgent } from "./workspace-agents.js";
  * its creator's to change and a workspace's its creator's, owners', and
  * admins'. A run starts as the automation's creator, so an automation an
  * agent makes runs as the member who started that agent. A Manager's calls
- * act instead as the member who asked for its turn under way (`turnAsker`):
+ * act instead as the member who asked for its turn under way (`askingMember`):
  * what it makes stands on their Automations page, is checked against their
  * devices, and runs as them, and it lists, changes, deletes, and runs
  * automations as they may; a run sent to the Manager still opens a turn its
@@ -386,6 +384,9 @@ const LIST_AUTOMATIONS_INPUT = Schema.Struct({
         "tool answered; leave it out to list them all.",
     ),
   ),
+  agentId: Schema.optionalKey(
+    describeWire(wireUuidSchema, "Only the automations whose runs land on this agent, by its id."),
+  ),
 });
 
 /** An automation as both tools take it: create needs all but disabledServers and agentId, and update takes any of them. */
@@ -464,7 +465,8 @@ export const LIST_AUTOMATIONS_TOOL = {
     "model and effort its runs take, its repositories, where its runs land, its scope, " +
     "when it is next due, its newest run, and whether the developer made it. Name an " +
     "automationId to read that one whole, its prompt in full and its newest runs, each with why " +
-    "it was skipped or failed and the agent it started. An automation fires on a schedule, a " +
+    "it was skipped or failed and the agent it started, or an agentId to list only those whose " +
+    "runs land on that agent. An automation fires on a schedule, a " +
     "GitHub event, a webhook, or a Sentry event, and starts an agent on its prompt, as " +
     "its creator.",
   inputSchema: LIST_AUTOMATIONS_INPUT,
@@ -482,7 +484,8 @@ export const CREATE_AUTOMATION_TOOL = {
     `defaults; ${AGENT_TOOL.LIST_MODELS} answers the models and efforts, and ` +
     `${AGENT_TOOL.LIST_MACHINES} the machines. ` +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
-    "Make one when the developer asks for it, never otherwise on your own, and read " +
+    "Make one when the developer asks for it, or one whose runs land on your own agentId for a " +
+    "recurring check you own; never otherwise on your own. Read " +
     `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have.`,
   inputSchema: CREATE_AUTOMATION_INPUT,
 } as const;
@@ -583,7 +586,7 @@ const runsOnOfAutomation = Effect.fnUntraced(function* (
   creatorId: string,
   runsOn: typeof AUTOMATION_RUNS_ON.Type,
   lead: string,
-): Effect.fn.Return<Result.Result<PersonalRunsOn, string>, StoreFailure, DatabaseServices> {
+): Effect.fn.Return<Result.Result<AgentRunsOnRequest, string>, StoreFailure, DatabaseServices> {
   if (runsOn.machine === AGENT_MACHINE.VERCEL) return Result.succeed(runsOn);
   const devices = yield* devicesSeenSince(creatorId, new Date(0));
 
@@ -843,23 +846,6 @@ const landingNamed = (
   );
 };
 
-/**
- * The member every automation call acts as: a Manager's asker, read from the
- * rows of its turn under way (`turnAsker`), with its owner standing in only
- * where no member asked; else the caller's member.
- */
-const automationMember = (
-  caller: AgentCall["caller"],
-): Effect.Effect<string, StoreFailure, DatabaseServices> => {
-  const agent = callerAgent(caller);
-
-  if (agent === undefined || agent.kind !== AGENT_KIND.MANAGER) {
-    return Effect.succeed(callerUserId(caller));
-  }
-
-  return turnAsker({ userId: agent.userId, conversationId: agent.conversationId });
-};
-
 /** An automation of the caller's workspace that its member may read, or nothing: one of another workspace is none of the caller's. */
 const workspaceAutomation = (userId: string, workspaceId: string, id: string) =>
   Effect.map(readAutomation(userId, id), (found) =>
@@ -877,14 +863,14 @@ export function runListAutomations(
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_ID));
   }
 
-  const { automationId } = asked.success;
+  const { automationId, agentId } = asked.success;
 
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = yield* automationMember(call.caller);
+      const userId = yield* askingMember(call.caller);
 
       const found =
         automationId === undefined
@@ -901,7 +887,16 @@ export function runListAutomations(
             listAutomations(userId, { organizationId: workspace.value }),
           );
 
-          const summaries = yield* Effect.forEach(listed, (each) => summaryOf(userId, each));
+          const landing =
+            agentId === undefined
+              ? listed
+              : listed.filter(
+                  (each) =>
+                    each.targetKind === AUTOMATION_TARGET.SAME_AGENT &&
+                    each.targetAgentId === agentId,
+                );
+
+          const summaries = yield* Effect.forEach(landing, (each) => summaryOf(userId, each));
 
           return {
             status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -960,7 +955,7 @@ export function runCreateAutomation(
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = yield* automationMember(call.caller);
+      const userId = yield* askingMember(call.caller);
       const id = calledId(userId, call.clientKey);
       // A call run again finds the automation it made first, as it was made.
       const already = yield* workspaceAutomation(userId, workspace.value, id);
@@ -1102,7 +1097,7 @@ export function runUpdateAutomation(
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = yield* automationMember(call.caller);
+      const userId = yield* askingMember(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
 
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
@@ -1211,7 +1206,7 @@ export function runDeleteAutomation(
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = yield* automationMember(call.caller);
+      const userId = yield* askingMember(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
 
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
@@ -1254,7 +1249,7 @@ export function runRunAutomation(
       const workspace = yield* callerWorkspace(call.caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
-      const userId = yield* automationMember(call.caller);
+      const userId = yield* askingMember(call.caller);
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
 
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);

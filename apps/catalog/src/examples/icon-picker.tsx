@@ -1,3 +1,4 @@
+import { emojiGroups } from "@repo/features/emoji-model";
 import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
@@ -19,7 +20,6 @@ import {
   StarIcon,
   ZapIcon,
 } from "@repo/ui/icons";
-import type { EmojiGroup } from "@repo/ui/section-icon-model";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -71,23 +71,29 @@ const COLORS: readonly IconPickerColor<Ink>[] = [
 ];
 
 /** A few emoji by category, as the picker loads them. */
-const EMOJI: readonly EmojiGroup[] = [
+const EMOJI = emojiGroups([
   {
     name: "Smileys & Emotion",
     emojis: [
-      { emoji: "😀", name: "grinning face" },
-      { emoji: "😎", name: "smiling face with sunglasses" },
-      { emoji: "🤔", name: "thinking face" },
+      { emoji: "😀", name: "grinning face", version: 1, keywords: ["happy"], shortcodes: [] },
+      {
+        emoji: "😎",
+        name: "smiling face with sunglasses",
+        version: 1,
+        keywords: ["cool"],
+        shortcodes: [],
+      },
+      { emoji: "🤔", name: "thinking face", version: 1, keywords: ["hmm"], shortcodes: [] },
     ],
   },
   {
     name: "Travel & Places",
     emojis: [
-      { emoji: "🚀", name: "rocket" },
-      { emoji: "🛻", name: "pickup truck" },
+      { emoji: "🚀", name: "rocket", version: 0.6, keywords: ["launch"], shortcodes: ["rocket"] },
+      { emoji: "🛻", name: "pickup truck", version: 13, keywords: ["truck"], shortcodes: [] },
     ],
   },
-];
+]);
 
 /** The emoji the example's picker offers as chosen last. */
 const RECENT_EMOJI = "🚀";

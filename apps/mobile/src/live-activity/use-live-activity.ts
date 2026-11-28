@@ -38,8 +38,8 @@ import { type KeptPhone, liveActivityModule } from "./live-activity-module.js";
 /** How long ago each of the fixture's agents began its turn, so its timers read as a working afternoon. */
 const FIXTURE_TURN_AGES = { REFRESH: 94_000, ACTIVITIES: 612_000, INVITES: 8_000 } as const;
 
-/** The fixture's activity once none works, as the service's end leaves it: none running, none waiting, none listed. */
-const FIXTURE_DONE_STATE: LiveActivityContentState = { running: 0, waiting: 0, agents: [] };
+/** The fixture's activity once none works, as the service's end leaves it: none running, none listed, and the working fixture's one ask still waiting, so both of the header's labels stand where they stood. */
+const FIXTURE_DONE_STATE: LiveActivityContentState = { running: 0, waiting: 1, agents: [] };
 
 /** The fixture's activity: three agents working and one ask waiting, the newest turn first, as of `now`. */
 function fixtureContentState(now: number): LiveActivityContentState {

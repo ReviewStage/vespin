@@ -1,6 +1,6 @@
 import { Toast as BaseToast, type ToastObject } from "@base-ui/react/toast";
 import { Duration } from "effect";
-import type { HTMLAttributes, ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { AlertIcon, CircleCheckIcon } from "../../icons/lucide-glyphs.js";
 import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { ReplayWords } from "../../session-replay-marks.js";
@@ -43,9 +43,13 @@ import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
  * (`ToastActions`, passed as `actions`) takes the pointer.
  *
  * The toast takes no class or style; where it stands is the stack's. It is
- * drawn in Tailwind utilities over the theme; `toast.css` keeps what those
- * cannot say: its place and motion, which read Base UI's custom properties
- * and states, and what answers the pointer, which reads the screen's hover.
+ * three boxes: Base UI's root, the slot that stands in the stack, moves,
+ * and is swiped; the card in it, its frame; and Base UI's content in the
+ * card, its row, which fades while the toast stands collapsed behind a newer
+ * one, so only the newest one's words are read at rest. It is drawn in
+ * Tailwind utilities over the theme; `toast.css` keeps what those cannot
+ * say: its place and motion, which read Base UI's custom properties and
+ * states, and what answers the pointer, which reads the screen's hover.
  */
 
 /** What a toast reports, of the status tones: the act done, the act refused, something asked of the developer, or work still under way. */
@@ -90,22 +94,18 @@ function leadInk(tone: ToastTone, own: boolean, mark: boolean): string {
 }
 
 /**
- * The card's own layout, its ground, edge, corner, and shadow a raised
- * `Card`'s (`ToastFrame`): its glyph, its words' first line, and its action share a first
- * row as tall as a control, each centered on it; its words wrap at the card's
- * own line. One with an action button ends a step closer to it.
+ * The card's row: its glyph, its words' first line, and its action share a
+ * first row as tall as a control, each centered on it; its words wrap at the
+ * card's own line. One with an action button ends a step closer to it.
  */
-const TOAST_CARD =
-  "ui-toast flex items-start gap-icon-gap px-list-inset py-row-inset has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
+const TOAST_ROW =
+  "ui-toast-row flex items-start gap-icon-gap px-list-inset py-row-inset has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
 
-/** The toast drawn as a card, as Base UI's root renders it: raised, at a dialog's corner, on a toast's shadow, holding what Base UI hands it. */
-function ToastFrame({
-  children,
-  ...props
-}: HTMLAttributes<HTMLElement> & { ref?: Ref<HTMLElement> | undefined }): React.JSX.Element {
+/** The toast's frame, filling its slot in the stack: a raised `Card` at a dialog's corner, on a toast's shadow. */
+function ToastFrame({ children }: { children: ReactNode }): React.JSX.Element {
   return (
     <Card
-      {...props}
+      className="ui-toast-card"
       look={CARD_LOOK.RAISED}
       corner={CARD_CORNER.DIALOG}
       shadow={CARD_SHADOW.TOAST}
@@ -195,61 +195,59 @@ export function Toast({
   const Lead = glyph;
 
   return (
-    <BaseToast.Root
-      toast={toast}
-      swipeDirection={SWIPE_AWAY}
-      render={(frame) => <ToastFrame {...frame} />}
-      className={TOAST_CARD}
-      data-tone={tone}
-    >
-      <span
-        className={`${TOAST_GLYPH} ${leadInk(tone, glyph !== undefined, mark !== undefined)}`}
-        aria-hidden="true"
-      >
-        {mark !== undefined ? (
-          <ProviderMark provider={mark} size={PROVIDER_MARK_SIZE.SLOT} />
-        ) : Lead !== undefined ? (
-          <Lead />
-        ) : (
-          <ToneGlyph tone={tone} />
-        )}
-      </span>
-      <span className={TOAST_TEXT}>
-        <BaseToast.Title render={<span className={wordsClass(chip !== undefined)} />}>
-          <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.SPAN}>
-            <ReplayWords unmasked={replayUnmasked}>{words}</ReplayWords>
-            {chip === undefined ? null : (
-              <>
-                {" "}
-                <ReplayWords unmasked={false}>
-                  <InlineRef
-                    look={INLINE_REF_LOOK.PILL}
-                    fit={INLINE_REF_FIT.FLOW}
-                    name={chip.name ?? INLINE_REF_NAME.NAME}
-                    glyph={chip.glyph}
-                    label={chip.label}
-                    kind={chip.kind}
-                    hint={false}
-                  />
-                </ReplayWords>
-              </>
-            )}
-            {afterChip === undefined ? null : (
-              <ReplayWords unmasked={replayUnmasked}>{` ${afterChip}`}</ReplayWords>
-            )}
-          </Text>
-        </BaseToast.Title>
-        {detail === undefined ? null : (
-          <BaseToast.Description
-            render={<span className="ui-toast-detail line-clamp-2 wrap-anywhere" />}
+    <BaseToast.Root toast={toast} swipeDirection={SWIPE_AWAY} className="ui-toast" data-tone={tone}>
+      <ToastFrame>
+        <BaseToast.Content className={TOAST_ROW}>
+          <span
+            className={`${TOAST_GLYPH} ${leadInk(tone, glyph !== undefined, mark !== undefined)}`}
+            aria-hidden="true"
           >
-            <Text variant={TEXT_VARIANT.CAPTION} as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED}>
-              <ReplayWords unmasked={replayUnmasked}>{detail}</ReplayWords>
-            </Text>
-          </BaseToast.Description>
-        )}
-      </span>
-      {actions}
+            {mark !== undefined ? (
+              <ProviderMark provider={mark} size={PROVIDER_MARK_SIZE.SLOT} />
+            ) : Lead !== undefined ? (
+              <Lead />
+            ) : (
+              <ToneGlyph tone={tone} />
+            )}
+          </span>
+          <span className={TOAST_TEXT}>
+            <BaseToast.Title render={<span className={wordsClass(chip !== undefined)} />}>
+              <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.SPAN}>
+                <ReplayWords unmasked={replayUnmasked}>{words}</ReplayWords>
+                {chip === undefined ? null : (
+                  <>
+                    {" "}
+                    <ReplayWords unmasked={false}>
+                      <InlineRef
+                        look={INLINE_REF_LOOK.PILL}
+                        fit={INLINE_REF_FIT.FLOW}
+                        name={chip.name ?? INLINE_REF_NAME.NAME}
+                        glyph={chip.glyph}
+                        label={chip.label}
+                        kind={chip.kind}
+                        hint={false}
+                      />
+                    </ReplayWords>
+                  </>
+                )}
+                {afterChip === undefined ? null : (
+                  <ReplayWords unmasked={replayUnmasked}>{` ${afterChip}`}</ReplayWords>
+                )}
+              </Text>
+            </BaseToast.Title>
+            {detail === undefined ? null : (
+              <BaseToast.Description
+                render={<span className="ui-toast-detail line-clamp-2 wrap-anywhere" />}
+              >
+                <Text variant={TEXT_VARIANT.CAPTION} as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED}>
+                  <ReplayWords unmasked={replayUnmasked}>{detail}</ReplayWords>
+                </Text>
+              </BaseToast.Description>
+            )}
+          </span>
+          {actions}
+        </BaseToast.Content>
+      </ToastFrame>
     </BaseToast.Root>
   );
 }

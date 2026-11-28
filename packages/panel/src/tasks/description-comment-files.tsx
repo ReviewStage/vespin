@@ -1,4 +1,4 @@
-import { type AgentAttachment, isAgentAttachmentType } from "@repo/features/agent-wire";
+import { type AgentAttachment, agentAttachmentTypeOf } from "@repo/features/agent-wire";
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
 import type { DescriptionCommentFile } from "@repo/features/description-comment-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -87,8 +87,8 @@ type UseCommentFileEntriesResult = {
  * same object for as long as its file and bytes do, because the box knows
  * each file it holds by the object, and a new one each draw would take it
  * for another file; and that a file of a type this window does not know,
- * one added after it, is no entry, since no box holds it, and stays on the
- * comment as it stands.
+ * one added after it, is held as a file of any other kind
+ * (`agentAttachmentTypeOf`), whose chip saves its bytes.
  */
 export function useCommentFileEntries(
   taskId: string,
@@ -98,9 +98,7 @@ export function useCommentFileEntries(
   const known = useRef(new Map<string, AgentAttachment>());
 
   const entries = files.flatMap((file, index) => {
-    const { mediaType } = file;
-
-    if (!isAgentAttachmentType(mediaType)) return [];
+    const mediaType = agentAttachmentTypeOf(file.mediaType);
     const data = chipBase64({ name: file.name, mediaType, url: urls[index] ?? "" });
     const was = known.current.get(file.attachmentId);
 

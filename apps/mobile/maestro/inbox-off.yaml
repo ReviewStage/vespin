@@ -40,10 +40,10 @@ env:
 - takeScreenshot: inbox-off-tasks
 # A thread a link names still opens, on Tasks' stack, since no Inbox tab
 # stands to open it on. The system asks before a custom scheme opens the app.
-- openLink: "vespin://inbox/81e2a425-6d9f-4ab7-92df-000000000001"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://inbox/81e2a425-6d9f-4ab7-92df-000000000001"
 - extendedWaitUntil:
     visible: ".*withdrawing one deletes it.*"
     timeout: 15000
@@ -78,8 +78,8 @@ env:
 - extendedWaitUntil:
     visible: "Teammate invitations"
     timeout: 30000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:

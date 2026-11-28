@@ -14,10 +14,11 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handHostReads, handMembers } from "../testing/app-state.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 
@@ -25,8 +26,8 @@ import { ToastHost } from "../toast.js";
  * task-list-view.test.ts -- the sidebar's Tasks section lists the work under
  * way, the reader's own until View options says otherwise, grouped as it
  * says, each row saying what its group does not, the pins standing apart in
- * a section of their own, and each workspace keeping its own view on this
- * Mac.
+ * a section of their own, and each workspace keeping its own view on the
+ * account.
  */
 
 const DEAN = "user-dean";
@@ -67,6 +68,7 @@ beforeEach(() => {
   });
   fakeAppBridge({});
   handMembers(() => ({ rows: { members: MEMBERS } }));
+  keepViewChoices();
 });
 
 afterEach(() => {
@@ -195,8 +197,8 @@ function viewOptions(sidebar: HTMLElement): HTMLButtonElement {
   );
 }
 
-/** Chooses `choice` under Group by in the Tasks head's View options, and lets the menu go. */
-function groupBy(sidebar: HTMLElement, choice: string): void {
+/** Chooses `choice` under Group by in the Tasks head's View options, lets the menu go, and waits for the choice to land on the account. */
+async function groupBy(sidebar: HTMLElement, choice: string): Promise<void> {
   const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Group by").click());
@@ -207,11 +209,12 @@ function groupBy(sidebar: HTMLElement, choice: string): void {
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
   });
+  await settleQueries();
 }
 
 /** Lists the tasks in one run, Group by › None. */
-function listUngrouped(sidebar: HTMLElement): void {
-  groupBy(sidebar, "None");
+function listUngrouped(sidebar: HTMLElement): Promise<void> {
+  return groupBy(sidebar, "None");
 }
 
 /** Chooses `choice` under `submenu` in the Tasks head's View options. */
@@ -222,6 +225,7 @@ async function choose(sidebar: HTMLElement, submenu: string, choice: string): Pr
   // Note that a member is offered once the workspace's members reach their query.
   const item = await vi.waitFor(() => menuItem(choice));
   act(() => item.click());
+  await settleQueries();
 }
 
 /** The first of a button's words a reader hears: a row's or a fold's name, before its count and its chord. */
@@ -359,10 +363,10 @@ test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › A
   assert.equal(viewOptions(sidebar).getAttribute("aria-description"), "Filtered");
 });
 
-test("grouped by none, the tasks run in one list, each row naming its repository and wearing who is on it", () => {
+test("grouped by none, the tasks run in one list, each row naming its repository and wearing who is on it", async () => {
   keepAnyone();
-  const sidebar = mountSidebar(ACME, ASSIGNED);
-  listUngrouped(sidebar);
+  const sidebar = await mountRead(ACME, ASSIGNED);
+  await listUngrouped(sidebar);
   assert.deepEqual(groupNames(sidebar), []);
   assert.deepEqual(taskRows(sidebar), [
     { name: "Billing empty states", repository: "console", face: true },
@@ -387,15 +391,15 @@ test("the pins stand in a section of their own above Tasks, whatever the view li
   );
 });
 
-test("each workspace keeps its own view on this Mac across launches", () => {
-  listUngrouped(mountSidebar(ACME));
+test("each workspace keeps its own view across launches", async () => {
+  await listUngrouped(await mountRead(ACME));
   unmountAll();
 
-  assert.deepEqual(groupNames(mountSidebar(ACME)), []);
+  assert.deepEqual(groupNames(await mountRead(ACME)), []);
   unmountAll();
   const other = { ...PERSONAL, id: "workspace-other", name: "Other" };
   const elsewhere = TASKS.map((each) => ({ ...each, workspaceId: other.id }));
-  assert.deepEqual(groupNames(mountSidebar(other, elsewhere)), ["console", "relay"]);
+  assert.deepEqual(groupNames(await mountRead(other, elsewhere)), ["console", "relay"]);
 });
 
 test("a workspace nobody shares lists every task and offers no Assigned to, Group by choosing Repository or None, Repository at first", () => {
@@ -445,6 +449,7 @@ test("a list of your own that holds nothing says so, and Show all lists everyone
   const showAll = note?.querySelector("button");
   assert.ok(showAll, "the note offers Show all");
   act(() => showAll.click());
+  await settleQueries();
   assert.equal(taskRows(sidebar).length, 2);
   assert.equal(headWords(sidebar), "Everyone's tasks");
 });
@@ -477,7 +482,7 @@ test("in one run, a task with no repository says so on its row", async () => {
   keepAnyone();
   const notes = task("t-6", "Hiring loop notes", null, DEAN, { createdAt: 1, updatedAt: 700 });
   const sidebar = await mountRead(ACME, [...TASKS, notes]);
-  listUngrouped(sidebar);
+  await listUngrouped(sidebar);
   assert.deepEqual(taskRows(sidebar)[0], {
     name: "Hiring loop notes",
     repository: "No repository",
@@ -512,6 +517,7 @@ test("⌘K offers each view choice only while it would change the list, and runn
   act(() => {
     runAppCommand(APP_COMMAND.LIST_TASKS_UNGROUPED);
   });
+  await settleQueries();
   assert.deepEqual(groupNames(sidebar), []);
   assert.equal(appCommandOffered(APP_COMMAND.LIST_TASKS_UNGROUPED), false);
   assert.equal(appCommandOffered(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY), true);
@@ -519,17 +525,20 @@ test("⌘K offers each view choice only while it would change the list, and runn
   act(() => {
     runAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY);
   });
+  await settleQueries();
   assert.equal(appCommandOffered(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY), false);
   assert.equal(appCommandOffered(APP_COMMAND.LIST_TASKS_UNGROUPED), true);
 
   act(() => {
     runAppCommand(APP_COMMAND.SHOW_EVERYONES_TASKS);
   });
+  await settleQueries();
   assert.equal(headWords(sidebar), "Everyone's tasks");
   assert.equal(appCommandOffered(APP_COMMAND.SHOW_EVERYONES_TASKS), false);
   act(() => {
     runAppCommand(APP_COMMAND.SHOW_MY_TASKS);
   });
+  await settleQueries();
   assert.equal(headWords(sidebar), "My tasks");
 });
 
@@ -561,6 +570,7 @@ test("Show completed sub-tasks stands a parent's finished sub-tasks under it, mu
   const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Show completed sub-tasks").click());
+  await settleQueries();
 
   const fold = sidebar.querySelector<HTMLButtonElement>(
     'button[aria-label="Sub-tasks of Onboarding"]',
@@ -568,9 +578,11 @@ test("Show completed sub-tasks stands a parent's finished sub-tasks under it, mu
 
   assert.ok(fold, "Onboarding folds its sub-tasks");
   act(() => fold.click());
+  await settleQueries();
   const audit = sidebar.querySelector<HTMLButtonElement>('button[aria-label="Sub-tasks of Audit"]');
   assert.ok(audit, "Audit folds its sub-tasks");
   act(() => audit.click());
+  await settleQueries();
   assert.deepEqual(names(sidebar), ["Onboarding", "Audit", "Delete"]);
 
   const muted = [...sidebar.querySelectorAll(`${TASK_LIST} li[data-muted="true"]`)].map(
@@ -582,6 +594,7 @@ test("Show completed sub-tasks stands a parent's finished sub-tasks under it, mu
   act(() => {
     runAppCommand(APP_COMMAND.HIDE_FINISHED_SUB_TASKS);
   });
+  await settleQueries();
   assert.deepEqual(names(sidebar), ["Onboarding", "Delete"]);
   assert.equal(appCommandOffered(APP_COMMAND.HIDE_FINISHED_SUB_TASKS), false);
   assert.equal(appCommandOffered(APP_COMMAND.SHOW_FINISHED_SUB_TASKS), true);
@@ -647,7 +660,7 @@ function heardFaces(sidebar: HTMLElement): [string, string | undefined][] {
 test("a row wears its assignee's face where someone else is on it, none where you are, and the unassigned mark, never its creator's, where no one is", async () => {
   keepAnyone();
   const sidebar = await mountRead(ACME, ASSIGNED);
-  listUngrouped(sidebar);
+  await listUngrouped(sidebar);
 
   assert.deepEqual(heardFaces(sidebar), [
     ["Billing empty states", "(unassigned)"],
@@ -670,6 +683,7 @@ test("Assigned to a teammate, with nothing of theirs, says so, and Show all list
   const showAll = note?.querySelector("button");
   assert.ok(showAll, "the note offers Show all");
   act(() => showAll.click());
+  await settleQueries();
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "Everyone's tasks");
 });

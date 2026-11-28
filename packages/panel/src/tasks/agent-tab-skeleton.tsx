@@ -1,7 +1,16 @@
 import { BOOT_WORDS } from "@repo/features/agent-boot-words";
 import { readingWords } from "@repo/features/words";
-import { CHAT_RUN, CHAT_SIDE, ChatBubble, ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
-import { ConversationLead } from "../ai-elements/conversation.js";
+import {
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChannelMessage,
+  ChatBubble,
+  ComposerFoot,
+  SKELETON_KIND,
+  Skeleton,
+  SkeletonRegion,
+} from "@repo/ui";
+import { ConversationLead } from "@repo/ui/conversation";
 import { Message, MessageContent } from "../ai-elements/message.js";
 import { PromptInputCard } from "../ai-elements/prompt-input.js";
 import { BUTTON, ComposerCard, PLACEHOLDER } from "./agent-composer.js";
@@ -31,7 +40,13 @@ import { WorkingLine } from "./working-time.js";
  * them. A Start still under way has no transcript to stand in for, so its
  * log says only that the agent is starting, at its top where the agent's
  * tab goes on saying how its machine boots (`AgentBootLine`), rather than
- * an exchange that never took place.
+ * an exchange that never took place. A Manager's chat is a channel, not a
+ * transcript, so until its messages are read it stands as a channel's last
+ * runs, each drawn as the chat draws a message (`ChannelMessage`): a
+ * picture's disc in the gutter, a name and a time over the lines, and a run
+ * going on under its sender's with neither (`ManagerChatSkeleton`); a
+ * thread beside it stands its message and a reply from its top
+ * (`ManagerThreadSkeleton`).
  */
 
 /** What the log's placeholder says to a reader. */
@@ -46,6 +61,45 @@ const LOG_LINE_WIDTHS = {
   ASKED: ["208px", "132px"],
   REPLY: ["94%", "86%", "58%"],
   WORKED: "36%",
+} as const;
+
+/**
+ * A channel message as its skeleton stands it: how wide each of its lines
+ * stands, and, where it opens its sender's run, how wide the sender's name
+ * stands over them; one with no name goes on under the message before it.
+ */
+interface ChannelMessageSkeletonLines {
+  readonly name?: string;
+  readonly lines: readonly string[];
+}
+
+/** How wide a channel message's time stands beside its sender's name, as a day's time reads ("Today, 8:04 PM"). */
+const CHANNEL_TIME_WIDTH = "88px";
+
+/** A channel message's picture, the gutter's disc, as wide as the gutter the chat stands its faces in. */
+const CHANNEL_AVATAR_WIDTH = "var(--spacing-channel-avatar)";
+
+/**
+ * A Manager's chat's last messages, the newest last: a person's ask, then
+ * the Manager's answer, a second message going on under it, as the chat's
+ * foot most often reads.
+ */
+const CHAT_MESSAGES: readonly ChannelMessageSkeletonLines[] = [
+  { name: "112px", lines: ["58%"] },
+  { name: "136px", lines: ["94%", "72%"] },
+  { lines: ["44%"] },
+];
+
+/** A Manager's thread from its top: the message it answers, then a reply under it. */
+const THREAD_MESSAGES: readonly ChannelMessageSkeletonLines[] = [
+  { name: "136px", lines: ["92%", "64%"] },
+  { name: "112px", lines: ["52%"] },
+];
+
+/** What the chat's placeholder says to a reader, and its thread's. */
+const CHAT_LOADING_LABEL = {
+  CHAT: readingWords("the messages"),
+  THREAD: readingWords("the thread"),
 } as const;
 
 /** How wide the model's name stands in the composer until the agent says which it is. */
@@ -80,6 +134,58 @@ export function TranscriptSkeleton({
           </Message>
           <Skeleton width={LOG_LINE_WIDTHS.WORKED} />
         </div>
+      </SkeletonRegion>
+    </div>
+  );
+}
+
+/** A channel's messages, each drawn as the chat draws one: opening a run under its sender's disc, name, and time, or going on under the one before. */
+function ChannelMessagesSkeleton({
+  messages,
+}: {
+  messages: readonly ChannelMessageSkeletonLines[];
+}): React.JSX.Element {
+  return (
+    <div className="agent-log-skeleton manager-chat-skeleton">
+      {messages.map(({ name, lines }, at) => (
+        <ChannelMessage
+          // Note that the messages are a fixed declaration, so each keeps its place in it.
+          key={at}
+          avatar={<Skeleton kind={SKELETON_KIND.CIRCLE} width={CHANNEL_AVATAR_WIDTH} />}
+          name={<Skeleton width={name} />}
+          at={<Skeleton width={CHANNEL_TIME_WIDTH} />}
+          continues={name === undefined}
+        >
+          {lines.map((width) => (
+            <Skeleton key={width} width={width} />
+          ))}
+        </ChannelMessage>
+      ))}
+    </div>
+  );
+}
+
+/** A Manager's chat while its messages are read, which `label` names to a reader: its last messages, standing at its foot where the newest draw over the box. */
+export function ManagerChatSkeleton({
+  label = CHAT_LOADING_LABEL.CHAT,
+}: {
+  label?: string | undefined;
+}): React.JSX.Element {
+  return (
+    <div className="agent-log-skeleton-wait">
+      <SkeletonRegion label={label}>
+        <ChannelMessagesSkeleton messages={CHAT_MESSAGES} />
+      </SkeletonRegion>
+    </div>
+  );
+}
+
+/** A Manager's thread while its messages are read: the message it answers and a reply, standing from its top as a thread reads. */
+export function ManagerThreadSkeleton(): React.JSX.Element {
+  return (
+    <div className="agent-log-skeleton-wait manager-thread-skeleton-wait">
+      <SkeletonRegion label={CHAT_LOADING_LABEL.THREAD}>
+        <ChannelMessagesSkeleton messages={THREAD_MESSAGES} />
       </SkeletonRegion>
     </div>
   );
@@ -135,18 +241,29 @@ function StartingLog(): React.JSX.Element {
 /**
  * A whole agent's tab before it can be drawn: the log's last exchange over
  * the composer, which `label` names to a reader, or, while the agent's
- * Start is still under way (`starting`), the log saying it starts.
+ * Start is still under way (`starting`), the log saying it starts; a
+ * Manager's (`chat`) its chat's last messages over the composer.
  */
 export function AgentTabSkeleton({
   label,
   starting = false,
+  chat = false,
 }: {
   label?: string | undefined;
   starting?: boolean;
+  chat?: boolean;
 }): React.JSX.Element {
+  const log = chat ? (
+    <ManagerChatSkeleton label={label} />
+  ) : starting ? (
+    <StartingLog />
+  ) : (
+    <TranscriptSkeleton label={label} />
+  );
+
   return (
     <AgentTabFrame>
-      {starting ? <StartingLog /> : <TranscriptSkeleton label={label} />}
+      {log}
       <AgentTabFoot>
         <ComposerSkeleton />
       </AgentTabFoot>

@@ -8,6 +8,7 @@ import {
   iosRouteAgent,
   iosRouteHidesTabs,
   iosRouteOnTab,
+  iosRouteStanding,
 } from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
 
@@ -156,5 +157,15 @@ describe("a route opened from a tab", () => {
     ["/start-task", "inbox", "/start-task"],
   ] as const)("%s from %s opens at %s", (route, standing, opened) => {
     expect(iosRouteOnTab(route, standing)).toBe(opened);
+  });
+});
+
+// Note that the regression this catches is a person's page opened from a thread on an iPad landing on Tasks, whose Back then stands on Tasks' empty detail rather than the thread, while a task keeps opening on Tasks beside its list.
+describe("a route opened from a tab in a regular window", () => {
+  it.each([
+    ["/tasks/person/user-1", "inbox", "/(inbox)/tasks/person/user-1"],
+    ["/tasks/task-1", "inbox", "/(tasks)/tasks/task-1"],
+  ] as const)("%s from %s opens at %s", (route, standing, opened) => {
+    expect(iosRouteOnTab(route, iosRouteStanding(route, standing, false))).toBe(opened);
   });
 });

@@ -1,28 +1,15 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import {
-  DEVICE_ARCH,
-  DEVICE_PLATFORM,
-  HOST_UPDATE,
-  MACHINE_NETWORK,
-  MACHINE_OWNER,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Exit, Option, Struct } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
-import { organization, user } from "../../schemas/auth.js";
+import { user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
-import {
-  connectWorkspaceMachine,
-  DEVICE_LAYOUT,
-  getTestDB,
-  joinWorkspace,
-  openWorkspace,
-} from "../../testing/index.js";
-import { ownDeviceHost } from "../device-agent-store.js";
+import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import {
   allowedAppsOf,
   beatDevice,
@@ -30,18 +17,15 @@ import {
   devicesNamed,
   devicesSeenSince,
   joinCommandDevice,
-  machinesNamed,
   markAwayDevices,
   markCommandsAwayDevices,
   registerDevice,
   removeMachine,
-  renameWorkspaceMachine,
   saveCommandDeviceSettings,
   saveDeviceAppLooks,
   workspaceMachinesOf,
-  workspaceOwnedMachinesOf,
 } from "../device-store.js";
-import { enrollOwnDevice, hostsOf, registerHost, removeHost } from "../host-store.js";
+import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 import { commandMachinesOf, markMachineListening } from "../machine-command-store.js";
 
 /**
@@ -55,10 +39,7 @@ import { commandMachinesOf, markMachineListening } from "../machine-command-stor
  * goes quiet, and the apps each machine always allows are read by its own
  * account alone. A workspace's machines are read by its members alone, and
  * name only those of its members, each online while it beats as a host or
- * its app listened lately. A machine a workspace owns is listed to its
- * members alone and is no member's own, stays with the workspace when the
- * account that connected it is deleted, and goes with the workspace; a
- * device with both owners or neither is refused.
+ * its app listened lately.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -108,117 +89,6 @@ it.layer(getTestDB())("the device store", (it) => {
           "a workspace the member is not in",
         );
       }),
-  );
-
-  it.effect(
-    "a machine a workspace owns is listed to its members alone, and is no member's own, though a read of where agents run names it",
-    () =>
-      Effect.gen(function* () {
-        const { owner, other } = yield* openAccounts;
-        const shared = yield* openWorkspace(owner);
-        yield* openWorkspace(other);
-        const box = yield* connectWorkspaceMachine(shared, owner);
-
-        assert.deepEqual(
-          (yield* workspaceOwnedMachinesOf(owner, shared)).map((machine) =>
-            Struct.omit(machine, ["lastSeenAt"]),
-          ),
-          [
-            {
-              id: box,
-              name: "build-box",
-              platform: DEVICE_PLATFORM.LINUX,
-              arch: DEVICE_ARCH.X64,
-              connectedBy: owner,
-              network: MACHINE_NETWORK.PUBLIC_ONLY,
-            },
-          ],
-        );
-        assert.deepEqual(yield* workspaceOwnedMachinesOf(other, shared), [], "not a member");
-        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, new Date(0)), []);
-        assert.equal((yield* devicesNamed([box])).size, 0);
-        assert.equal(
-          (yield* machinesNamed([box])).get(box)?.name,
-          "build-box",
-          "where its agents run",
-        );
-      }),
-  );
-
-  it.effect("a workspace's machine keeps the name its admin gave it through its register", () =>
-    Effect.gen(function* () {
-      const { owner } = yield* openAccounts;
-      const shared = yield* openWorkspace(owner);
-      const box = yield* connectWorkspaceMachine(shared, owner, `secret-${randomUUID()}`);
-      const host = { deviceId: box, owner: { kind: MACHINE_OWNER.WORKSPACE, workspaceId: shared } };
-      yield* renameWorkspaceMachine(shared, box, "Build farm");
-
-      const registered = yield* registerHost(host, { name: "ip-10-0-0-7", ...DEVICE_LAYOUT });
-
-      assert.ok(Option.isSome(registered));
-      assert.deepEqual(
-        (yield* workspaceOwnedMachinesOf(owner, shared)).map((machine) => machine.name),
-        ["Build farm"],
-      );
-    }),
-  );
-
-  it.effect(
-    "a workspace's machine stays with it when the account that connected it is deleted, and goes with the workspace",
-    () =>
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const { owner, other } = yield* openAccounts;
-        const shared = yield* openWorkspace(owner);
-        yield* joinWorkspace(shared, other);
-        const box = yield* connectWorkspaceMachine(shared, other, `secret-${randomUUID()}`);
-        yield* db.delete(user).where(eq(user.id, other));
-
-        assert.deepEqual(
-          (yield* workspaceOwnedMachinesOf(owner, shared)).map((machine) => [
-            machine.id,
-            machine.connectedBy,
-          ]),
-          [[box, null]],
-        );
-
-        yield* db.delete(organization).where(eq(organization.id, shared));
-
-        assert.deepEqual(
-          yield* db.select({ id: device.id }).from(device).where(eq(device.id, box)),
-          [],
-        );
-      }),
-  );
-
-  it.effect("a device owned by both an account and a workspace, or by neither, is refused", () =>
-    Effect.gen(function* () {
-      const db = yield* Database;
-      const { owner } = yield* openAccounts;
-      const shared = yield* openWorkspace(owner);
-      const now = yield* Clock.currentTimeMillis;
-
-      const row = {
-        name: "build-box",
-        platform: DEVICE_PLATFORM.LINUX,
-        arch: DEVICE_ARCH.X64,
-        lastSeenAt: new Date(now),
-      };
-
-      const both = yield* Effect.exit(
-        db.insert(device).values({
-          ...row,
-          id: randomUUID(),
-          userId: owner,
-          organizationId: shared,
-          network: MACHINE_NETWORK.PUBLIC_ONLY,
-        }),
-      );
-
-      const neither = yield* Effect.exit(db.insert(device).values({ ...row, id: randomUUID() }));
-
-      assert.deepEqual([Exit.isFailure(both), Exit.isFailure(neither)], [true, true]);
-    }),
   );
 
   it.effect(
@@ -280,7 +150,7 @@ it.layer(getTestDB())("the device store", (it) => {
         ...DEVICE_LAYOUT,
       });
 
-      const beatenByOther = yield* beatDevice(ownDeviceHost(other, id));
+      const beatenByOther = yield* beatDevice(other, id);
 
       assert.equal(registered, true);
       assert.equal(takenOver, false, "an id another account holds is not moved");
@@ -589,7 +459,7 @@ it.layer(getTestDB())("the device store", (it) => {
       yield* TestClock.adjust("60 seconds");
 
       const staleRead = yield* devicesSeenSince(owner, cutoff);
-      const beaten = yield* beatDevice(ownDeviceHost(owner, id));
+      const beaten = yield* beatDevice(owner, id);
       const freshRead = yield* devicesSeenSince(owner, cutoff);
 
       assert.deepEqual(staleRead, [], "a Mac silent past the cutoff is not there");
@@ -618,11 +488,11 @@ it.layer(getTestDB())("the device store", (it) => {
           hosts.map((host) => [host.update, host.updateFailure]),
         );
 
-        yield* beatDevice(ownDeviceHost(owner, id), { update: HOST_UPDATE.WAITING });
+        yield* beatDevice(owner, id, { update: HOST_UPDATE.WAITING });
         // A held read touches the device with no word of its update.
-        yield* beatDevice(ownDeviceHost(owner, id));
+        yield* beatDevice(owner, id);
         const touched = yield* listed;
-        yield* beatDevice(ownDeviceHost(owner, id), {});
+        yield* beatDevice(owner, id, {});
         const cleared = yield* listed;
 
         assert.deepEqual(touched, [[HOST_UPDATE.WAITING, null]]);
@@ -714,7 +584,7 @@ it.layer(getTestDB())("the device store", (it) => {
         yield* TestClock.adjust(60_000);
         yield* markAwayDevices(yield* Clock.currentTimeMillis, freshMs);
         const markedAgain = yield* awayAt;
-        yield* beatDevice(ownDeviceHost(owner, id));
+        yield* beatDevice(owner, id);
         const cleared = yield* awayAt;
 
         assert.equal(whileFresh, null);

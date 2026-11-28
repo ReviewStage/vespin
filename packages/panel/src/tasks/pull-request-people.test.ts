@@ -264,7 +264,14 @@ test("a pull request's tab card says who opened it and its reviewers once its ta
   // Note that each draw's window holds the members anew, so the host lays them for it.
   handMembers(() => ({ rows: { members: [CHARLES] } }));
   const read = await draw(card(PEOPLE));
-  assert.match(read.textContent ?? "", /Opened by Expiry job for luke-agent/u);
+  assert.deepEqual(
+    [
+      read.querySelector("[data-pull-request-opener]")?.textContent,
+      read.querySelector("[data-pull-request-agent]")?.textContent,
+    ],
+    ["Opened by luke-agentbot", "via Expiry job"],
+    "the person who opened it leads, named whole on a row of their own, and the agent follows",
+  );
   assert.equal(read.querySelectorAll('[aria-label="Reviewers"] > li').length, 4);
 });
 

@@ -15,9 +15,11 @@
  *
  * The transcript is the work under the chat, read beside it only for what
  * a chat shows of it: whether a turn is under way, which the working line
- * says, and each turn's work, which Show work opens under the Manager's
- * first message of the turn, among its actions and in its menu, and which
- * the working line opens for the turn under way. A call the Manager holds for the reader's answer stands at the chat's
+ * just over the box says, never a row of the chat (`manager-working-dock.tsx`),
+ * and each turn's work, which Show work opens under the Manager's first
+ * message of the turn, among its actions and in its menu, and which the
+ * working line's Show work opens at the chat's end for the turn under way.
+ * A call the Manager holds for the reader's answer stands at the chat's
  * foot, its answers under it, since the work it stands in is a press away. A
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
  * drawn at its end from the moment it is sent, as the host draws it on its
@@ -35,7 +37,6 @@
  * nothing back; the rewind itself stays the agent tab's (`rewind-action.tsx`).
  */
 
-import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
@@ -61,6 +62,7 @@ import {
   chatMessageLanding,
   type ManagerChatLine,
   managerChatView,
+  managerWorkingLine,
 } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
@@ -77,6 +79,12 @@ import {
   TIME_LOOK,
   Time,
 } from "@repo/ui";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -88,12 +96,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
@@ -120,6 +122,7 @@ import {
   type SentLine,
   tabTurnOf,
   teammateStarter,
+  WORKING_PHASE,
   workingLineWords,
 } from "./agent-model.js";
 import {
@@ -131,9 +134,9 @@ import {
 import type { DelegationDoors } from "./agent-tab.js";
 import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
-import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
+import { ManagerChatSkeleton, ManagerThreadSkeleton } from "./agent-tab-skeleton.js";
 import { useChatMessageMenu } from "./chat-message-menu.js";
-import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
+import { type ChatWorkToggle, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import {
   type ChatEdit,
@@ -154,6 +157,7 @@ import {
   ThreadSummary,
   useThreadDoors,
 } from "./manager-chat-threads.js";
+import { ManagerWorkingDock, useLiveWorkToggle } from "./manager-working-dock.js";
 import { CHAT_MESSAGE_GONE, useMessageReveal } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { SentMessage } from "./skill-chip.js";
@@ -171,7 +175,6 @@ import { useAgentEndDoors } from "./use-agent-end-doors.js";
 import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
-import { WorkingLine } from "./working-time.js";
 
 /** A Manager as its chat draws it: its name over each run of its messages, and its face beside the run, none where a service older than faces answers. */
 interface ChatManagerLook {
@@ -569,30 +572,6 @@ function SendingLine({
         </div>
       )}
     </SentMessage>
-  );
-}
-
-/** What the chat says while a turn runs: its working line in a bubble of the Manager's, as a chat app shows the other side typing, the turn's work so far a press away. */
-function ChatWorking({
-  words,
-  manager,
-  work,
-}: {
-  words: string;
-  manager: ChatManagerLook;
-  work: ReactNode | null;
-}): ReactNode {
-  const toggle = useWorkToggle();
-
-  return (
-    <ChannelMessage
-      avatar={<ChatFace face={manager.face} />}
-      name={manager.name}
-      actions={work === null ? null : <WorkingWorkAction toggle={toggle} />}
-      under={toggle.shown && work !== null ? work : null}
-    >
-      <WorkingLine startedAt={undefined} words={words} />
-    </ChannelMessage>
   );
 }
 
@@ -1098,6 +1077,10 @@ export function ManagerChatTab({
   const { marks, standing, manager, name, view, delegation, drawLine } = chatBox;
   const { mutate: retryChat } = useMutation(managerChatRetryMutation());
 
+  const liveWork = useLiveWorkToggle(
+    standing.working ? (standing.turnId ?? agent.turnId ?? undefined) : undefined,
+  );
+
   const {
     mutate: readOlder,
     isError: olderFailed,
@@ -1208,20 +1191,27 @@ export function ManagerChatTab({
       }),
   });
 
-  const workingWords =
-    approvals.waiting > 0
-      ? waitingOnYouWords(approvals.waiting)
+  // Note that the line over the box says a phase in its own words only where the turn is neither starting nor working, so a send reads as the Manager at work at once.
+  const phase =
+    standing.phase === WORKING_PHASE.STARTING || standing.phase === WORKING_PHASE.WORKING
+      ? undefined
       : workingLineWords(standing.phase, standing.waitsUntil);
+
+  const workingLine = managerWorkingLine(view, {
+    working: standing.working,
+    name,
+    waiting: approvals.waiting,
+    phase,
+  });
+
+  const liveShown = workingLine?.work === true && liveWork.shown;
 
   // What stands after the messages is drawn inside the last of them, as an agent's log draws it, so the run measures it with the row and keeps to it.
   const trailing =
-    !standing.working &&
-    asks.length === 0 &&
-    ended === undefined &&
-    endTrail === undefined ? null : (
+    !liveShown && asks.length === 0 && ended === undefined && endTrail === undefined ? null : (
       <>
         {asks.length === 0 ? null : (
-          // Note that only the foot's calls offer the answers, since the same call drawn in the work under the working line would offer them twice.
+          // Note that only the foot's calls offer the answers, since the same call drawn in the turn's work Show work opens would offer them twice.
           <ApprovalsProvider asks={asks}>
             <div className="agent-loose-approvals flex flex-col">
               {asks.map((ask) => (
@@ -1230,16 +1220,10 @@ export function ManagerChatTab({
             </div>
           </ApprovalsProvider>
         )}
-        {standing.working ? (
-          <ChatWorking
-            words={workingWords}
-            manager={manager}
-            work={
-              view.live.length === 0 ? null : (
-                <TurnWorkRows parts={view.live} moving delegation={delegation} />
-              )
-            }
-          />
+        {liveShown ? (
+          <div className="manager-live-work">
+            <TurnWorkRows parts={view.live} moving delegation={delegation} />
+          </div>
         ) : null}
         {ended === undefined && endTrail === undefined ? null : (
           <div className="agent-end flex flex-col items-start gap-control-gap">
@@ -1297,7 +1281,7 @@ export function ManagerChatTab({
       );
     }
 
-    if (chat === undefined) return <TranscriptSkeleton />;
+    if (chat === undefined) return <ManagerChatSkeleton />;
 
     return (
       <Conversation list={list} onNearTop={onNearTop}>
@@ -1336,6 +1320,7 @@ export function ManagerChatTab({
         <UndeliveredLines value={marks}>
           {log}
           <AgentTabFoot>
+            <ManagerWorkingDock line={workingLine} face={agent.face} toggle={liveWork} />
             <ThreadsDock threads={threads} />
             {chatBox.dock({
               box,
@@ -1508,7 +1493,7 @@ export function ManagerThreadTab({
       <OlderReadFailed onRetry={onOlder} />
     </Conversation>
   ) : chat === undefined || lacksRoot ? (
-    <TranscriptSkeleton />
+    <ManagerThreadSkeleton />
   ) : rootLine === undefined ? (
     // A root gone from the chat, as a rewind drops one, takes its thread with it.
     <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>

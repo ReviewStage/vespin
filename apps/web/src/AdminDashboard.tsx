@@ -33,6 +33,7 @@ import { WorkspacesScreen } from "@repo/panel/admin/screens/workspaces";
 import { useCallback, useEffect, useState } from "react";
 import { SignInCard } from "./admin/chrome/gate-cards";
 import { WebAdminDoors } from "./admin/web-admin-doors";
+import { forgetTabStores } from "./app/web-local-store";
 import { authClient } from "./auth-client";
 
 /**
@@ -137,6 +138,9 @@ function AdminDashboardPage({
 
     if (error) throw new Error("The sign-out was refused.");
     SIGN_IN_CHOSEN.write(false);
+
+    // Note that this page runs no host to delete the app's copy of the account (`web-local-store.ts`), so the sign-out deletes it here, not waited on, since an open app tab lets it go only as it hears it.
+    if (typeof indexedDB !== "undefined") void forgetTabStores(indexedDB);
   }, [fixtureViewer]);
 
   const withdraw = useAdminSignOut(signOut);

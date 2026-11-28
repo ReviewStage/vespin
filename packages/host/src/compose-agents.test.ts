@@ -18,6 +18,7 @@ import {
 import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { FAILED_RUN_WINDOW_MILLIS } from "@repo/features/inbox-live";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -60,8 +61,10 @@ import {
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { LIVE_RESTART } from "./live-follow.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
+import { sqliteBackend } from "./local-sqlite.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
@@ -73,7 +76,7 @@ import {
   GATE_CLOSED_SIGNED_OUT,
   holding,
   ITEM,
-  type ITEMS_PARTS,
+  type ItemsLive,
   LIVE_ANSWERED,
   MESSAGE_ID,
   NOW,
@@ -542,7 +545,7 @@ function newestPage(cursor: string, text: string, before?: string): AgentNewestA
 }
 
 it.effect(
-  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, and reads on from its cursor at once, caught up before the live read stands; once its first rows land it reads on again, so a message written while the live read was sealed is laid, once; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
+  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, and reads on from its cursor once, as the live read's first rows land, so a message written while the live read was sealed is laid, once, and the page caught up; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
   () =>
     Effect.gen(function* () {
       const {
@@ -559,17 +562,18 @@ it.effect(
       const newest = newestPage("1:0", "Reading the invites.", "40");
       pageNewest(newest);
 
-      // The first read past the newest page finds nothing new; a message is written after it, while the live read is sealed.
+      // A message is written after the newest page is read, while the live read is sealed.
       const between = {
         ...pageNow("2:0", { holds: true, text: "Writing the expiry." }),
         wakeIn: 3_000,
       };
 
-      script(pageNow("1:0", { holds: true }), between);
+      script(between);
       const letGo = yield* holding(acts.AGENTS_TRANSCRIPT.hold(FOLLOWED));
       yield* settled;
       const word = { status: AGENT_STATUS.RUNNING, title: "Invites" };
 
+      // Note that nothing is read past the newest page before the live read's first rows land, since it was read just now up to its cursor.
       assert.deepEqual(held(), [
         {
           messages: newest.messages,
@@ -580,47 +584,34 @@ it.effect(
           // The clock stands at the start, so every time of the read is its start; the fake service answers at once.
           read: UNMOVED_READ,
         },
-        {
-          messages: newest.messages,
-          before: "40",
-          cursor: "1:0",
-          word: { ...word, caughtUp: true },
-          pages: 2,
-          read: UNMOVED_READ,
-        },
       ]);
       assert.deepEqual(asked.toSorted(), [
         `messages-newest:${AGENT_ID}:cut`,
-        `messages-now:${AGENT_ID}:1:0`,
         `transcript-live:${AGENT_ID}`,
       ]);
 
-      // The live read's first rows read on from the newest page's cursor again, never from the start, and the message written between is laid once.
+      // The live read's first rows read on from the newest page's cursor, never from the start, and the message written between is laid once.
       transcriptRows(live, 2);
       yield* settled;
-      assert.deepEqual(held()[2], {
+      assert.deepEqual(held()[1], {
         messages: [...newest.messages, ...between.messages],
         before: "40",
         cursor: "2:0",
         word: { ...word, caughtUp: true },
-        pages: 3,
+        pages: 2,
         read: UNMOVED_READ,
       });
       const reads = asked.filter((ask) => ask.startsWith("messages-"));
 
-      assert.deepEqual(reads, [
-        `messages-newest:${AGENT_ID}:cut`,
-        `messages-now:${AGENT_ID}:1:0`,
-        `messages-now:${AGENT_ID}:1:0`,
-      ]);
+      assert.deepEqual(reads, [`messages-newest:${AGENT_ID}:cut`, `messages-now:${AGENT_ID}:1:0`]);
 
       // Note that a short page is caught up, so nothing is read again until the clock reaches the edge the service named.
       yield* TestClock.adjust("2 seconds");
       yield* settled;
-      assert.equal(held().length, 3);
+      assert.equal(held().length, 2);
       yield* TestClock.adjust("1 second");
       yield* settled;
-      assert.equal(held().length, 4);
+      assert.equal(held().length, 3);
       assert.equal(asked.at(-1), `messages-now:${AGENT_ID}:2:0`);
       assert.deepEqual(ids(held().at(-1)), ["m-1:0", "m-2:0"]);
 
@@ -1056,7 +1047,7 @@ function signedInLocal(
 ) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const local = yield* localCopy(stateRoot).pipe(Scope.provide(scope));
+    const local = yield* localCopy(yield* sqliteBackend(stateRoot)).pipe(Scope.provide(scope));
     yield* local.open("user-dana", harness.refused);
     yield* settled;
 
@@ -2372,7 +2363,7 @@ const OTHER_ITEM: InboxItem = {
 };
 
 /** Where an item on `taskId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
-function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
+function stampOf(item: InboxItem, taskId: string | null, moved: WireRecord = {}) {
   return {
     id: item.id,
     taskId,
@@ -2390,7 +2381,7 @@ function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
 
 /** The account's items' read moved to the stamps given, the items given its rows, each as `row` writes it. */
 function deliverItems(
-  live: { readonly items: PolledLive<(typeof ITEMS_PARTS)[number]> },
+  live: { readonly items: ItemsLive },
   stamps: readonly unknown[],
   items: readonly (InboxItem | WireRecord)[],
 ) {
@@ -2441,42 +2432,45 @@ it.effect(
     }),
 );
 
+/** One launch as the host makes it on `root`'s local database: the pool on the local copy, the agents on the pool, then the database opened. */
+function localLaunch(
+  root: string,
+  tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[],
+) {
+  return Effect.gen(function* () {
+    const local = yield* localCopy(yield* sqliteBackend(root));
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: local.store,
+    });
+
+    const launch = yield* subject({
+      pool,
+      ...(tasksListed === undefined ? undefined : { tasksListed }),
+    });
+
+    yield* local.open("user-dana", {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
+
+    return launch;
+  });
+}
+
 it.effect(
   "the Inbox kept on the local database is told at the next launch beside the tasks its items stand on, as the task list summed them up when they were kept, before the service answers",
   () =>
     Effect.gen(function* () {
       const root = yield* temporaryDirectoryScoped("compose-agents-kept-inbox-");
       const holder = taskSummaryOf(planListRow(TASK_ID, "Teammate invitations"), undefined);
-
-      /** One launch as the host makes it: the pool on the local copy, the agents on the pool, then the database opened. */
-      const launched = (tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[]) =>
-        Effect.gen(function* () {
-          const local = yield* localCopy(root);
-
-          const pool = yield* entityPool({
-            mintKey: () => "key",
-            replayRefused: Effect.void,
-            store: local.store,
-          });
-
-          const launch = yield* subject({
-            pool,
-            ...(tasksListed === undefined ? undefined : { tasksListed }),
-          });
-
-          yield* local.open("user-dana", {
-            kept: () => [],
-            moves: Stream.empty,
-            restored: () => Effect.void,
-          });
-
-          return launch;
-        });
-
       const quit = yield* Scope.make();
 
       const first = yield* Scope.provide(quit)(
-        launched((taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
+        localLaunch(root, (taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
       );
 
       first.sealItems(LIVE_ANSWERED);
@@ -2486,7 +2480,7 @@ it.effect(
       yield* toldTimes(first.accountItems, 1);
       yield* Scope.close(quit, Exit.void);
 
-      const next = yield* launched();
+      const next = yield* localLaunch(root);
       yield* next.open;
       yield* settled;
 
@@ -2495,6 +2489,35 @@ it.effect(
         kept: true,
         keptHolders: [holder],
       });
+    }).pipe(Effect.provide(localPlatform)),
+);
+
+it.effect(
+  "an Inbox kept on the local database however large is kept whole, so the next launch reads past the sync id kept rather than whole",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-kept-large-inbox-");
+      // Note that its JSON runs past a megabyte, as a busy account's Inbox does.
+      const large: InboxItem = { ...HELD_ITEM, title: "Review ".repeat(200_000) };
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(localLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(large, TASK_ID)], [large]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* localLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-")),
+        [],
+        "the next launch reads past the sync id kept, never whole",
+      );
     }).pipe(Effect.provide(localPlatform)),
 );
 
@@ -2534,7 +2557,7 @@ function keptItemIds(pool: EntityPool) {
 /** One launch as the host makes it where the Inbox kind is kept on disk: the pool on the local copy, the agents on the pool, then `account`'s database opened. */
 function keptLaunch(root: string, account = "user-dana") {
   return Effect.gen(function* () {
-    const local = yield* localCopy(root);
+    const local = yield* localCopy(yield* sqliteBackend(root));
 
     const pool = yield* entityPool({
       mintKey: () => "key",
@@ -2580,6 +2603,74 @@ it.effect(
         "the next launch reads past the sync id kept, never whole",
       );
     }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** The ids of every item the account's Inbox holds as its last telling drew them, by plan. */
+function toldItemIds(told: readonly unknown[]): readonly string[] {
+  // SAFETY: the account's items are told as wire values.
+  const last = told.at(-1) as WireValue | undefined;
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows[INBOX_SCOPE_KIND.TASK] : undefined;
+  const items = isRecord(rows) ? Object.values(rows).flatMap((list) => list ?? []) : [];
+
+  return items
+    .flatMap((item) => (isRecord(item) && Predicate.isString(item.id) ? [item.id] : []))
+    .sort();
+}
+
+it.effect.each([
+  {
+    holds: "the local database keeps each answer",
+    platform: localPlatform,
+    launch: (root: string) =>
+      Effect.map(localLaunch(root), (launch) => ({
+        ...launch,
+        heldIds: Effect.sync(() => toldItemIds(launch.accountItems())),
+      })),
+  },
+  {
+    holds: "the account's database keeps the Inbox kind",
+    platform: keptPlatform,
+    launch: (root: string) =>
+      Effect.map(keptLaunch(root), (launch) => ({ ...launch, heldIds: keptItemIds(launch.pool) })),
+  },
+])(
+  "where $holds, an Inbox follow started again reads past the sync id of the last answer it took, never whole, and stands on every item it held",
+  ({ platform, launch }) =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-inbox-restart-");
+      const { open, sealItems, live, accountItems, itemsAsked, heldIds } = yield* launch(root);
+      sealItems(LIVE_ANSWERED);
+      yield* open;
+      yield* settled;
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(accountItems, 1);
+      yield* nextPoll;
+      const firstAt = itemsAsked.at(-1);
+
+      const moved = { ...HELD_ITEM, revision: 3, updatedAt: HELD_ITEM.updatedAt + 1_000 };
+      const other = stampOf(OTHER_ITEM, OTHER_TASK_ID);
+      deliverItems(live, [stampOf(moved, TASK_ID), other], [moved, OTHER_ITEM]);
+      yield* nextPoll;
+      const standsAt = itemsAsked.at(-1);
+
+      // The session is refused as signed out while the account still stands, as a Mac just woken may be, so the follow ends and starts again after a rest; an item moves meanwhile.
+      live.items.refuse(LIVE_SIGNED_OUT);
+      yield* settled;
+      live.items.refuse(undefined);
+      const again = { ...moved, revision: 4, updatedAt: moved.updatedAt + 1_000 };
+      deliverItems(live, [stampOf(again, TASK_ID), other], [again, OTHER_ITEM]);
+      const restartedAt = itemsAsked.length;
+      yield* TestClock.adjust(LIVE_RESTART);
+      yield* settled;
+
+      assert.ok(standsAt !== undefined && standsAt !== "" && standsAt !== firstAt);
+      assert.deepEqual(
+        itemsAsked.slice(restartedAt, restartedAt + 1),
+        [standsAt],
+        "the follow started again reads past the last answer's sync id, not the launch's or none",
+      );
+      assert.deepEqual(yield* heldIds, [HELD_ITEM.id, OTHER_ITEM.id].sort());
+    }).pipe(Effect.provide(platform)),
 );
 
 it.effect(
@@ -3489,5 +3580,269 @@ it.effect(
         [`start:${TASK_ID}:press-1:default`, `start:${TASK_ID}:press-1:default`],
       );
       assert.deepEqual(pool.queued(), []);
+    }),
+);
+
+/** A task of the account's settled long ago, whose items only a page of older items answers. */
+const OLDER_TASK_ID = "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f70";
+
+/** An item of that task closed forty days back and still unread, past the account's items' window. */
+const OLDER_ITEM: InboxItem = {
+  ...LIVE_ITEM,
+  id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+  key: "rename-flag",
+  title: "Rename the flag?",
+  needsReply: false,
+  status: INBOX_STATUS.CLOSED,
+  unread: true,
+  updatedAt: ITEM.updatedAt - 40 * 86_400_000,
+};
+
+/** An item on no task, older still, which a second page answers under its agent. */
+const OLDEST_ITEM: InboxItem = {
+  ...OLDER_ITEM,
+  id: "8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f",
+  key: "standup",
+  title: "Skip standup?",
+  updatedAt: OLDER_ITEM.updatedAt - 86_400_000,
+};
+
+/** The first page of older items: the item on the settled task, the task and its agent beside it, and a second page after it. */
+const FIRST_OLDER_PAGE = {
+  stamps: [stampOf(OLDER_ITEM, OLDER_TASK_ID)],
+  items: [{ ...ITEM_ROW, ...OLDER_ITEM }],
+  tasks: [planListRow(OLDER_TASK_ID, "Rename the flag")],
+  agents: [agentListRow(OLDER_TASK_ID, 1_000)],
+  next: "page-2",
+} as const;
+
+/** The ids of the older items the host last told, by the plan each is on and on no task by its agent. */
+function olderIdsOf(told: readonly WireValue[]) {
+  const last = told.at(-1);
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows : undefined;
+
+  const idsBy = (lists: WireValue | undefined) =>
+    Object.fromEntries(
+      Object.entries(isRecord(lists) ? lists : {}).map(([holder, items]) => [
+        holder,
+        (Array.isArray(items) ? items : []).map((item) => (isRecord(item) ? item.id : undefined)),
+      ]),
+    );
+
+  return rows === undefined
+    ? undefined
+    : { tasks: idsBy(rows[INBOX_SCOPE_KIND.TASK]), agents: idsBy(rows.agents) };
+}
+
+/** Whether the older item the host last told is drawn unread. */
+function olderUnread(told: readonly WireValue[], itemId: string): boolean | undefined {
+  const last = told.at(-1);
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows : undefined;
+  const tasks = rows === undefined ? undefined : rows[INBOX_SCOPE_KIND.TASK];
+
+  for (const items of Object.values(isRecord(tasks) ? tasks : {})) {
+    for (const item of Array.isArray(items) ? items : []) {
+      if (isRecord(item) && item.id === itemId) return item.unread === true;
+    }
+  }
+
+  return undefined;
+}
+
+it.effect(
+  "a page of older items is read into the session beside the account's items, the tasks and agents it stands on drawn into the task list, and answers only the page after it, the last none",
+  () =>
+    Effect.gen(function* () {
+      const { open, acts, answerOlder, olderItems, coldDrawn, asked } = yield* subject();
+      yield* open;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+
+      answerOlder("page-2", {
+        stamps: [stampOf(OLDEST_ITEM, null)],
+        items: [{ ...ITEM_ROW, ...OLDEST_ITEM }],
+        agents: [{ ...agentListRow(OLDER_TASK_ID, 900), taskId: null }],
+      });
+
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({}), { next: "page-2" });
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({ before: "page-2" }), {});
+
+      assert.deepEqual(
+        asked.filter((each) => each.startsWith("inbox-older:")),
+        ["inbox-older:", "inbox-older:page-2"],
+      );
+
+      assert.deepEqual(
+        coldDrawn.map((rows) => rows.tasks.map((task) => task.id)),
+        [[OLDER_TASK_ID], []],
+      );
+
+      assert.deepEqual(olderIdsOf(olderItems()), {
+        tasks: { [OLDER_TASK_ID]: [OLDER_ITEM.id] },
+        agents: { [AGENT_ID]: [OLDEST_ITEM.id] },
+      });
+    }),
+);
+
+it.effect(
+  "a page asked while the task list cannot draw its tasks, or that the service does not answer, answers unanswered and tells no older item",
+  () =>
+    Effect.gen(function* () {
+      let readable = false;
+
+      const { open, acts, answerOlder, olderItems, asked } = yield* subject({
+        readableOutside: () => readable,
+      });
+
+      yield* open;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+      const unanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({}), unanswered);
+      assert.deepEqual(
+        asked.filter((each) => each.startsWith("inbox-older:")),
+        [],
+      );
+
+      readable = true;
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({ before: "unknown" }), unanswered);
+      assert.deepEqual(olderItems(), []);
+    }),
+);
+
+it.effect(
+  "an older item the account's items come to carry, as one a write moved back into their window, is theirs alone, and a sign-out lets every older item go",
+  () =>
+    Effect.gen(function* () {
+      const { open, reset, acts, answerOlder, olderItems, sealItems, live, accountItems } =
+        yield* subject();
+
+      sealItems(LIVE_ANSWERED);
+      yield* open;
+      yield* settled;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+      yield* acts.AGENTS_INBOX_OLDER_PAGE({});
+
+      const reopened = { ...OLDER_ITEM, status: INBOX_STATUS.OPEN, updatedAt: ITEM.updatedAt };
+      deliverItems(live, [stampOf(reopened, OLDER_TASK_ID)], [reopened]);
+      yield* toldTimes(accountItems, 1);
+      assert.deepEqual(olderIdsOf(olderItems()), { tasks: {}, agents: {} });
+
+      yield* acts.AGENTS_INBOX_OLDER_PAGE({});
+      yield* reset;
+      assert.deepEqual(olderItems().at(-1), {});
+    }),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a mark on an older item draws over it at once and stands once the service takes it, and the kept Inbox never holds the older item",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-older-kept-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      deliverItems(launch.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(launch.accountItems, 1);
+      launch.answerOlder(undefined, FIRST_OLDER_PAGE);
+      yield* launch.acts.AGENTS_INBOX_OLDER_PAGE({});
+      assert.equal(olderUnread(launch.olderItems(), OLDER_ITEM.id), true);
+
+      launch.answerMarks(false);
+      yield* launch.acts.AGENTS_INBOX_READ_STATE({ itemId: OLDER_ITEM.id, unread: false });
+      yield* settled;
+      const drawn = olderUnread(launch.olderItems(), OLDER_ITEM.id);
+
+      launch.answerMarks(true);
+      yield* launch.pool.resend;
+      yield* settled;
+
+      assert.equal(drawn, false, "drawn read the moment it is asked");
+      assert.equal(olderUnread(launch.olderItems(), OLDER_ITEM.id), false);
+      assert.deepEqual(launch.pool.queued(), []);
+      assert.deepEqual(yield* keptItemIds(launch.pool), [HELD_ITEM.id]);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** What the host last told each place's search found: the words, and the ids found by the plan each is on, by the place. */
+function foundIdsOf(told: readonly WireValue[]) {
+  const last = told.at(-1);
+
+  return Object.fromEntries(
+    Object.entries(isRecord(last) ? last : {}).map(([place, read]) => {
+      const rows = isRecord(read) && isRecord(read.rows) ? read.rows : {};
+      const items = isRecord(rows.items) ? rows.items[INBOX_SCOPE_KIND.TASK] : undefined;
+
+      return [
+        place,
+        {
+          query: rows.query,
+          ids: olderIdsOf([{ rows: { [INBOX_SCOPE_KIND.TASK]: items ?? {} } }])?.tasks,
+        },
+      ];
+    }),
+  );
+}
+
+it.effect(
+  "a place's newer words wait for its search out, and only the latest are asked once it answers, while another place asks beside it; the words they replaced answer replaced, and are drawn nowhere",
+  () =>
+    Effect.gen(function* () {
+      const { open, reset, acts, answerSearch, foundItems, coldDrawn, asked } = yield* subject();
+      yield* open;
+      const held = yield* Deferred.make<void>();
+      answerSearch("ce", FIRST_OLDER_PAGE, Deferred.await(held));
+
+      answerSearch("cents", {
+        stamps: [stampOf(OLDEST_ITEM, OLDER_TASK_ID)],
+        items: [{ ...ITEM_ROW, ...OLDEST_ITEM }],
+      });
+
+      answerSearch("flag", FIRST_OLDER_PAGE);
+
+      const inInbox = (query: string) =>
+        acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX, query });
+
+      const out = yield* Effect.forkChild(inInbox("ce"));
+      yield* settled;
+      const between = yield* Effect.forkChild(inInbox("cen"));
+      yield* settled;
+      const latest = yield* Effect.forkChild(inInbox("cents"));
+      yield* settled;
+
+      assert.deepEqual(yield* Fiber.join(between), { replaced: true });
+
+      assert.deepEqual(
+        yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.EVERYTHING, query: "flag" }),
+        {},
+      );
+
+      const searched = () => asked.filter((each) => each.startsWith("inbox-search:"));
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag"]);
+
+      yield* Deferred.succeed(held, undefined);
+      assert.deepEqual(yield* Fiber.join(out), { replaced: true });
+      assert.deepEqual(yield* Fiber.join(latest), {});
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag", "inbox-search:cents"]);
+
+      assert.deepEqual(foundIdsOf(foundItems()), {
+        [INBOX_SEARCH_PLACE.INBOX]: { query: "cents", ids: { [OLDER_TASK_ID]: [OLDEST_ITEM.id] } },
+        [INBOX_SEARCH_PLACE.EVERYTHING]: {
+          query: "flag",
+          ids: { [OLDER_TASK_ID]: [OLDER_ITEM.id] },
+        },
+      });
+
+      // Note that the replaced words' answer drew neither its items nor its tasks.
+      assert.ok(
+        foundItems().every((told) => foundIdsOf([told])[INBOX_SEARCH_PLACE.INBOX]?.query !== "ce"),
+      );
+      assert.equal(coldDrawn.length, 2);
+
+      // The Inbox's words cleared let its found items go, and a sign-out every place's.
+      assert.deepEqual(yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX }), {});
+      assert.deepEqual(Object.keys(foundIdsOf(foundItems())), [INBOX_SEARCH_PLACE.EVERYTHING]);
+      yield* reset;
+      assert.deepEqual(foundItems().at(-1), {});
     }),
 );

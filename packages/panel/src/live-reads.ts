@@ -69,6 +69,7 @@ import {
 } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
 import type { FailureFacts } from "@repo/features/failure-facts";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { IntegrationProviderParams } from "@repo/features/integration-view";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -107,7 +108,7 @@ import { actMutation } from "./act-mutations.js";
 import { streamFrom } from "./act-stream.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
-import { appStateQuery } from "./use-app-state.js";
+import { appStateQuery, onDocumentWritten } from "./use-app-state.js";
 
 /** A live read, by its name. */
 type LiveReadName = keyof AppHostReads;
@@ -222,6 +223,7 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
   [LIVE_READ.MACHINES]: () => askAct(ACT_KIND.MACHINES_FOLLOW),
   [LIVE_READ.MACHINE_ASKS]: () => askAct(ACT_KIND.MACHINE_ASKS_FOLLOW),
+  [LIVE_READ.VIEW_CHOICES]: () => askAct(ACT_KIND.VIEW_CHOICES_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_ORIGIN_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.HOLDER_INBOX]: ([kind, id]) =>
@@ -348,9 +350,12 @@ const LIVE_QUERY_READS = [
   LIVE_READ.HOSTS,
   LIVE_READ.MACHINES,
   LIVE_READ.MACHINE_ASKS,
+  LIVE_READ.VIEW_CHOICES,
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
+  LIVE_READ.INBOX_OLDER,
+  LIVE_READ.INBOX_FOUND,
   LIVE_READ.HOLDER_INBOX,
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
@@ -500,10 +505,7 @@ function firstAnswer<Read extends LiveReadName>(
     settle();
 
     if (answered) return;
-    // Note that only a write of the document is heard, because every observer of it reports each write again (`observerResultsUpdated`), a thousand times a push in a long transcript.
-    stop = client.getQueryCache().subscribe((event) => {
-      if (isAppState(event.query) && event.type === "updated") settle();
-    });
+    stop = onDocumentWritten(client, settle);
 
     return Effect.sync(() => stop());
   });
@@ -578,6 +580,10 @@ export const machinesQuery = (accountId: string | undefined) =>
 export const machineAsksQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.MACHINE_ASKS, accountIds(accountId));
 
+/** The account's view choices (a sort, a filter, a fold), by the account. */
+export const viewChoicesQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.VIEW_CHOICES, accountIds(accountId));
+
 /** This Mac's host, by the account, which the host reads on its own every few seconds and holds for the session. */
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
@@ -588,6 +594,13 @@ export const agentOriginQuery = (agentId: string | undefined) =>
 
 /** The feed of every item the account reaches, which the host holds for the session. */
 export const inboxItemsQuery = () => liveReadQuery(LIVE_READ.INBOX_ITEMS, []);
+
+/** The account's settled items older than the feed holds, as All read them a page at a time past it, which the host holds for the session; none before a page is read. */
+export const inboxOlderQuery = () => liveReadQuery(LIVE_READ.INBOX_OLDER, []);
+
+/** The items `place`'s search found on the service past what the host holds, and the words they were found by, held while its words stand; disabled while the place asks nothing. */
+export const inboxFoundQuery = (place: InboxSearchPlace | undefined) =>
+  liveReadQuery(LIVE_READ.INBOX_FOUND, place === undefined ? undefined : [place]);
 
 /** One holder's own inbox, by its kind and its id. */
 export const holderInboxQuery = (holder: InboxHolderKey | undefined) =>

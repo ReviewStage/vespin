@@ -166,6 +166,14 @@ import {
   UsageLimitNotice,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationLead,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -200,14 +208,6 @@ import {
   automationActor,
   namedAutomationActor,
 } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationLead,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { Fold, FoldBody } from "../ai-elements/fold.js";
 import {
   Message,
@@ -226,6 +226,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { STEADY_DOORS, useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import {
   useTaskListCollections,
   useTaskListRow,
@@ -308,7 +309,15 @@ import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
-import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
+import {
+  sameComputerApps,
+  sameEntries,
+  sameFields,
+  sameIds,
+  sameSet,
+  useKept,
+  useSteady,
+} from "./kept-draws.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -380,6 +389,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
@@ -852,6 +862,7 @@ function DelegationRow({
   doors: DelegationDoors | undefined;
 }): ReactNode {
   const view = delegationView(part, doors?.own);
+  const links = usePlainLinkNames();
   const live = useLiveDoors(doors);
   const onOpen = doors?.onOpen;
   // The worker's own session says where it stands, since the call may settle the moment it is under way.
@@ -884,7 +895,7 @@ function DelegationRow({
     <>
       <TranscriptSubagent
         callId={part.callId}
-        job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
+        job={view.title ?? (cardTitle(view.task, links) || CALL_WORDS[CALL_KIND.WORKER].verb)}
         pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
         state={standing === undefined ? part.state : workerToolState(standing.status)}
         startedAt={doors?.starts?.get(part.callId)}
@@ -1380,7 +1391,7 @@ function OriginBody({ body }: { body: string }): React.JSX.Element {
 function PlanCard({
   text,
   lead,
-  title = cardTitle(text),
+  title: given,
   sender,
   sentAt,
   body,
@@ -1405,6 +1416,8 @@ function PlanCard({
   /** The task the agent works on, whose description's pictures the card draws; none where it works on none. */
   taskId?: string | undefined;
 }): ReactNode {
+  const derived = cardTitle(text, usePlainLinkNames());
+  const title = given ?? derived;
   const named = sender != null;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
@@ -1423,7 +1436,7 @@ function PlanCard({
             <PlanIcon>
               {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
             </PlanIcon>
-            <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
+            <PlanTitle label={lead.label} previews={title === derived}>
               {title}
             </PlanTitle>
           </PlanHeader>
@@ -3449,8 +3462,18 @@ function AgentTabView({
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
-  const queueEditing = useQueueEditing(composer, queue, pictures);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
+  const queueEditing = useSteadyDoors(
+    useQueueEditing(composer, queue, pictures),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
+
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
@@ -3667,6 +3690,26 @@ function AgentTabView({
     [lines],
   );
 
+  // Note that what the dock is handed is the same from write to write while what it reads is, so the box under the transcript holds while the transcript moves.
+  const { usage, payer, payerSubscriptionId, context } = transcript;
+
+  const dockTranscript = useMemo(
+    () => ({ usage, payer, payerSubscriptionId, context }),
+    [usage, payer, payerSubscriptionId, context],
+  );
+
+  const dockQueue = useMemo(
+    () => ({ controls: controlsQueue, working: standing.working, editing: queueEditing }),
+    [controlsQueue, standing.working, queueEditing],
+  );
+
+  const dockPlace = useMemo(
+    () => ({ owner: macOwner, route: callRoute, pictures, computerApps }),
+    [macOwner, callRoute, pictures, computerApps],
+  );
+
+  const stop = useSteadyDoor(onStop);
+
   return (
     <AgentTabFrame ref={tab} label={name}>
       <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -3838,9 +3881,9 @@ function AgentTabView({
           agent={agent}
           box={box}
           composer={composer}
-          transcript={transcript}
+          transcript={dockTranscript}
           approvalsWaiting={approvals.waiting}
-          onStop={onStop}
+          onStop={stop}
           onUnarchive={onUnarchive}
           continuedNote={continuedNote}
           cards={cards}
@@ -3849,8 +3892,8 @@ function AgentTabView({
           replyDoor={replyDoor}
           closedRemedy={closedRemedy}
           onMoveToCloud={onMoveToCloud}
-          queue={{ controls: controlsQueue, working: standing.working, editing: queueEditing }}
-          place={{ owner: macOwner, route: callRoute, pictures, computerApps }}
+          queue={dockQueue}
+          place={dockPlace}
         />
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
@@ -4179,7 +4222,13 @@ export function AgentSubagentTab({
   const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
   const models = control.models;
   // The press is the same door from draw to draw, so a message kept as it was opens what the window opens now.
   const openTarget = useSteady(onOpenTarget);
@@ -4197,7 +4246,7 @@ export function AgentSubagentTab({
     onHeld(callId, { ...held, subagentTitles: new Map() });
   }, [onHeld, callId, messages, pageStatus, runStartedAt, pageTitle]);
   // A worker's reply streams into a log as quiet as its agent's, so it is said once whole, under the worker's name.
-  const name = cardTitle(task);
+  const name = cardTitle(task, usePlainLinkNames());
   const tab = useRef<HTMLElement>(null);
   useReplySaid({ messages, status: pageStatus, name, tab });
 

@@ -6,11 +6,18 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
+  CHECK_SUMMARY,
   type ListedAgent,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
 } from "@repo/features/agent-wire";
-import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { ListedPullRequest, TaskRunsOnRequest } from "@repo/features/task-wire";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
+import { MANAGER_SORT, type ManagerSort } from "@repo/features/workspace-managers-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -25,9 +32,16 @@ import {
   type ModelsRead,
 } from "../tasks/use-agents.js";
 import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
-import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
-import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
+import { fakeActPort, fakeActPortCalls, refusedOnPort } from "../testing/app-bridge.js";
+import {
+  handHostReads,
+  handState,
+  heldPreferences,
+  signedInAs,
+  writeListedTasks,
+} from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { hoveredCard } from "../testing/desktop-inbox.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import {
   agentsControl,
@@ -37,6 +51,7 @@ import {
   tasksControl,
   withNewTaskShown,
 } from "../testing/tasks-control.js";
+import { hearViewChoices, keepViewChoices } from "../testing/view-choices.js";
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
@@ -45,7 +60,7 @@ import {
  * at all where it is off; its View options' sort; a Manager's row's Change
  * face, which opens its name's field with the face's picker and changes its
  * face, and Settings…, which renames it and
- * changes its model; and
+ * changes its model; the card a Manager's row hangs; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -110,8 +125,28 @@ const NOT_MANAGERS: readonly ListedAgent[] = [
   },
 ];
 
+/** The account signed in, whose view choices a test hands. */
+const ACCOUNT_ID = "user-ada";
+
+/** The account's choice of the workspace's Managers sort, as its read carries it. */
+const sortChoice = (value: ManagerSort): ViewChoiceLiveRow => ({
+  id: "0a1b2c3d-0000-4000-8000-0000000000f0",
+  key: VIEW_CHOICE_KEY.MANAGER_SORT,
+  workspaceId: WORKSPACE.id,
+  value,
+});
+
 /** A second model, which a Manager's Settings picks. */
 const SONNET = "anthropic/claude-sonnet-5.5";
+
+/** The agents a Manager started, as the live list carries them, and the pull requests their rows name. */
+interface ManagerWork {
+  readonly agents: readonly ListedAgent[];
+  readonly pullRequests: readonly ListedPullRequest[];
+}
+
+/** No work of a Manager's beyond what the list carries already. */
+const NO_WORK: ManagerWork = { agents: [], pullRequests: [] };
 
 const roots: Root[] = [];
 
@@ -134,7 +169,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
+/** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named; the account signed in where `choices` are given, holding them, or with them not yet read where they are null. */
 async function mountSidebar(
   on: boolean,
   opened: string[],
@@ -143,17 +178,29 @@ async function mountSidebar(
   renamed: AgentRenameAsk[] = [],
   chosen: { agentId: string; model: string }[] = [],
   faced: { agentId: string; face: ManagerFace }[] = [],
+  work: ManagerWork = NO_WORK,
+  choices?: readonly ViewChoiceLiveRow[] | null,
 ): Promise<HTMLElement> {
-  handState({ [EXPERIMENT.MANAGERS]: on });
+  const account = signedInAs({ id: ACCOUNT_ID, email: "ada@example.com", name: "Ada" }).account;
+
+  handState(
+    { [EXPERIMENT.MANAGERS]: on },
+    choices === undefined
+      ? {}
+      : choices === null
+        ? { account }
+        : { account, [LIVE_READ.VIEW_CHOICES]: { [ACCOUNT_ID]: { rows: choices } } },
+  );
   writeListedTasks({
     taskAgentPins: pinned.map((agentId) => ({ agentId, taskId: null, pinnedAt: 5 })),
+    agentPullRequests: work.pullRequests,
   });
   fakeActPort(fakeActPortCalls());
 
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
+    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING, ...work.agents],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
     agents: taskAgentsOf(
       agentsControl({
@@ -233,8 +280,66 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.deepEqual(opened, [FRONTEND]);
 });
 
-test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
-  const sidebar = await mountSidebar(true, []);
+test("a Manager's row hangs the Manager's card: where it stands, how many of the agents it started are at work, and how many of their pull requests are open", async () => {
+  const running: ListedAgent = {
+    ...CODER,
+    id: "0a1b2c3d-0000-4000-8000-00000000000f",
+    taskId: "0a1b2c3d-0000-4000-8000-000000000010",
+    title: "Invitations",
+    status: AGENT_STATUS.RUNNING,
+    startedByAgentId: FRONTEND,
+  };
+
+  const ended: ListedAgent = {
+    ...CODER,
+    id: "0a1b2c3d-0000-4000-8000-000000000011",
+    taskId: "0a1b2c3d-0000-4000-8000-000000000012",
+    title: "Digest",
+    startedByAgentId: FRONTEND,
+  };
+
+  const pullRequest = (agent: ListedAgent, number: number, state: PullRequestState) => ({
+    agentId: agent.id,
+    taskId: agent.taskId ?? "",
+    pullRequest: {
+      number,
+      title: agent.title ?? "",
+      url: `https://github.com/${RELAY}/pull/${number}`,
+      state,
+      checks: CHECK_SUMMARY.PASSING,
+      additions: 1,
+      deletions: 1,
+      changedFiles: 1,
+    },
+  });
+
+  // Note that one agent it started works and one has ended, and one of their pull requests is open and one merged, so the card counts one of each.
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], {
+    agents: [running, ended],
+    pullRequests: [
+      pullRequest(running, 7, PULL_REQUEST_STATE.OPEN),
+      pullRequest(ended, 6, PULL_REQUEST_STATE.MERGED),
+    ],
+  });
+
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row = [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+    button.textContent?.includes("Frontend Manager"),
+  );
+
+  assert.ok(row, "the Manager's row is drawn");
+
+  const words = hoveredCard(row, "[data-manager-card]");
+
+  assert.ok(words?.includes("Idle"), "the card says its Manager is idle");
+  assert.ok(words?.includes("Agents at work1"), "the card counts the one agent at work");
+  assert.ok(words?.includes("Open pull requests1"), "the card counts the one open pull request");
+});
+
+test("View options' Sort by keeps the sort on the account, whose sort lists the Manager that moved last first", async () => {
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  const written = hearViewChoices();
   const list = sidebar.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
   const order = () => list.textContent?.indexOf("Frontend Manager") ?? -1;
 
@@ -253,10 +358,67 @@ test("View options' Sort by › Recent activity lists the Manager that moved las
 
   act(() => item("Sort by").click());
   act(() => item("Recent activity").click());
+  await settleQueries();
+
+  assert.deepEqual(
+    written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+    [
+      {
+        key: VIEW_CHOICE_KEY.MANAGER_SORT,
+        workspaceId: WORKSPACE.id,
+        value: MANAGER_SORT.RECENT_ACTIVITY,
+      },
+    ],
+  );
+
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+
+  const sorted = await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, [
+    sortChoice(MANAGER_SORT.RECENT_ACTIVITY),
+  ]);
+
+  const managers = sorted.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
 
   assert.ok(
-    order() < (list.textContent?.indexOf("Billing Manager") ?? -1),
+    (managers.textContent?.indexOf("Frontend Manager") ?? -1) <
+      (managers.textContent?.indexOf("Billing Manager") ?? -1),
     "the Manager that settled last stands first",
+  );
+});
+
+test("a Managers sort this Mac kept itself moves up to the account once, and leaves the Mac", async () => {
+  window.localStorage.setItem(
+    "app.sidebarManagerSorts",
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
+  const written = hearViewChoices();
+  await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  await settleQueries();
+
+  assert.deepEqual(
+    written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+    [{ key: VIEW_CHOICE_KEY.MANAGER_SORT, workspaceId: WORKSPACE.id, value: MANAGER_SORT.NAME }],
+  );
+  assert.equal(window.localStorage.getItem("app.sidebarManagerSorts"), "{}");
+});
+
+test("a Managers sort the account refused to keep stays on this Mac, for the next launch to move up", async () => {
+  window.localStorage.setItem(
+    "app.sidebarManagerSorts",
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.VIEW_CHOICE_WRITE]: () => Promise.reject(refusedOnPort("Not kept.")),
+  });
+  await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  await settleQueries();
+
+  assert.equal(
+    window.localStorage.getItem("app.sidebarManagerSorts"),
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
   );
 });
 
@@ -304,6 +466,74 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager", "Billing Manager"]);
   act(() => fold.click());
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
+});
+
+test("a face picked before the account's choices are read is kept first among the faces the account picked last, though its picker was put away", async () => {
+  const faced: { agentId: string; face: ManagerFace }[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], faced, NO_WORK, null);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row =
+    [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+      button.textContent?.includes("Frontend Manager"),
+    ) ?? assert.fail("the Manager's row is drawn");
+
+  act(() => {
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+  });
+
+  const change =
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("Change face"),
+    ) ?? assert.fail("Change face stands");
+
+  await act(async () => change.click());
+  await act(async () =>
+    (
+      document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ?? assert.fail("Cat")
+    ).click(),
+  );
+  await act(async () =>
+    (
+      document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
+      assert.fail("Purple")
+    ).click(),
+  );
+  await vi.waitFor(() => assert.equal(faced.length, 1, "the face is changed"));
+
+  // The rename ends, putting the picker away before the account's choices land.
+  const name = list?.querySelector<HTMLInputElement>('input[aria-label="Agent name"]');
+
+  await act(async () =>
+    name?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    ),
+  );
+  assert.equal(document.querySelector('button[aria-label="Cat"]'), null, "the picker is put away");
+
+  // The account's choices land, holding the face it picked last on another device.
+  const written = keepViewChoices([
+    {
+      id: "0a1b2c3d-0000-4000-8000-0000000000f1",
+      key: VIEW_CHOICE_KEY.RECENT_MANAGER_FACES,
+      workspaceId: null,
+      value: [{ character: "mug", color: "green" }],
+    },
+  ]);
+
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      written
+        .filter((write) => write.key === VIEW_CHOICE_KEY.RECENT_MANAGER_FACES)
+        .map((write) => write.value),
+      [
+        [
+          { character: "cat", color: "purple" },
+          { character: "mug", color: "green" },
+        ],
+      ],
+    ),
+  );
 });
 
 test("a Manager's row's Change face opens its name's field with the face's picker open, a face picked there is changed and hands the focus back to the name, and Escape ends the edit", async () => {
@@ -441,6 +671,9 @@ const MAC: MacOffer = {
   providers: [MODEL_PROVIDER.ANTHROPIC],
 };
 
+/** Ada's Mac, as a Start names it. */
+const ON_MAC: TaskRunsOnRequest = { machine: AGENT_MACHINE.DEVICE, deviceId: MAC.deviceId };
+
 /** New Task's control as New Manager reads it: the recent repository, and the devices as `modelsRead` stands. */
 /** New task as New Manager reads it: its doors, and where the newest read of the models stands, which the window provides apart (`NewTaskShown.modelsRead`). */
 interface ManagerNewTask {
@@ -463,11 +696,11 @@ function newManagerTask({
 
 /**
  * The sidebar over the workspace with Managers on, the account's default
- * model read, each Create the service hears kept in `created` and answered
+ * model read and its last Runs on pick where `lastPick` names one, each Create the service hears kept in `created` and answered
  * unanswered; answers how to draw it again over another New Task, press a
  * button by its name, and type the Manager's name.
  */
-async function mountNewManager(newTask: ManagerNewTask) {
+async function mountNewManager(newTask: ManagerNewTask, lastPick?: TaskRunsOnRequest) {
   handState({ [EXPERIMENT.MANAGERS]: true });
   handHostReads({
     models: {
@@ -482,14 +715,10 @@ async function mountNewManager(newTask: ManagerNewTask) {
         ],
       },
     },
-    preferences: {
-      rows: {
-        agent: { model: MANAGER.model, effort: "high" },
-        chaptersModel: CHAPTERS_MODEL.HAIKU,
-        slackNotifications: true,
-        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
-      },
-    },
+    preferences: heldPreferences({
+      agent: { model: MANAGER.model, effort: "high" },
+      ...(lastPick === undefined ? undefined : { runsOn: lastPick }),
+    }),
   });
 
   const created: { idempotencyKey: string; name: string; runsOn: unknown }[] = [];
@@ -574,8 +803,6 @@ test("a Create sent again after an edit is a request of its own, under a key of 
 });
 
 test("where the last pick is a device, Create waits on the read of the devices New Manager asks as it opens, and stands once that read lands", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
-
   // Note that the ask stamps its generation at once, in the press that opens the card, as the agents control does.
   let asked: () => void = () => undefined;
 
@@ -587,7 +814,7 @@ test("where the last pick is a device, Create waits on the read of the devices N
     });
 
   const reading = { ...standing(MODELS_READ.READING) };
-  const { draw, button, press, name } = await mountNewManager(standing(MODELS_READ.READ));
+  const { draw, button, press, name } = await mountNewManager(standing(MODELS_READ.READ), ON_MAC);
 
   asked = () => draw(reading);
   press("New Manager");
@@ -603,12 +830,10 @@ test("where the last pick is a device, Create waits on the read of the devices N
 });
 
 test("a Create sent again after its device left the list, nothing else changed, is a request of its own on the cloud", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
-
   const listed = (devices: readonly MacOffer[]) =>
     newManagerTask({ devices, modelsRead: { state: MODELS_READ.READ, generation: 1 } });
 
-  const { created, draw, press, name } = await mountNewManager(listed([MAC]));
+  const { created, draw, press, name } = await mountNewManager(listed([MAC]), ON_MAC);
 
   press("New Manager");
   act(() => draw({ ...listed([MAC]), modelsRead: { state: MODELS_READ.READ, generation: 2 } }));

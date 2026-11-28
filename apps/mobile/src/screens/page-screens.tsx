@@ -8,7 +8,7 @@ import { VERB } from "@repo/features/words";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
+import { BUTTON_LOOK, EmptyState, GLYPH, Screen, SealedPage, StackBarMenu } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { PAGE_NEWEST, usePageHtml } from "../agents/use-agent.js";
@@ -129,15 +129,22 @@ export function PageScreen({
       <Stack.Screen options={{ title: named }} />
       {address === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={PAGE_WORDS.MORE}>
-            <Stack.Toolbar.Label>{PAGE_WORDS.MORE}</Stack.Toolbar.Label>
-            <Stack.Toolbar.MenuAction
-              icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-              onPress={() => openInSafari(address)}
-            >
-              {VERB.OPEN_IN_BROWSER}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
+          <Stack.Toolbar.View>
+            <StackBarMenu
+              menu={{
+                label: PAGE_WORDS.MORE,
+                symbol: GLYPH.MORE,
+                choices: [],
+                actions: [
+                  {
+                    label: VERB.OPEN_IN_BROWSER,
+                    symbol: GLYPH.OPEN_EXTERNALLY,
+                    onPress: () => openInSafari(address),
+                  },
+                ],
+              }}
+            />
+          </Stack.Toolbar.View>
         </Stack.Toolbar>
       )}
       {/* Note that the page stands as the screen's root, outside its SwiftUI host, since the web view sizes itself to the screen. */}
