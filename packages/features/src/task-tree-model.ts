@@ -51,11 +51,14 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
 import {
   COMPLETED_WINDOW,
   type CompletedWindow,
+  mayHoldSettled,
+  showsSettledInFull,
   standsCompleted,
   statusOf,
   TASKS_GROUP,
   TASKS_GROUPING,
   TASKS_ORDER,
+  type TasksDisplay,
   type TasksFilter,
   type TasksGroup,
   type TasksGroupHead,
@@ -145,14 +148,15 @@ export const TASK_TREE_GROUPINGS = [
 type TaskTreeGrouping = (typeof TASK_TREE_GROUPINGS)[number];
 
 /**
- * The completed windows the phone offers: the Tasks page's but All, since
- * the list a phone holds keeps only the tasks finished in the past month,
- * and pages in no older ones.
+ * The completed windows the phone offers, the Tasks page's: All reads the
+ * tasks finished before the list's live window from the service a page at a
+ * time, as the page's does (`settled-paging.ts`).
  */
 export const TASK_TREE_COMPLETED = [
   COMPLETED_WINDOW.NONE,
   COMPLETED_WINDOW.PAST_WEEK,
   COMPLETED_WINDOW.PAST_MONTH,
+  COMPLETED_WINDOW.ALL,
 ] as const satisfies readonly CompletedWindow[];
 
 type TaskTreeCompleted = (typeof TASK_TREE_COMPLETED)[number];
@@ -316,24 +320,34 @@ function inSidebarOrder(
   ];
 }
 
+/** The Tasks page's filter the view's statuses stand for: none where it names none. */
+function viewFilter(treeView: TaskTreeView): TasksFilter {
+  return treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+}
+
+/** The Tasks page's List display the view stands for. */
+function viewDisplay(treeView: TaskTreeView): TasksDisplay {
+  return {
+    grouping: treeView.grouping,
+    order: treeView.order,
+    emptyGroups: false,
+    completed: treeView.completed,
+    pinnedFirst: false,
+    subTasks: treeView.subTasks,
+    properties: [],
+  };
+}
+
 /** The reader's tasks no pin or section holds as the view groups, orders, and keeps them, through the Tasks page's own List (`tasksListGroups`), the repositories' groups in the sidebar's order. */
 function viewGroups(unplaced: readonly TaskSummary[], input: TaskTreeInput): readonly TasksGroup[] {
   const { treeView, readerId } = input;
-  const filter: TasksFilter = treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+  const filter = viewFilter(treeView);
 
   const groups = tasksListGroups(
     inViewStatuses(tasksAssignedTo(unplaced, treeView.assignedTo, readerId), treeView),
     {
       filter,
-      display: {
-        grouping: treeView.grouping,
-        order: treeView.order,
-        emptyGroups: false,
-        completed: treeView.completed,
-        pinnedFirst: false,
-        subTasks: treeView.subTasks,
-        properties: [],
-      },
+      display: viewDisplay(treeView),
       pinned: [],
       sections: [],
       readerId,
@@ -517,6 +531,47 @@ export function taskTree(input: TaskTreeInput): TaskTree {
       rows: drawn(group.at + 2 + sections.length),
     })),
   };
+}
+
+/**
+ * Whether a finished task past the list may nest under an open parent
+ * wherever the tree lists the parent, whatever the view's statuses: while
+ * sub-tasks fold under their parents and the completed window keeps every
+ * finished one, since the tree homes a finished sub-task by the window alone
+ * (`withSubTasks`).
+ */
+function nestsEverySettled(treeView: TaskTreeView): boolean {
+  return !treeView.subTasks && treeView.completed === COMPLETED_WINDOW.ALL;
+}
+
+/** Whether the view shows settled tasks in full, so the list reads those finished before its live window from the service: as the Tasks page's does (`showsSettledInFull`), or while every finished sub-task may nest under an open parent (`nestsEverySettled`). */
+export function treeShowsSettledInFull(treeView: TaskTreeView): boolean {
+  return (
+    nestsEverySettled(treeView) || showsSettledInFull(viewFilter(treeView), viewDisplay(treeView))
+  );
+}
+
+/** Whether a group of the tree may hold a settled task, whose run's end reads the next page: any group while every finished sub-task may nest under an open parent, else one of the view's groups the Tasks page says may (`mayHoldSettled`), never Pinned, Following, or a section, which hold only open tasks then. */
+export function treeGroupMayHoldSettled(group: TaskTreeGroup, treeView: TaskTreeView): boolean {
+  if (nestsEverySettled(treeView)) return true;
+
+  return group.head !== undefined && mayHoldSettled(group.head);
+}
+
+/** Whether any group of the tree that may hold a settled task draws a row, whose run has an end to come to (`settledRowsDrawn`); a group `folded` shut draws none, so it has no end to wait on. */
+export function treeDrawsSettled(
+  tree: TaskTree,
+  treeView: TaskTreeView,
+  folded: (group: TaskTreeGroup) => boolean,
+): boolean {
+  return [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+    ...tree.tasks,
+  ].some(
+    (group) => treeGroupMayHoldSettled(group, treeView) && group.rows.length > 0 && !folded(group),
+  );
 }
 
 /**

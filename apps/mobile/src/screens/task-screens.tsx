@@ -38,6 +38,7 @@ import {
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
+import type { SettledPages } from "@repo/features/settled-paging";
 import {
   agentLastMovedAt,
   agentRunsOnWords,
@@ -97,6 +98,7 @@ import {
   type TaskTreeGroup,
   taskBranches,
   taskRowLook,
+  treeGroupMayHoldSettled,
 } from "@repo/features/task-tree-model";
 import {
   TASK_PRIORITY_ORDER,
@@ -290,6 +292,7 @@ import {
 } from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useTreeSettledPages } from "../tasks/use-settled-pages.js";
 import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
@@ -1124,16 +1127,19 @@ function FoldedRows({
   rows,
   listing,
   parents,
+  onAtEnd,
 }: {
   readonly rows: TaskTreeGroup["rows"];
   readonly listing: TasksListing;
   readonly parents: OpenedParents;
+  /** Told whether the group's last row stands on the screen, where settled tasks past the list are read in at its end; none elsewhere. */
+  readonly onAtEnd?: ((atEnd: boolean) => void) | undefined;
 }) {
   const branches = useMemo(() => taskBranches(rows), [rows]);
 
   // Note that only the group's top rows are recycled, since a parent's sub-tasks stand inside its disclosure.
   return (
-    <RowForEach data={branches} keyOf={(branch) => branch.row.task.id}>
+    <RowForEach data={branches} keyOf={(branch) => branch.row.task.id} onAtEnd={onAtEnd}>
       {(branch) => <TaskBranchRows branch={branch} listing={listing} parents={parents} />}
     </RowForEach>
   );
@@ -1540,10 +1546,13 @@ function GroupSection({
   group,
   listing,
   hold,
+  settledPages,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
   readonly hold: TreeHold;
+  /** The paging of the settled tasks past the list, which a group that may hold one (`treeGroupMayHoldSettled`) tells as its end comes and goes; none where the list reads none in. */
+  readonly settledPages?: SettledPages | undefined;
 }) {
   const newTaskIn = useNewTaskIn();
   const newTaskInRepository = useNewTaskInRepository();
@@ -1566,7 +1575,14 @@ function GroupSection({
       onDropLink={dropOnto(group, listing)}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
-      <FoldedRows rows={group.rows} listing={listing} parents={treeParents(hold)} />
+      <FoldedRows
+        rows={group.rows}
+        listing={listing}
+        parents={treeParents(hold)}
+        onAtEnd={
+          treeGroupMayHoldSettled(group, listing.treeView) ? settledPages?.onRunEnd : undefined
+        }
+      />
     </ListSection>
   );
 }
@@ -1616,6 +1632,8 @@ function treeEmpty(tree: TaskTree): boolean {
 
 type TasksTreeProps = {
   readonly listing: TasksListing;
+  /** The paging of the settled tasks past the list, which the tree's groups tell as they come to their end. */
+  readonly settledPages: SettledPages;
   /** The parents opened and groups folded, held by the Tasks tab's root screen. */
   readonly hold: TreeHold;
   readonly look: ListLook;
@@ -1632,7 +1650,16 @@ type TasksTreeProps = {
  * header and count, a task's sub-tasks folded under it; or, while a search
  * is typed, every task it finds. A pull reads it again.
  */
-function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
+function TasksTree({
+  listing,
+  settledPages,
+  hold,
+  look,
+  search,
+  selected,
+  onSelect,
+  onRefresh,
+}: TasksTreeProps) {
   const { tree } = listing;
   const status = useTasksReadStatus();
   // Note that a list its tab has not yet read says it is reading, never that it holds no task, as the tab first comes forward and its rows are read.
@@ -1689,6 +1716,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
         hold={hold}
         managers={managers}
         managersListed={managersListed}
+        settledPages={settledPages}
       />
     </RowList>
   );
@@ -1704,12 +1732,15 @@ function TreeSections({
   hold,
   managers,
   managersListed,
+  settledPages,
 }: {
   readonly listing: TasksListing;
   readonly hold: TreeHold;
   readonly managers: readonly ListedAgent[];
   /** Whether the workspace has the Managers experiment on. */
   readonly managersListed: boolean;
+  /** The paging of the settled tasks past the list, which the view's groups tell as they come to their end. */
+  readonly settledPages: SettledPages;
 }) {
   const { tree } = listing;
 
@@ -1722,16 +1753,38 @@ function TreeSections({
         hold={hold}
       />
       {tree.pinned === undefined ? null : (
-        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+        <GroupSection
+          group={tree.pinned}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       )}
       {tree.following === undefined ? null : (
-        <GroupSection group={tree.following} listing={listing} hold={hold} />
+        <GroupSection
+          group={tree.following}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       )}
       {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+        <GroupSection
+          key={group.key}
+          group={group}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       ))}
       {tree.tasks.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+        <GroupSection
+          key={group.key}
+          group={group}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       ))}
     </>
   );
@@ -3725,14 +3778,21 @@ type TasksSearch = { readonly search: string; readonly setSearch: (search: strin
  * first where it stops agents and its delete asking always, with the
  * questions that ask, and the pull that reads the list again.
  */
-function useTasksScreen({ search, setSearch }: TasksSearch) {
+function useTasksScreen({ search, setSearch }: TasksSearch, hold: TreeHold) {
   const read = useTasksListing(search);
   const doors = useTaskRowDoors(read.workspace?.id);
   const { listing, status, deletion } = useListingAsks(read, doors);
   const { refreshTasks } = useInboxActs();
   const viewMenu = useViewMenu(read);
 
-  return { search, setSearch, listing, status, deletion, refreshTasks, viewMenu };
+  const settledPages = useTreeSettledPages({
+    workspaceId: read.workspace?.id,
+    treeView: read.treeView,
+    tree: read.tree,
+    folded: hold.folded,
+  });
+
+  return { search, setSearch, listing, status, deletion, refreshTasks, viewMenu, settledPages };
 }
 
 /** The list's View options, its members' photos read as files for the menu, built anew only as the view or the members change. */
@@ -3768,7 +3828,7 @@ function TasksStackList({
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu, settledPages } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
@@ -3801,6 +3861,7 @@ function TasksStackList({
       <Screen>
         <TasksTree
           listing={listing}
+          settledPages={settledPages}
           hold={hold}
           look={LIST_LOOK.PLAIN}
           search={search}
@@ -3945,13 +4006,14 @@ function tasksListColumn(
   selected: string | undefined,
   select: (id: string) => void,
 ) {
-  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu, settledPages } = screen;
 
   return {
     chosen: selected !== undefined,
     view: (
       <TasksTree
         listing={listing}
+        settledPages={settledPages}
         hold={hold}
         look={LIST_LOOK.PLAIN}
         search={search}
@@ -4047,8 +4109,8 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
   const router = useRouter();
   const onTab = useOnTab();
   const [search, setSearch] = useState("");
-  const screen = useTasksScreen({ search, setSearch });
   const hold = useTreeHold();
+  const screen = useTasksScreen({ search, setSearch }, hold);
   const workspaceId = screen.listing.workspace?.id;
   const managers = useWorkspaceManagers(workspaceId);
   const managersListed = useManagersListed(workspaceId);
@@ -4061,6 +4123,7 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
         hold={hold}
         managers={managers}
         managersListed={managersListed}
+        settledPages={screen.settledPages}
       />
     ),
     opens: (id: string) => {
@@ -4119,8 +4182,8 @@ function TasksOwnRoot() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
-  const screen = useTasksScreen({ search, setSearch });
   const hold = useTreeHold();
+  const screen = useTasksScreen({ search, setSearch }, hold);
 
   return (
     <>

@@ -47,6 +47,7 @@ import {
   MINE,
   narrowedByWhose,
   READING_INBOX,
+  READING_OLDER_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import {
@@ -101,6 +102,8 @@ import {
   ListRow,
   type ListScopes,
   ListSection,
+  LOADING_ROW_LOOK,
+  LoadingRow,
   type MarkdownVideo,
   menuWithout,
   NoSelection,
@@ -164,6 +167,7 @@ import {
   useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
+import type { InboxOlderPages } from "../inbox/use-inbox-older-pages.js";
 import {
   pendingThreadFile,
   type ThreadAnswer,
@@ -289,6 +293,8 @@ type InboxRowsProps = {
   readonly empty?: ReactNode | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
+  /** The paging of the account's older items, which the list's last row tells as it comes and goes, a spinner standing under the rows while a page is read; none where All is not shown. */
+  readonly olderPages?: InboxOlderPages | undefined;
 };
 
 /**
@@ -316,9 +322,11 @@ function InboxRows({
   scopes,
   empty,
   onChooseStart,
+  olderPages,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
+  const onAtEnd = olderPages?.onAtEnd;
 
   return (
     <RowList
@@ -340,6 +348,7 @@ function InboxRows({
           onMark={onMark}
           remindMenu={remindMenu}
           onResolve={onResolve}
+          onAtEnd={onAtEnd}
         />
       ) : (
         <InboxRunSections
@@ -349,8 +358,13 @@ function InboxRows({
           onMark={onMark}
           remindMenu={remindMenu}
           onResolve={onResolve}
+          onAtEnd={onAtEnd}
         />
       )}
+      {/* Note that the spinner stands only under rows, since a list with none stands its empty state, which says it reads. */}
+      {olderPages?.reading === true && listed.length > 0 ? (
+        <LoadingRow words={READING_OLDER_INBOX} look={LOADING_ROW_LOOK.LIST_END} />
+      ) : null}
     </RowList>
   );
 }
@@ -363,11 +377,18 @@ function InboxRows({
  */
 function InboxRunSections({
   runs,
+  onAtEnd,
   ...acts
-}: InboxRowActs & { readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[] }) {
+}: InboxRowActs & {
+  readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[];
+  /** Told whether the last run's last row stands on the screen, as All reads its older items there; none where nothing reads past the rows. */
+  readonly onAtEnd?: ((atEnd: boolean) => void) | undefined;
+}) {
   const { onFold } = useInboxRunFolds();
+  // Note that the list's end is the last run that draws rows, since a folded run draws none, so Everything else folded leaves Pinned's last row to read on.
+  const last = runs.findLastIndex(({ items }) => items.length > 0);
 
-  return runs.map(({ run, items, count, folded }) => (
+  return runs.map(({ run, items, count, folded }, at) => (
     <ListSection
       key={run}
       title={INBOX_RUN_LABEL[run]}
@@ -376,7 +397,7 @@ function InboxRunSections({
       folded={folded}
       onFold={(shut) => onFold(run, shut)}
     >
-      <InboxItemRows listed={items} {...acts} />
+      <InboxItemRows listed={items} onAtEnd={at === last ? onAtEnd : undefined} {...acts} />
     </ListSection>
   ));
 }
@@ -421,10 +442,15 @@ type InboxRowActs = {
  */
 export function InboxItemRows({
   listed,
+  onAtEnd,
   ...acts
-}: InboxRowActs & { readonly listed: readonly InboxListed<InboxAnyHolder>[] }) {
+}: InboxRowActs & {
+  readonly listed: readonly InboxListed<InboxAnyHolder>[];
+  /** Told whether the run's last row stands on the screen; none where nothing reads past the rows. */
+  readonly onAtEnd?: ((atEnd: boolean) => void) | undefined;
+}) {
   return (
-    <RowForEach data={listed} keyOf={(each) => each.item.id}>
+    <RowForEach data={listed} keyOf={(each) => each.item.id} onAtEnd={onAtEnd}>
       {(each) => <InboxItemRow listed={each} {...acts} />}
     </RowForEach>
   );
@@ -1460,6 +1486,8 @@ function useInboxScreen(
     pinnedFirst: runs?.pinnedFirst === true,
     whose,
     agent,
+    // Note that only the Inbox tab's own All reads the account's older items, never an agent's Inbox, whose threads are one agent's.
+    readsOlder: agent === undefined,
   });
 
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
@@ -1680,6 +1708,7 @@ function InboxStackList({ heading, ...held }: InboxHeld & { readonly heading?: I
           onResolve={acts.resolve}
           choosing={choosing?.rows}
           onChooseStart={chooseStart}
+          olderPages={listing.olderPages}
           empty={
             listing.listed.length === 0 ? (
               <InboxEmpty
@@ -1738,6 +1767,7 @@ function inboxListColumn(
       onResolve={acts.resolve}
       choosing={choosing?.rows}
       onChooseStart={chooseStart}
+      olderPages={listing.olderPages}
       empty={
         listing.listed.length === 0 ? (
           <InboxEmpty

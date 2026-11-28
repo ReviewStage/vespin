@@ -180,6 +180,8 @@ import {
   TASKS_READ,
   type TaskListParts,
   type TasksView,
+  type tasksSettledPageAnswerSchema,
+  type tasksSettledPageParamsSchema,
 } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import {
@@ -320,6 +322,9 @@ const LISTED = {
   EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
   DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
   LANDING: "f859b19c-d405-4b2e-a9e0-0516273849a5",
+  CSV_IMPORT: "0a6ac2ad-e516-4c3f-8af1-1627384950b6",
+  RATE_LIMITS: "1b7bd3be-f627-4d40-9b02-27384950a1c7",
+  DIGEST_V0: "2c8ce4cf-0738-4e51-8c13-384950a1b2d8",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -1354,6 +1359,66 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     completedAt: LANDED - 5 * DAY,
   }),
 ];
+
+/**
+ * The account's tasks finished before the list's live window, which only a
+ * read of the workspace's settled page lays into the list, as the service
+ * answers its one page: two Done in each repository's months past and one
+ * Canceled, so the Tasks tab's All draws tasks the list held not.
+ */
+const SETTLED_PAGE_TASKS: readonly TaskSummary[] = [
+  listedTask(LISTED.CSV_IMPORT, "Ledger CSV import", {
+    repository: "ada/ledger",
+    status: TASK_STATUS.DONE,
+    number: 31,
+    createdAt: LANDED - 60 * DAY,
+    updatedAt: LANDED - 52 * DAY,
+    completedAt: LANDED - 52 * DAY,
+  }),
+  listedTask(LISTED.RATE_LIMITS, "Signup rate limits", {
+    repository: "ada/relay",
+    status: TASK_STATUS.DONE,
+    number: 27,
+    createdAt: LANDED - 75 * DAY,
+    updatedAt: LANDED - 64 * DAY,
+    completedAt: LANDED - 64 * DAY,
+  }),
+  listedTask(LISTED.DIGEST_V0, "Weekly digest", {
+    repository: "ada/relay",
+    status: TASK_STATUS.CANCELED,
+    number: 22,
+    createdAt: LANDED - 95 * DAY,
+    updatedAt: LANDED - 88 * DAY,
+    completedAt: LANDED - 88 * DAY,
+  }),
+];
+
+/** What a read of a workspace's settled page answers: the fixture's one page, with none after it, for its own workspace; none for any other workspace or profile. */
+export function settledPageAnswer(
+  profile: string,
+  params: typeof tasksSettledPageParamsSchema.Type,
+): typeof tasksSettledPageAnswerSchema.Type | undefined {
+  if (!STAGED_PROFILES.has(profile) || params.workspaceId !== FIXTURE_IDS.WORKSPACE) {
+    return undefined;
+  }
+
+  return {};
+}
+
+/** The list with the settled page's tasks laid in once the page is `read`, as the host reads a page in beside its own; the list itself before, or where they stand already. */
+export function settledPageTasksView(
+  profile: string,
+  list: ListedTasksView,
+  read: boolean,
+): ListedTasksView {
+  if (!read || !STAGED_PROFILES.has(profile)) return list;
+
+  const missing = SETTLED_PAGE_TASKS.filter(
+    (settled) => !list.tasks.some((task) => task.id === settled.id),
+  );
+
+  return missing.length === 0 ? list : { ...list, tasks: [...list.tasks, ...missing] };
+}
 
 /** The tasks the fixture lays after the list's own, by id. */
 const STAGED_TASK_IDS: ReadonlySet<string> = new Set(
