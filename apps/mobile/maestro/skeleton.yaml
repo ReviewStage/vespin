@@ -69,7 +69,7 @@ env:
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
 - runFlow:
-    file: subflows/open-row.yaml
+    file: subflows/open-foot-row.yaml
     env:
       ROW: "Teammate invitations"
 - assertVisible: "Created by .*"

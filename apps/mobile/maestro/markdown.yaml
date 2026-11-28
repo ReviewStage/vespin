@@ -18,11 +18,11 @@ appId: dev.vespin.ios
     file: subflows/tab.yaml
     env:
       TAB: Tasks
-# Note that the task's row is opened clear of the tab bar (`open-row.yaml`),
+# Note that the task's row is opened clear of the tab bar (`open-foot-row.yaml`),
 # because on an iPhone it stands at the window's foot, under the floating
 # tab bar, where a tap lands on the bar's glass rather than the row.
 - runFlow:
-    file: subflows/open-row.yaml
+    file: subflows/open-foot-row.yaml
     env:
       ROW: "Teammate invitations"
 - assertVisible: "Created by .*"
