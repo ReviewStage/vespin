@@ -1,6 +1,7 @@
-import { Schema } from "effect";
+import { it as effectIt } from "@effect/vitest";
+import { Effect, Fiber, Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { LIVE_MODE, liveRead, liveRows, ORDER } from "./live-read.js";
+import { LIVE_MODE, liveRead, liveRows, liveRowsInSlices, ORDER } from "./live-read.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 
 const READ = liveRead({
@@ -29,4 +30,33 @@ describe("liveRead", () => {
     expect(read).toEqual({ things: [first, last] });
     expect(Schema.encodeSync(READ.rows)(read)).toEqual({ things: [first, last] });
   });
+});
+
+describe("liveRowsInSlices", () => {
+  effectIt.effect(
+    "decodes a large answer as its rows do, leaving out a row that does not read, while other work runs between its slices",
+    () =>
+      Effect.gen(function* () {
+        // Note that the answer holds several slices' rows, as a busy account's whole Inbox does.
+        const things = Array.from({ length: 2_500 }, (_, at) => ({ id: `t${at}`, count: at }));
+
+        const carried = {
+          things: [...things.slice(0, 1_200), { id: "bad", count: "x" }, ...things.slice(1_200)],
+        };
+
+        const order: string[] = [];
+
+        const decoding = yield* Effect.forkChild(
+          Effect.tap(liveRowsInSlices(READ.parts).decodeInSlices(carried), () =>
+            Effect.sync(() => order.push("decoded")),
+          ),
+        );
+
+        yield* Effect.forkChild(Effect.sync(() => order.push("other")));
+        const decoded = yield* Fiber.join(decoding);
+
+        expect(decoded).toEqual({ things });
+        expect(order).toEqual(["other", "decoded"]);
+      }),
+  );
 });

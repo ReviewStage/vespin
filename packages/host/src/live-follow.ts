@@ -1,5 +1,6 @@
 import { ServiceReach } from "@repo/features";
 import type { FailureFacts } from "@repo/features/failure-facts";
+import type { SlicedLiveRows } from "@repo/features/live-read";
 import {
   LIVE_SIGNED_OUT,
   liveDigestOf,
@@ -660,6 +661,19 @@ export function decodedLiveRows<Part extends string, Rows>(
   );
 }
 
+/** How an answer's rows are decoded: whole under `schema`, or a slice at a time where it is a read's sliced rows (`liveRowsInSlices`). */
+function rowsDecoder<Rows>(
+  schema: Schema.Decoder<Rows> | SlicedLiveRows<Rows>,
+): (carried: Readonly<Record<string, readonly unknown[]>>) => Effect.Effect<Option.Option<Rows>> {
+  if ("decodeInSlices" in schema) {
+    return (carried) => Effect.map(schema.decodeInSlices(carried), Option.some);
+  }
+
+  const decode = Schema.decodeUnknownOption(schema);
+
+  return (carried) => Effect.sync(() => decode(carried));
+}
+
 /**
  * A read followed until it is gone, each answer's rows, every part's,
  * decoded under `schema` and handed to `take` the moment its poll answers,
@@ -685,10 +699,10 @@ export function followTakingRows<
     ) => Effect.Effect<Read | LiveFailure>;
   },
   first: Read,
-  schema: Schema.Decoder<Rows>,
+  schema: Schema.Decoder<Rows> | SlicedLiveRows<Rows>,
   take: (rows: Rows, standing: SyncStanding | undefined, read: Read) => Effect.Effect<void>,
 ): Effect.Effect<void, LiveBroken> {
-  const decode = Schema.decodeUnknownOption(schema);
+  const decode = rowsDecoder(schema);
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
 
   /** Takes the answer's rows where it carries them, answering whether they decoded. */
@@ -697,10 +711,12 @@ export function followTakingRows<
 
     if (carried === undefined) return Effect.succeed(true);
 
-    return Option.match(decode(carried), {
-      onNone: () => Effect.succeed(false),
-      onSome: (rows) => Effect.as(take(rows, syncStandingOf(read), read), true),
-    });
+    return Effect.flatMap(decode(carried), (decoded) =>
+      Option.match(decoded, {
+        onNone: () => Effect.succeed(false),
+        onSome: (rows) => Effect.as(take(rows, syncStandingOf(read), read), true),
+      }),
+    );
   };
 
   return Effect.gen(function* () {
