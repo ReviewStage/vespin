@@ -1,14 +1,13 @@
 /**
- * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own and deleted for good, a sandbox deleted only while it is the one read, and one resumed until it runs.
+ * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own and deleted for good, and a sandbox deleted only while it is the one read.
  *
  * A sandbox is named and not persistent: it runs, and a stop discards its
- * disk, so what must outlive a run is kept on a drive (`SandboxDrive`); one
- * created persistent before stops with its disk kept as a snapshot and
- * resumes from it, each time in a run of its own. A call on
+ * disk, so what must outlive a run is kept on a drive (`SandboxDrive`), and a
+ * stopped sandbox is made again rather than resumed (`getOrCreate`). A call on
  * what runs in it (a command, a file, its PTY, its firewall) names its
  * target (`SandboxTarget`): the sandbox's name, for whatever run it is up in
  * now, or one run of it, where the call must reach that run alone. No call
- * resumes a sandbox but `resume`, `getOrCreate`, and what is built on them
+ * opens a sandbox but `create`, `getOrCreate`, and what is built on them
  * here. The production layer is the provider's (`vercel/`, which the app's
  * edge provides); a test's is `@repo/sandbox/testing`'s.
  *
@@ -18,8 +17,7 @@
  * caller times any other way. Only agent or terminal activity touches a
  * sandbox (`SANDBOX_IDLE`); a terminal touches it only once it was used
  * since its last touch (`touchedWhileUsed`), never for standing open
- * alone. A stopped sandbox bills nothing but the drive it opened with, and
- * a snapshot where it was created persistent before.
+ * alone. A stopped sandbox bills nothing but the drive it opened with.
  *
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
@@ -41,7 +39,6 @@ import {
   type ListedSandbox,
   type NetworkPolicy,
   type OpenedSandbox,
-  SANDBOX_STATUS,
   type SandboxCreate,
   type SandboxError,
   type SandboxFile,
@@ -78,21 +75,18 @@ export interface SandboxService {
   readonly driveStands: (name: string) => Effect.Effect<boolean, SandboxError>;
   /** Whether the sandbox of that name owns a drive it forked, standing whether the sandbox runs, stopped, or is gone; nothing is resumed. */
   readonly ownDriveStands: (sandboxName: string) => Effect.Effect<boolean, SandboxError>;
-  /** The named sandbox, resumed from its snapshot first where it was stopped; one not persistent holds none to resume (`SnapshotGone`). */
-  readonly resume: (name: string) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
-   * Opens a sandbox, not persistent, from the image or snapshot named, with the
+   * Opens a sandbox, not persistent, from the image named, with the
    * drive it asks for, on the open internet; answers it with the run it is
    * up in. A name another sandbox holds is refused (`SandboxNameTaken`),
    * which is what makes a name a lock.
    */
   readonly create: (ask: SandboxCreate) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
-   * The sandbox under the name: the one standing, resumed where it was
-   * stopped; else one created as `create` opens it; and where the one
-   * standing can never resume, its snapshot gone, that one deleted and
-   * another created under the same name, as is a stopped one whose own drive
-   * stands where the ask names its own (`SandboxDrive`). A sandbox it created
+   * The sandbox under the name: the one up, as it runs; else one created as
+   * `create` opens it, a stopped one standing under the name deleted first,
+   * the drive it owns kept for the create to mount again where the ask names
+   * one (`SandboxDrive`), since a stop kept nothing else of it. A sandbox it created
    * has the user the ask names, where it names one, made in it, and is then
    * handed to the caller's `onCreate` where it gives one, with whether it
    * mounted its own drive as it stood, before the call answers; a failure of
@@ -103,8 +97,7 @@ export interface SandboxService {
     onCreate?: (created: CreatedSandbox) => Promise<void>,
   ) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
-   * Deletes the named sandbox with the snapshots no other sandbox uses and
-   * the drive it owns, where it forked one, stopping its run first where the
+   * Deletes the named sandbox with the drive it owns, where it forked one, stopping its run first where the
    * drive is still mounted in it; one already gone counts as deleted. A
    * drive left by a delete that failed is deleted by the next delete of the
    * name, whether the sandbox still stands or not.
@@ -117,7 +110,7 @@ export interface SandboxService {
    * of it first (`deletedFilledDrive`).
    */
   readonly deleteDrive: (name: string) => Effect.Effect<void, SandboxError>;
-  /** Stops the target's run, keeping its disk as a snapshot for a resume; one already gone counts as stopped. */
+  /** Stops the target's run, which discards its disk; one already gone counts as stopped. */
   readonly stop: (target: SandboxTarget) => Effect.Effect<void, SandboxError>;
   /** Replaces the named sandbox's tags whole, without resuming it. */
   readonly updateTags: (
@@ -190,16 +183,6 @@ export interface SandboxService {
     policy: NetworkPolicy,
   ) => Effect.Effect<void, SandboxError>;
   /**
-   * Snapshots the target, which stops it, answering the snapshot's id. The
-   * snapshot lapses `expiresAfter` its last use, or never where that is
-   * infinite. A run that is no longer up is refused, so of two snapshots
-   * asked at once only the first is taken.
-   */
-  readonly snapshot: (
-    target: SandboxTarget,
-    expiresAfter: Duration.Duration,
-  ) => Effect.Effect<string, SandboxError>;
-  /**
    * The named sandbox in use now: its running run lengthened so it ends
    * `SANDBOX_IDLE` from now, where that moves its end out by more than a
    * little and within the provider's longest run; nothing where it is not
@@ -241,9 +224,6 @@ export const SANDBOX_IDLE = Duration.minutes(5);
  * before the sandbox would stop, and none of them is tried again.
  */
 export const SANDBOX_TOUCH_EVERY = Duration.minutes(1);
-
-/** How a resumed sandbox is waited on until it runs (`resumedRunning`). */
-const RESUME_WAIT = { POLL: Duration.seconds(1) } as const;
 
 /** A touch the sandbox did not confirm, logged in its own words and let be. */
 function loggedIfUnconfirmed<R>(
@@ -409,25 +389,3 @@ export const deletedFilledDrive = (fill: Pick<DriveFill, "name" | "drive">) =>
     yield* sandbox.delete(fill.name);
     yield* sandbox.deleteDrive(fill.drive);
   }).pipe(Effect.withSpan("web/deleteFilledDrive"));
-
-/**
- * The named sandbox resumed and waited on until it runs: the run it is up
- * in. Note that a resume may answer before the sandbox's own record says it
- * runs, so the record is read again until it does; the caller bounds the
- * wait.
- */
-export const resumedRunning = (name: string) =>
-  Effect.gen(function* () {
-    const sandbox = yield* Sandbox;
-    const resumed = yield* sandbox.resume(name);
-
-    const running = yield* sandbox.get(name).pipe(
-      Effect.map((found) => (found?.status === SANDBOX_STATUS.RUNNING ? found.running : undefined)),
-      Effect.repeat({
-        schedule: Schedule.spaced(RESUME_WAIT.POLL),
-        until: (found) => found !== undefined,
-      }),
-    );
-
-    return { name: resumed.name, running: running ?? resumed.running } satisfies SandboxRunning;
-  });

@@ -26,11 +26,10 @@ import {
  *
  * A retire is a courtesy the delete does not wait on: a session that
  * cannot be reached or does not confirm is logged by its outcome and
- * status, and the delete goes on, since its sandbox's snapshots expire on
- * their own lapse all the same (`@repo/sandbox`'s retention). Only a
- * coding agent's session is asked: a task's own session, from before every
- * turn was an agent's, ran on the retired runtime, which stands no more, and
- * its sandbox is left to expire.
+ * status, and the delete goes on, its sandbox left stopped once idle with
+ * the drive it owns, which nothing resumes again. Only a coding agent's
+ * session is asked: a task's own session, from before every turn was an
+ * agent's, ran on the retired runtime, which stands no more.
  */
 
 /**
@@ -42,9 +41,9 @@ import {
  * `AccountClient`, `timeoutMs`). Note that a
  * native reset is a few store writes and one sandbox delete
  * (`runner-sessions.ts`'s `reset`, `machine.discard`), so a reset that has
- * not answered in seconds is one the snapshots' expiry finishes better than
- * the caller waits on; past these the client would say the delete did not
- * answer while it went on and deleted all the same.
+ * not answered in seconds is one the caller is better off not waiting on;
+ * past these the client would say the delete did not answer while it went
+ * on and deleted all the same.
  */
 const RETIRE_SESSIONS = {
   CONCURRENCY: 4,
@@ -94,7 +93,7 @@ const retireOne = (
  * Retires every coding agent's session named, a few at a time, for as long
  * as the budget lasts; never fails, whatever a session answered. A retire still waiting when the
  * budget ends is interrupted, and it and every one not yet asked are logged
- * by their count and left to expire, as one never answered is.
+ * by their count and left standing, as one never answered is.
  */
 export function retireSessions(
   retiring: Retiring,

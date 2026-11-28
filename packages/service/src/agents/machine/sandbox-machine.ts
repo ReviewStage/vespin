@@ -1,36 +1,44 @@
 /**
  * sandbox-machine.ts -- the agent machine over `Sandbox`: a sandbox booted from the agents' image, the runner started in it as a user of the agent's own, and our doors read through it.
  *
- * `open` opens the session's sandbox through `Sandbox`'s `getOrCreate` under a
- * name of the session's own (`../agent-sandbox-open.ts`), as a persistent
- * sandbox is opened: the one standing under it is resumed, and
- * one is created where none stands, or where the one standing can never
- * resume, its snapshot gone. A sandbox the call creates is created from the
- * first of these that stands, and set up in its `onCreate`: from the image
- * with a fork of the drive the sandbox of the agent it was continued
- * or forked from owns, where its Start handed one, its checkout as that
- * agent left it at its last stop; from the agents' image (`../coder-host/agent-image.ts`), which
- * carries the runner and every tool the harnesses run, with a fork of its
- * workspace's drive (`../workspace-drive.ts`), every repository the
- * workspace connects in a folder of its own, the picked repository's folder
- * moved to where the checkout stands, a link left in its place, and fetched
- * up to the agent's branch (`claimAgentCheckout`); or from the image with an
+ * There is one way an agent's place is opened: `Sandbox`'s `getOrCreate`
+ * under a name of the session's own (`../agent-sandbox-open.ts`), from the
+ * agents' image (`../coder-host/agent-image.ts`), which carries the runner
+ * and every tool the harnesses run, with a drive mounted where the
+ * checkout's workspace stands. A sandbox up under the name is used as it
+ * runs; one stopped kept nothing but its own drive, so it is made again from
+ * the current image with that drive mounted as it stood, its checkout, its
+ * turns' restore points, and whatever the agent never pushed all on it; one
+ * is created where none stands. A first open (`open`) makes its drive from
+ * the first of these that stands, and its checkout in its `onCreate`: a
+ * fork of the drive the sandbox of the agent it was continued or forked
+ * from owns, where its Start handed one, its checkout as that agent left it
+ * at its last stop; a fork of its workspace's drive (`../workspace-drive.ts`),
+ * every repository the workspace connects in a folder of its own, the picked
+ * repository's folder moved to where the checkout stands, a link left in its
+ * place, and fetched up to the agent's branch (`claimAgentCheckout`); or an
  * empty drive of its own (`AGENT_OWN_DRIVE`), the repository cloned whole
- * onto it (`../coder-host/checkout.ts`), the agent's
- * write token written at the firewall ahead of either, in the run's first
- * write, to stand on past it. A snapshot or a drive found gone at the create
- * is passed by for the next. Nothing is installed on either: the agent
- * installs where it needs to. A sandbox's own drive is `@repo/sandbox`'s to fork and
- * to delete with it; nothing here names one. The `agent` user is made in a
- * sandbox created from the image. Every write the checkout makes is the group's
- * (`../repository-shell.ts`'s `GROUP_WRITES`), so the `agent` user writes
- * it too, and whatever another user installed in it is handed to
- * that user at its launch (`launchRunner`'s readying). A create on an image not yet ready (`ImageNotReady`) is asked again
- * once the registry has had time to prepare the image. The
- * commit identity is left to the launch (`finishCheckout`), which sets it,
- * and the write token again, beside its own steps. Nothing is deleted where the setup or the
- * caller's use fails: the sandbox stands under the session's name, where the
- * next message finds it.
+ * onto it (`../coder-host/checkout.ts`), the agent's write token written at
+ * the firewall ahead of either, in the run's first write, to stand on past
+ * it. A drive found gone at the create is passed by for the next. A resume
+ * (`resume`) opens the same way on the agent's own drive alone, and leaves a
+ * checkout it finds missing to the relaunch (`checkOutMissing`); a sandbox it
+ * made again says so, since the installed skills and whatever else stood on
+ * the old disk went with it, while the harness's own session is kept in our
+ * store, not on the disk, and is resumed from there
+ * (`../coder-host/runner-sessions.ts`). Nothing is installed on either: the
+ * agent installs where it needs to. A sandbox's own drive is
+ * `@repo/sandbox`'s to fork and to delete with it; nothing here names one.
+ * The `agent` user is made in every sandbox as it is created. Every write
+ * the checkout makes is the group's (`../repository-shell.ts`'s
+ * `GROUP_WRITES`), so the `agent` user writes it too, and whatever another
+ * user installed in it is handed to that user at its launch
+ * (`launchRunner`'s readying). A create on an image not yet ready
+ * (`ImageNotReady`) is asked again once the registry has had time to prepare
+ * the image. The commit identity is left to the launch (`finishCheckout`),
+ * which sets it, and the write token again, beside its own steps. Nothing is
+ * deleted where the setup or the caller's use fails: the sandbox stands
+ * under the session's name, where the next message finds it.
  *
  * `launchRunner` readies the sandbox as root, sharing each checkout with the
  * `agent` user, and then starts the deploy's runner, its whole unit written
@@ -65,22 +73,7 @@
  * session and its agent, as the sandbox is created. The
  * firewall is the sandbox run's network policy, composed whole at each
  * write from its sources and the swaps its launch keeps
- * (`../sandbox-firewall.ts`), and a stop is the run's, which a snapshot
- * of another agent's sandbox carries none of. A resume of a
- * sandbox under its session's name is the same `getOrCreate`, asking for the
- * agent's own drive (`AGENT_OWN_DRIVE`): one stopped on a drive of its own is
- * never resumed from its snapshot but made anew from the current image with
- * that drive mounted, its checkout, its turns' restore points, and whatever
- * the agent never pushed all on it; one from before drives resumes from its
- * snapshot as it did, and is made anew from the image on an empty drive of
- * its own where that snapshot expired, its checkout cloned again before the
- * relaunch. Either way made anew, it says so, since the installed skills
- * and whatever else stood on the old disk went with it; the harness's own
- * session is kept in our store, not on the disk, and is resumed from there
- * (`../coder-host/runner-sessions.ts`). A legacy
- * sandbox, opened before `getOrCreate` under a UUID, is used where it runs,
- * and otherwise moved to its session's name from its last snapshot
- * (`reopenedOf`), never resumed in place.
+ * (`../sandbox-firewall.ts`), and a stop is the run's.
  */
 
 import {
@@ -89,8 +82,6 @@ import {
   CURSOR_SDK_ENTRY,
   RUNNER_DIRECTORY,
   RUNNER_UNIT,
-  SANDBOX_TOOLS_DIRECTORY,
-  SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME,
   SHARED_FILES_DIRECTORY,
 } from "@repo/agent-runner/pins";
 import { LAUNCH_PATH, type LaunchPath } from "@repo/agent-runner/protocol";
@@ -141,14 +132,11 @@ import { bookSandboxUsageCheck } from "../../billing/usage-queues.js";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import {
   AGENT_OWN_DRIVE,
-  type AgentSnapshotSource,
   agentSandboxName,
   agentSandboxOf,
   agentSandboxTags,
   agentTag,
-  legacySandboxOf,
   openAgentSandbox,
-  reopenedOf,
   SANDBOX_ENV,
 } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
@@ -259,9 +247,8 @@ const DRIVE_SHARED_FILES = `${DRIVE_STATE_FOLDER}/shared`;
  * launch, root's, so a file saved in one session can still be posted after
  * a resume, which makes the sandbox again with nothing of its old disk. The
  * state folder is made the workspace's owner's where it is missing, as the
- * checkout's record would make it, and a shared folder the old disk still
- * holds as a folder, as one resumed from a snapshot from before the link,
- * is moved onto the drive first.
+ * checkout's record would make it, and a shared folder the disk already
+ * holds as a folder is moved onto the drive first.
  */
 const LINK_SHARED_FILES = [
   `if [ ! -d ${DRIVE_STATE_FOLDER} ]; then install -d -o "$(stat -c %u ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE})" -g "$(stat -c %g ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE})" -m 0775 ${DRIVE_STATE_FOLDER}; fi`,
@@ -298,22 +285,12 @@ const RUNNER_UPLOAD_MODE = 0o644;
 const RUNNER_UPLOADS = Object.values(RUNNER_UNIT).map((name) => `${RUNNER_UPLOAD}/${name}`);
 
 /**
- * The link a sandbox made before the product's rename is given on each
- * launch, root's, from our tools' directory to the one its image put them
- * in, so the runner and the Claude Code binary are found where the
- * pins name them. Note that it can go only once no sandbox made before the
- * rename is listed (named `luke-agent-` and a UUID), because a sandbox in
- * steady use resumes from its own snapshot for as long as it lives.
- */
-const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ] && [ ! -e ${SANDBOX_TOOLS_DIRECTORY} ] && [ ! -L ${SANDBOX_TOOLS_DIRECTORY} ]; then ln -s ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ${SANDBOX_TOOLS_DIRECTORY}; fi`;
-
-/**
  * The `agent` user put in the `docker` group on each launch, root's, so the
  * harness and every command it runs reach the daemon the image's `docker`
  * starts (`apps/web/agent-image/Dockerfile`). Note that it is asked only
- * where the group stands, because a sandbox resumed from a snapshot of an
- * image before Docker has none, and only where the user is not already in
- * it, since the runner started after it takes the user's groups as it starts.
+ * where the group stands, so a sandbox up on an image without Docker still
+ * launches, and only where the user is not already in it, since the runner
+ * started after it takes the user's groups as it starts.
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
@@ -382,9 +359,9 @@ const READIED_MARK = "/var/lib/vespin/readied";
  * The launch's readying, run by bash as root through `sudo`, waited on before the runner starts:
  * `agent` put in the `docker` group, the deploy's runner unit the launch
  * uploaded copied whole over the one the sandbox's disk holds, root's and
- * read-only as the image makes it, so a sandbox created from a snapshot
- * or resumed on an older runner runs the deploy's bundle beside the files it
- * loads, all from one build, and the upload removed (copied rather than
+ * read-only as the image makes it, so a sandbox made from an older image
+ * runs the deploy's bundle beside the files it loads, all from one build,
+ * and the upload removed (copied rather than
  * moved, so an upload a readying cut short leaves stays the default user's,
  * which the next launch overwrites); the member's installed skills, where
  * the sandbox's opening uploaded them,
@@ -404,7 +381,6 @@ const READIED_MARK = "/var/lib/vespin/readied";
 function readyScript(): string {
   return [
     "set -euo pipefail",
-    LINK_TOOLS_DIRECTORY,
     JOIN_DOCKER_GROUP,
     `install -o root -g root -m 0444 -t ${RUNNER_DIRECTORY} ${RUNNER_UPLOADS.join(" ")}`,
     `rm -rf ${RUNNER_UPLOAD}`,
@@ -537,10 +513,9 @@ function sandboxPlace(session: string, name: string, sandboxSessionId: string): 
 }
 
 /**
- * What a created sandbox was created from, which says how its checkout is
- * made: a fork of the drive of the agent it was started from, a fork of its
- * workspace's drive, or the image alone. A sandbox reopened from its own
- * snapshot (`reopenedOf`) counts as the first, its checkout on that snapshot.
+ * What a created sandbox's drive was made from, which says how its checkout
+ * is made: a fork of the drive of the agent it was started from, a fork of
+ * its workspace's drive, or the agent's own, as it stood or made empty.
  */
 const CREATED_FROM = { SOURCE: "source", WORKSPACE: "workspace", IMAGE: "image" } as const;
 
@@ -548,29 +523,29 @@ type CreatedFrom = (typeof CREATED_FROM)[keyof typeof CREATED_FROM];
 
 /** The launch's path for a sandbox created from each. */
 const LAUNCH_PATH_OF = {
-  [CREATED_FROM.SOURCE]: LAUNCH_PATH.SOURCE_SNAPSHOT,
+  [CREATED_FROM.SOURCE]: LAUNCH_PATH.SOURCE_DRIVE,
   [CREATED_FROM.WORKSPACE]: LAUNCH_PATH.WORKSPACE_DRIVE,
   [CREATED_FROM.IMAGE]: LAUNCH_PATH.IMAGE,
 } as const satisfies Record<CreatedFrom, LaunchPath>;
 
-/** One way the agent's sandbox may be created: what from, the snapshot where it is one, and the drive it forks where it forks one. */
+/** The path of a first open's launch: in a sandbox found up, made again on the agent's own drive as it stood, or created on the drive its attempt made. */
+function launchPathOf(created: boolean, driveKept: boolean, from: CreatedFrom): LaunchPath {
+  if (!created) return LAUNCH_PATH.RELAUNCHED;
+
+  return driveKept ? LAUNCH_PATH.FRESH : LAUNCH_PATH_OF[from];
+}
+
+/** One way the agent's sandbox may be created from the image: what its drive is made from, and the drive. */
 interface CreateAttempt {
   readonly from: CreatedFrom;
-  readonly snapshot: AgentSnapshotSource | undefined;
-  readonly drive: SandboxDrive | undefined;
+  readonly drive: SandboxDrive;
 }
 
 /** The image with the agent's own drive, which every open falls back to and every resume takes: the drive it stood on mounted again, else one made empty. */
 const FROM_IMAGE: CreateAttempt = {
   from: CREATED_FROM.IMAGE,
-  snapshot: undefined,
   drive: AGENT_OWN_DRIVE,
 };
-
-/** Whether a create failed because the snapshot or the drive it named is gone, expired, deleted, or never filled, so the next way is tried. */
-function snapshotUnusable(failure: { readonly _tag: string }): boolean {
-  return Predicate.isTagged(failure, "SnapshotGone") || Predicate.isTagged(failure, "SandboxGone");
-}
 
 /** What an agent with a repository is checked out from as its sandbox is created: the agent, and the reads the open made of its repositories, its own on its write token. */
 interface AgentCheckoutReads {
@@ -684,10 +659,9 @@ function runnerInSession(
   };
 }
 
-/** What a place this machine found keeps for its own later calls: the account its record is kept under, and the sandbox as it was read. */
+/** What a place this machine found keeps for its own later calls: the account its record is kept under. */
 interface KeptPlace {
   readonly userId: string;
-  readonly sandbox: ListedSandbox;
 }
 
 /** A listed sandbox as the place a later call finds, under the account's session given, with the session's record where it was written for this sandbox. */
@@ -706,7 +680,7 @@ function foundOf(
       ? sandboxPlace(session, sandbox.name, sandbox.running)
       : undefined;
 
-  const kept: KeptPlace = { userId, sandbox };
+  const kept: KeptPlace = { userId };
 
   return {
     machine: AGENT_MACHINE.VERCEL,
@@ -716,7 +690,7 @@ function foundOf(
     running,
     runner: own === undefined ? undefined : runnerInSession(session, sandbox, own),
     launch: own === undefined ? undefined : markOf(own),
-    // SAFETY: what is kept is this machine's own to read back in `discard` and `resume`; no caller reads it.
+    // SAFETY: what is kept is this machine's own to read back in `discard`; no caller reads it.
     kept: kept as KeptPlace & MachineKept,
   };
 }
@@ -805,13 +779,8 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
 
     stop: (place) => api.stop(place),
 
-    // MIGRATION: a legacy sandbox the session moved off is deleted first, so a discard that fails
-    // between the two never leaves its old disk to be moved again.
     discard: (found) =>
       Effect.gen(function* () {
-        const legacy = yield* legacySandboxOf(api, found.session);
-
-        if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
         yield* api.delete(found.name);
         yield* recordedSandboxDiscarded(found.name);
         yield* forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name);
@@ -1135,8 +1104,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           sessionId,
           tags: agentSandboxTags(sessionId, agent),
           vcpus,
-          ...(attempt.snapshot === undefined ? undefined : { snapshot: attempt.snapshot }),
-          ...(attempt.drive === undefined ? undefined : { drive: attempt.drive }),
+          drive: attempt.drive,
         },
         checkout === undefined
           ? undefined
@@ -1157,15 +1125,15 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.mapError((failure) => refused ?? failure),
       );
 
-      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created && !driveKept);
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId));
 
       return { ...runningOf(sandbox), created, driveKept, from: attempt.from };
     });
 
   /**
-   * The agent's sandbox opened from the first attempt whose snapshot and
-   * drive stand (`gotOn`), each one found gone at the create logged and
-   * passed by, as the open ended.
+   * The agent's sandbox opened from the first attempt whose drive stands
+   * (`gotOn`), each one found gone at the create logged and passed by, as
+   * the open ended.
    */
   const openedFromFirst = (
     agent: Agent,
@@ -1183,7 +1151,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         const gone =
           Result.isFailure(opened) &&
           attempt.from !== CREATED_FROM.IMAGE &&
-          snapshotUnusable(opened.failure) &&
+          Predicate.isTagged(opened.failure, "SandboxGone") &&
           (yield* api.get(agentSandboxName(sessionId)).pipe(
             Effect.map((standing) => standing === undefined),
             Effect.orElseSucceed(() => false),
@@ -1191,7 +1159,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
         if (!gone) return opened;
         yield* Effect.logWarning(
-          `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
+          `An agent's sandbox was not created on a fork of its ${attempt.from}'s drive, which was gone`,
         );
       }
 
@@ -1250,7 +1218,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           : [
               {
                 from: CREATED_FROM.SOURCE,
-                snapshot: undefined,
                 drive: { fork: { ownedBy: source }, at: WORKSPACE_DRIVE.MOUNT },
               },
             ]),
@@ -1259,7 +1226,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           : [
               {
                 from: CREATED_FROM.WORKSPACE,
-                snapshot: undefined,
                 drive: { fork: { base: drive }, at: WORKSPACE_DRIVE.MOUNT },
               },
             ]),
@@ -1280,9 +1246,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * restore whose finish failed; nothing where it holds a finished one. Note
    * that a place can stand without one, because a launch whose checkout
    * failed leaves its sandbox for the next message, which resumes it and
-   * checks nothing out, and a sandbox made anew in place of one whose
-   * snapshot lapsed holds none, so its runner would start in a folder that is
-   * not there. Answers whether it cloned.
+   * checks nothing out, and a sandbox made anew on an own drive made empty,
+   * its old one gone, holds none, so its runner would start in a folder that
+   * is not there. Answers whether it cloned.
    */
   const ownCheckoutRestored = (
     place: SandboxRunning,
@@ -1356,7 +1322,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ),
         );
 
-        const [{ name, running, created, from }, [plan, beside]] = yield* Effect.all(
+        const [{ name, running, created, driveKept, from }, [plan, beside]] = yield* Effect.all(
           [
             openedCheckout(
               ask.target,
@@ -1384,46 +1350,28 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             name: nameOfSandbox(name),
             checkoutPath: SANDBOX_LAYOUT.checkoutPath,
             finishCheckout,
-            path: created ? LAUNCH_PATH_OF[from] : LAUNCH_PATH.RESUMED,
+            path: launchPathOf(created, driveKept, from),
           },
           beside,
         );
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(ask.session)))),
 
     // The session's sandbox is run again through `getOrCreate` (`gotOn`) from the image with its own
-    // drive (`FROM_IMAGE`): one up is used as it runs; one stopped on a drive of its own is made
-    // again from the current image with that drive mounted, its checkout and unpushed work on it;
-    // one from before drives resumes from its snapshot, or where that is gone is made again on an
-    // empty drive of its own. A sandbox made again is set up with nothing to check out, since the
+    // drive (`FROM_IMAGE`): one up is used as it runs; one stopped is made again from the current
+    // image with its own drive mounted, its checkout and unpushed work on it, or on one made empty
+    // where its own is gone. A sandbox made again is set up with nothing to check out, since the
     // relaunch clones the checkout it finds missing (`ownCheckoutRestored`) and sets it up then; one
     // made again on the checkout its drive kept is set up here (`setUpAgain`).
-    // MIGRATION: a legacy sandbox (`agentSandboxOf`) is used where it runs, and otherwise made anew
-    // under the session's name from its last snapshot (`reopenedOf`), its disk kept, or from the
-    // image where that snapshot is gone, so it is never resumed in place; it is read again on each
-    // try, so one that was still stopping is seen stopped.
     resume: (found, agent, setup) =>
       Effect.gen(function* () {
-        const legacy = found.name !== agentSandboxName(found.session);
-
-        if (legacy && found.running !== undefined) return { place: found.running, created: false };
-        // Note that the boot is recorded under the session's own name, which a legacy sandbox is reopened under and the task list reads.
         yield* recordedSandboxBooting(agent.id, agentSandboxName(found.session));
 
-        const standing = legacy
-          ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
-          : keptOf(found).sandbox;
-
-        const { snapshot } = yield* reopenedOf(found.session, standing);
-
-        const attempts: readonly CreateAttempt[] =
-          snapshot === undefined
-            ? [FROM_IMAGE]
-            : [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE];
-
-        const opened = yield* openedFromFirst(agent, found.session, attempts, undefined);
-
-        if (Result.isFailure(opened)) return yield* opened.failure;
-        const { name, running, created, driveKept, from } = opened.success;
+        const { name, running, created, driveKept } = yield* gotOn(
+          agent,
+          found.session,
+          FROM_IMAGE,
+          undefined,
+        );
 
         // A sandbox up that no launch readied was made again by a caller that launches nothing, so it
         // is set up as one made here, its installed skills written again (`READIED_MARK`).
@@ -1437,7 +1385,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
         return {
           place: sandboxPlace(found.session, name, running),
-          created: (created && from === CREATED_FROM.IMAGE) || remade,
+          created: created || remade,
         };
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(found.session)))),
 

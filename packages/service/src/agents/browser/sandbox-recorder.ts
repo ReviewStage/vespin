@@ -36,7 +36,6 @@ import { PLAYWRIGHT_PIN } from "@repo/agent-runner/pins";
 import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { Option, Schema } from "effect";
-import { LINK_SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 import { RECORDING_CURSOR_SOURCE, RECORDING_CURSOR_STOP } from "./recording-cursor.js";
 import { SANDBOX_BROWSER } from "./sandbox-browser.js";
 
@@ -266,14 +265,11 @@ const RECORDER_ALIVE =
 const START_SCRIPT = [
   "set -u",
   'port="$1" state="$HOME/$2" max="$3" bytes="$4" width="$5" height="$6" source="$7"',
-  `(cd "$HOME" && ${LINK_SANDBOX_STATE_FOLDER})`,
   'dir="$state/recording"',
   RECORDER_ALIVE,
   'mkdir -p "$state" && chmod 700 "$state"',
   `if [ ! -e "$dir/done.json" ] && alive; then echo ${RECORDING_START_OUTPUT.RUNNING}; exit 0; fi`,
-  // Note that an image from before Playwright's shared folder kept the encoder in the default user's cache, which a sandbox resumed from its snapshot still holds.
   `encoder=$(ls ${PLAYWRIGHT_PIN.BROWSERS}/ffmpeg-*/ffmpeg-linux 2>/dev/null | sort -V | tail -n 1)`,
-  `[ -n "$encoder" ] || encoder=$(ls "$HOME"/.cache/ms-playwright/ffmpeg-*/ffmpeg-linux 2>/dev/null | sort -V | tail -n 1)`,
   `[ -x "$encoder" ] || { echo 'no encoder in the image' >&2; exit ${RECORDING_START_EXIT.NO_ENCODER}; }`,
   'rm -rf "$dir" && mkdir -p "$dir" && chmod 700 "$dir"',
   'setsid node --no-warnings -e "$source" "$port" "$dir" "$max" "$bytes" "$encoder" "$width" "$height" >"$dir/recorder.log" 2>&1 </dev/null &',
@@ -298,7 +294,6 @@ const START_SCRIPT = [
 const STOP_SCRIPT = [
   "set -u",
   'dir="$HOME/$1/recording" tenths="$2"',
-  `(cd "$HOME" && ${LINK_SANDBOX_STATE_FOLDER})`,
   RECORDER_ALIVE,
   'if [ ! -e "$dir/done.json" ]; then',
   `  alive || { echo '{"ok":false,"reason":"${RECORDING_FAILURE.NONE}"}'; exit 0; }`,

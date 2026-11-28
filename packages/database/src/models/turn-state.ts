@@ -1066,38 +1066,14 @@ const forgetSnapshotsOfSandbox = SqlSchema.void({
     ),
 });
 
-const forgetSnapshotsOfAgent = SqlSchema.void({
-  Request: Schema.Struct({ agentId: Schema.String }),
-  execute: ({ agentId }) =>
-    Database.use((db) =>
-      db
-        .update(turns)
-        .set(NO_SNAPSHOT)
-        .where(
-          inArray(
-            turns.conversationId,
-            db
-              .select({ conversationId: agentTable.conversationId })
-              .from(agentTable)
-              .where(eq(agentTable.id, agentId)),
-          ),
-        ),
-    ),
-});
-
 /**
  * The snapshots the turns of the sandbox's agent hold forgotten, since a
- * snapshot stands only while the sandbox it was taken in does: written as
- * the sandbox is released, discarded, or made anew under its name
- * (`agent-sandboxes.ts`), so no turn claims a checkout no sandbox holds.
+ * snapshot stands only while the drive the sandbox owns does: written as the
+ * sandbox is released or discarded, its drive deleted with it
+ * (`agent-sandboxes.ts`), so no turn claims a checkout no drive holds.
  */
 export function forgetTurnSnapshotsOfSandbox(sandboxName: string): TurnStateEffect<void> {
   return forgetSnapshotsOfSandbox({ sandboxName });
-}
-
-/** The snapshots the agent's turns hold forgotten, as `forgetTurnSnapshotsOfSandbox` forgets them, for a sandbox the agent opens anew. */
-export function forgetTurnSnapshotsOfAgent(agentId: string): TurnStateEffect<void> {
-  return forgetSnapshotsOfAgent({ agentId });
 }
 
 /**

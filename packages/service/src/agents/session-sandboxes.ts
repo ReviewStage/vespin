@@ -5,7 +5,7 @@
  * which records its last use in the `agent_sandbox` ledger); what is here
  * deletes it, and never resumes one stopped.
  *
- * An agent's session has one persistent sandbox (`agent-sandbox-open.ts`),
+ * An agent's session has one sandbox (`agent-sandbox-open.ts`),
  * tagged with the session's id, and a new agent's sandbox owns a drive its
  * checkout stands on (`workspace-drive.ts`). An agent's sandbox is deleted, with
  * the drive it owns, through `Sandbox`'s one `delete`, once its ledger row
@@ -22,8 +22,7 @@
  * delete, writes it LIVE where it was opened, touched, or given a turn
  * since, and else deletes the sandbox, one already gone counting as
  * deleted, and writes it RELEASED. A delivery that failed comes again. An agent brought back after its release opens a sandbox afresh,
- * its checkout made from its workspace's drive and its pushed branch,
- * as a sandbox whose snapshot lapsed is.
+ * its checkout made from its workspace's drive and its pushed branch.
  *
  * Every outcome is a log line of its own, so a stuck or runaway release
  * shows.

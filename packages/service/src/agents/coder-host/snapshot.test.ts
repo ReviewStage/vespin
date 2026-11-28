@@ -32,9 +32,9 @@ import { SNAPSHOT, SNAPSHOT_MISS, type SnapshotOutcome, snapshotSource } from ".
  * made, bar what git ignores and files named like credentials, lands as one commit on the branch asked for,
  * and the source's own index and working tree are as they were; a checkout
  * with nothing uncommitted pushes its `HEAD`; a retry pushes over its own
- * branch; a stopped sandbox is woken and left to its own idle stop, and a
- * running one is left running; and a sandbox gone, a failed copy, or one
- * past its bound is a miss, and a failed copy logs the end of its stderr,
+ * branch; a running sandbox is left running, and a stopped one, whose drive
+ * a Start hands instead, is never woken; and a sandbox gone or stopped, a
+ * failed copy, or one past its bound is a miss, and a failed copy logs the end of its stderr,
  * bounded and redacted. The
  * firewall's record is kept in the test's own database, under the source's
  * account and a key ring of the suite's.
@@ -220,7 +220,7 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
   );
 
   it.effect(
-    "a stopped sandbox is woken for the copy, which runs in the woken session under the installation token, and is left running",
+    "a stopped sandbox, whose drive a Start hands instead, copies nothing and wakes nothing",
     (t) =>
       Effect.gen(function* () {
         const source = yield* checkoutFor(t);
@@ -229,12 +229,8 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
 
         const outcome = yield* copy(sandbox);
 
-        assert.ok(outcome.copied);
-        assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.WOKEN]);
-        assert.deepEqual([sandbox.state.status, sandbox.stops], ["running", []]);
-        assert.deepEqual(sandbox.policies, [
-          { session: SOURCE_SANDBOX.WOKEN, hosts: ["*", "github.com", "api.github.com"] },
-        ]);
+        assert.deepEqual(outcome, { copied: false, miss: SNAPSHOT_MISS.FAILED });
+        assert.deepEqual([sandbox.ran, sandbox.state.status], [[], "stopped"]);
       }),
   );
 
@@ -260,7 +256,7 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
         "origin",
         join(source.root, "gone.git"),
       );
-      const sandbox = sourceSandbox(source, "stopped");
+      const sandbox = sourceSandbox(source, "running");
       const logged: string[] = [];
 
       const outcome = yield* copy(sandbox).pipe(logging(logged));
@@ -300,25 +296,21 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
       }),
   );
 
-  it.effect("a wake that never answers is given up at the bound", (t) =>
+  it.effect("a copy that never answers is given up at the bound", (t) =>
     Effect.gen(function* () {
-      const sandbox = sourceSandbox(yield* checkoutFor(t), "stopped");
-      let wakeStarted = () => {};
+      const sandbox = sourceSandbox(yield* checkoutFor(t), "running");
+      let copyStarted = () => {};
 
-      const woken = new Promise<void>((resolve) => {
-        wakeStarted = resolve;
+      const started = new Promise<void>((resolve) => {
+        copyStarted = resolve;
       });
 
       const fiber = yield* Effect.forkChild(
         copyOver(async (url, init) => {
-          if (new URL(url).searchParams.get("resume") !== "true") {
-            return answerOf(sandbox, url, init);
-          }
+          if (!new URL(url).pathname.endsWith("/cmd")) return answerOf(sandbox, url, init);
 
-          // Vercel began bringing the sandbox up, and never answered the wake.
-          sandbox.state.status = "pending";
-          sandbox.state.session = SOURCE_SANDBOX.WOKEN;
-          wakeStarted();
+          // The copy's command was sent, and Vercel never answered it.
+          copyStarted();
 
           return new Promise<Response>((_, reject) => {
             init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
@@ -326,7 +318,7 @@ it.layer(getTestDB())("a source agent's work copied", (it) => {
         }),
       );
 
-      yield* Effect.promise(() => woken);
+      yield* Effect.promise(() => started);
 
       yield* TestClock.adjust(Duration.sum(SNAPSHOT.TIMEOUT, Duration.seconds(1)));
       const outcome: SnapshotOutcome = yield* Fiber.join(fiber);

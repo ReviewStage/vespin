@@ -61,7 +61,7 @@ import {
 } from "../schemas/agent-sandbox.js";
 import { conversations } from "../schemas/storage.js";
 import { forgetAgentSandboxHolds } from "./agent-sandbox-holds.js";
-import { forgetTurnSnapshotsOfAgent, forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
+import { forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -382,7 +382,7 @@ export function recordAgentSandboxBootFailed(sandboxName: string): SandboxUseEff
 
 /** The sandbox deleted by its session's discard, its row RELEASED. */
 export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffect<void> {
-  // The snapshots its agent's turns hold went with its disk, and every hold on it with its run.
+  // The snapshots its agent's turns hold went with the drive it owned, and every hold on it with its run.
   return Effect.andThen(
     Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), forgetAgentSandboxHolds(sandboxName)),
     markReleased({ sandboxName }),
@@ -391,22 +391,16 @@ export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffe
 
 /**
  * The agent's sandbox recorded LIVE and used at `at`, where its row was
- * written before the cutoff or stood RELEASED. Where the open created the
- * sandbox on a `fresh` checkout, under a name whose earlier sandbox was
- * released, discarded, or lapsed, the snapshots the agent's turns hold are
- * forgotten first, since they stood on the disk that is gone. Note that a
- * sandbox created on the agent's own drive as it stood is not fresh, because
- * the checkout those snapshots' refs live in is on that drive.
+ * written before the cutoff or stood RELEASED. Note that the snapshots the
+ * agent's turns hold are kept whatever the open made, because their refs
+ * live in the checkout on the agent's own drive, which only the sandbox's
+ * delete deletes (`recordAgentSandboxDiscarded`, `settleAgentSandboxRelease`).
  */
 export function recordAgentSandboxOpen(
   agentId: string,
   use: AgentSandboxUse,
-  fresh = false,
 ): SandboxUseEffect<void> {
-  return Effect.andThen(
-    fresh ? forgetTurnSnapshotsOfAgent(agentId) : Effect.void,
-    upsertOpen({ ...use, agentId }),
-  );
+  return upsertOpen({ ...use, agentId });
 }
 
 /** The sandbox's row used at `at`, where an open recorded one and it was written before the cutoff. */
@@ -471,7 +465,7 @@ export function settleAgentSandboxRelease(
   sandboxName: string,
   state: typeof AGENT_SANDBOX_STATE.LIVE | typeof AGENT_SANDBOX_STATE.RELEASED,
 ): SandboxUseEffect<void> {
-  // A sandbox deleted took the snapshots its agent's turns hold with it, and every hold on it.
+  // A sandbox deleted took the drive it owned, and with it the snapshots its agent's turns hold, and every hold on it.
   return Effect.andThen(
     state === AGENT_SANDBOX_STATE.RELEASED
       ? Effect.andThen(

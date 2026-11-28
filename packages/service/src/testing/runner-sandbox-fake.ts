@@ -48,7 +48,6 @@ import {
   sandboxStopRefusal,
   sandboxTagsRefusal,
   sessionAnswered,
-  snapshotOf,
   vercelSandboxOver,
 } from "@repo/sandbox/vercel/testing";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
@@ -72,21 +71,15 @@ export interface FakeSandbox {
   status: string;
   currentSessionId: string;
   tags: Record<string, string>;
-  /** The image it was created from; none for one created from a snapshot. */
+  /** The image it was created from. */
   image: string | undefined;
-  /** The snapshot it was created from; none for one created from an image. */
-  sourceSnapshotId?: string;
   deleted: boolean;
   /** The timeout each session of the sandbox opens with, as its create or a later update set it. */
   timeout: number;
   /** The timeout each session a resume opened started with, in order. */
   resumedWith: number[];
-  /** Whether the snapshot the sandbox resumes from expired, so a resume is answered 410 as Vercel answers it. */
-  snapshotExpired?: boolean;
   /** When the sandbox was created, as Vercel's list says it: later for each sandbox opened. */
   createdAt: number;
-  /** The snapshot it resumes from, which its last snapshot made; none before one is taken. */
-  currentSnapshotId?: string;
   /** What its create mounted, as the create sent it, which the drives read back (`fakeDrives`). */
   mounted?: FakeMounts | undefined;
 }
@@ -304,18 +297,10 @@ export function runnerSandboxApi() {
    * sandbox's next session.
    */
   const stopsAt: StopsAt = {};
-  /** How many resumes the API refuses next with 422 `sandbox_snapshotting`, as Vercel answers one while the last stop's snapshot is still being taken. */
-  const snapshotting = { remaining: 0 };
 
   /** What a test does the moment a detached command has started, before the API answers; the exit a waited run ends on, 0 unless it says, and what it prints, nothing unless it says; and what it does as a waited run arrives, before it ends. */
   const hooks: Hooks = {};
 
-  /** The snapshots taken, in order. */
-  const snapshots: string[] = [];
-  /** The snapshots that lapsed or were deleted, which a create from one is refused for. */
-  const goneSnapshots = new Set<string>();
-  /** The expiration each snapshot was asked with, by its id, as the API's body carried it. */
-  const snapshotExpirations = new Map<string, unknown>();
   let next = 0;
 
   const id = (prefix: string) => {
@@ -335,9 +320,6 @@ export function runnerSandboxApi() {
     tags: sandbox.tags,
     createdAt: sandbox.createdAt,
     timeout: sandbox.timeout,
-    ...(sandbox.currentSnapshotId === undefined
-      ? undefined
-      : { currentSnapshotId: sandbox.currentSnapshotId }),
   });
 
   const respond = async (url: string, init: RequestInit): Promise<Response> => {
@@ -367,20 +349,12 @@ export function runnerSandboxApi() {
         return Response.json({ error: { code: "not_found" } }, { status: 404 });
       }
 
-      const source: string | undefined = asked.source?.snapshotId;
-
-      // A snapshot that lapsed or was deleted is refused as Vercel refuses it.
-      if (source !== undefined && goneSnapshots.has(source)) {
-        return Response.json({ error: { code: "snapshot_not_found" } }, { status: 410 });
-      }
-
       const sandbox: FakeSandbox = {
         name: asked.name,
         status: "running",
         currentSessionId: mintSession(),
         tags: asked.tags,
         image: asked.image,
-        ...(source === undefined ? undefined : { sourceSnapshotId: source }),
         ...(mounted === undefined ? undefined : { mounted }),
         deleted: false,
         createdAt: sandboxes.length + 1,
@@ -442,19 +416,6 @@ export function runnerSandboxApi() {
       }
 
       const resuming = parsed.searchParams.get("resume") === "true";
-
-      if (resuming && sandbox.status === "stopped" && sandbox.snapshotExpired === true) {
-        return Response.json({ error: { code: "snapshot_not_found" } }, { status: 410 });
-      }
-
-      if (resuming && snapshotting.remaining > 0) {
-        snapshotting.remaining -= 1;
-
-        return Response.json(
-          { error: { code: "sandbox_snapshotting", message: "Sandbox is being snapshotted." } },
-          { status: 422 },
-        );
-      }
 
       // A resume of a sandbox still stopping waits the stop out and opens its next session, which
       // `@vercel/sandbox`'s `withResume` relies on.
@@ -531,25 +492,6 @@ export function runnerSandboxApi() {
         },
         { status: 410 },
       );
-    }
-
-    if (rest === "snapshot") {
-      // A snapshot stops the session it is taken of, so a second one asked of it is refused.
-      const taking = sandboxes.find(
-        (each) => !each.deleted && each.currentSessionId === sessionId && each.status === "running",
-      );
-
-      if (taking === undefined) return new Response(null, { status: 422 });
-      const snapshot = id("snap");
-      snapshots.push(snapshot);
-      snapshotExpirations.set(snapshot, (await body()).expiration);
-      taking.status = "stopped";
-      taking.currentSnapshotId = snapshot;
-
-      return Response.json({
-        snapshot: snapshotOf({ id: snapshot, status: "created", sourceSessionId: sessionId }),
-        ...sessionAnswered({ id: sessionId, status: "stopped" }),
-      });
     }
 
     if (rest === "network-policy" && holdPolicy.remaining > 0) {
@@ -715,9 +657,6 @@ export function runnerSandboxApi() {
     mountedAt: (sandbox: FakeSandbox | undefined, at: string) =>
       drives.mountedAt(sandbox?.mounted, at),
     commands,
-    snapshots,
-    goneSnapshots,
-    snapshotExpirations,
     uploads,
     policies,
     runs,
@@ -730,7 +669,6 @@ export function runnerSandboxApi() {
     exit,
     idleStop,
     stopsAt,
-    snapshotting,
     hooks,
   };
 }

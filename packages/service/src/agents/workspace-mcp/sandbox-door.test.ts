@@ -4,16 +4,17 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
-import { SANDBOX_STATUS, type Sandbox } from "@repo/sandbox";
+import type { Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { Effect } from "effect";
+import { agentSandboxName } from "../agent-sandbox-open.js";
 import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { agentSandboxDoors, SANDBOX_DOOR_MAX_BYTES } from "./sandbox-door.js";
 
 /**
  * The door to a native agent's sandbox, through `Sandbox` kept in memory:
- * the sandbox tagged with the agent's session is found, the file is read
+ * the sandbox named after the agent's session is found, the file is read
  * from its run by a command, a path that is no file is no file, a file past
  * every tool's bound is read only one byte past it, a file is written under
  * its attachments folder, and a conversation that
@@ -35,7 +36,7 @@ function disk(files: Readonly<Record<string, Uint8Array>>): string {
   return root;
 }
 
-/** The sandboxes tagged with the session, one stopped and one up, each command run in the stand-in disk given. */
+/** The sandbox named after the session, up, each command run in the stand-in disk given. */
 function standing(root: string) {
   const sandbox = memorySandbox({
     run: (command) => {
@@ -49,13 +50,7 @@ function standing(root: string) {
     },
   });
 
-  sandbox.stand({
-    name: "sbx-stopped",
-    tags: { sessionId: SESSION },
-    status: SANDBOX_STATUS.STOPPED,
-    createdAt: 0,
-  });
-  const up = sandbox.stand({ name: "sbx-up", tags: { sessionId: SESSION }, createdAt: 1 });
+  const up = sandbox.stand({ name: agentSandboxName(SESSION), tags: { sessionId: SESSION } });
 
   return { sandbox, up };
 }
@@ -88,7 +83,7 @@ async function bytesOf(stream: ReadableStream<Uint8Array> | null): Promise<numbe
 }
 
 it.effect(
-  "a file is read from the running sandbox tagged with the agent's session, by its path, under the capability drop, and a path that is no file is no file",
+  "a file is read from the running sandbox named after the agent's session, by its path, under the capability drop, and a path that is no file is no file",
   () =>
     Effect.gen(function* () {
       const root = disk({ "repository/shot.png": new Uint8Array([1, 0, 255, 10, 3]) });
@@ -108,7 +103,7 @@ it.effect(
       assert.equal(missing, null);
       assert.equal(directory, null);
       assert.ok(memory.state.commands.every((each) => each.running === up.running));
-      assert.deepEqual(memory.state.resumed, []);
+      assert.deepEqual(memory.state.deleted, []);
     }),
 );
 
@@ -129,7 +124,7 @@ it.effect("a file past every tool's bound is read only one byte past it", () =>
 );
 
 it.effect(
-  "a file is written into the running sandbox tagged with the agent's session, readable by the agent, at the path it answers",
+  "a file is written into the running sandbox named after the agent's session, readable by the agent, at the path it answers",
   () =>
     Effect.gen(function* () {
       const { sandbox: memory, up } = standing(tmpdir());

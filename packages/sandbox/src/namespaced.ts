@@ -10,9 +10,7 @@
  * provider and the prefix taken off what comes back, so the caller speaks
  * the names it always did. Tag values are prefixed alike, so a list by tag
  * finds only the namespace's sandboxes, and production's lists by tag, made
- * with no namespace, never find a Preview's. A snapshot is named by its id,
- * which no namespace changes: a Preview may create a sandbox of its own
- * from one, which leaves the snapshot as it was.
+ * with no namespace, never find a Preview's.
  */
 
 import { Effect, Predicate } from "effect";
@@ -100,7 +98,6 @@ export function namespacedSandbox(sandbox: SandboxService, namespace: string): S
       ),
     driveStands: (name) => sandbox.driveStands(named.inner(name)),
     ownDriveStands: (sandboxName) => sandbox.ownDriveStands(named.inner(sandboxName)),
-    resume: (name) => Effect.map(sandbox.resume(named.inner(name)), named.listed),
     create: (ask) => Effect.map(sandbox.create(named.ask(ask)), named.listed),
     getOrCreate: (ask, onCreate) =>
       Effect.map(
@@ -131,7 +128,6 @@ export function namespacedSandbox(sandbox: SandboxService, namespace: string): S
     connectPty: (shell) => sandbox.connectPty(shell),
     updateNetworkPolicy: (target, policy) =>
       sandbox.updateNetworkPolicy(named.target(target), policy),
-    snapshot: (target, expiresAfter) => sandbox.snapshot(named.target(target), expiresAfter),
     touch: (name) => sandbox.touch(named.inner(name)),
   };
 }

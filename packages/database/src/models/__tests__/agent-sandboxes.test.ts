@@ -121,7 +121,7 @@ const holdsSnapshot = (turnId: string) =>
 
 it.layer(getTestDB())("when each cloud agent's sandbox was last used", (it) => {
   it.effect(
-    "the snapshots an agent's turns hold go with its sandbox: forgotten as it is discarded, released, or opened anew, and kept across an open that resumed it",
+    "the snapshots an agent's turns hold go with its sandbox's drive: forgotten as it is discarded or released, and kept across every open",
     () =>
       Effect.gen(function* () {
         const agentId = yield* openAgent;
@@ -138,10 +138,6 @@ it.layer(getTestDB())("when each cloud agent's sandbox was last used", (it) => {
           (yield* rowOf(name)).map((row) => row.state),
           [AGENT_SANDBOX_STATE.RELEASED],
         );
-
-        const created = yield* turnWithSnapshot(agentId);
-        yield* recordAgentSandboxOpen(agentId, useAt(name, MINUTES_LATER), true);
-        assert.equal(yield* holdsSnapshot(created), false, "a sandbox made anew holds none");
 
         const released = yield* turnWithSnapshot(agentId);
         yield* Effect.flatMap(Database, (db) =>

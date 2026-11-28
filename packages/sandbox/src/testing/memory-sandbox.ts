@@ -2,17 +2,16 @@
  * memory-sandbox.ts -- `Sandbox` kept in memory, for a suite to provide on its tag: the second implementation of the package's interface, its state open to the suite's assertions, and the hooks a suite answers its commands and its failures through.
  *
  * It keeps what a provider would: sandboxes by name, each up in a run of its
- * own or stopped, holding a snapshot only where it is persistent, as one
- * created before sandboxes were made otherwise, or took one; the drives they opened with, the
- * commands each run started, the files written, the policies set, and the
- * snapshots taken. A call fenced to
- * a run the sandbox is no longer up in answers as gone, as the interface
- * says; nothing resumes but `resume` and `getOrCreate`. A suite scripts what
+ * own or stopped, its disk kept by none; the drives they opened with, the
+ * commands each run started, the files written, and the policies set. A
+ * call fenced to a run the sandbox is no longer up in answers as gone, as
+ * the interface says; nothing opens a sandbox but `create` and
+ * `getOrCreate`, which makes a stopped one again. A suite scripts what
  * a command answers (`hooks.run`, `hooks.start`) and which call fails
  * (`hooks.fail`), and moves a command's exit itself (`exited`).
  */
 
-import { Clock, Duration, Effect, Layer, Predicate, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Predicate, Redacted } from "effect";
 import { EndedSessionsOnDelete, SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
@@ -39,7 +38,6 @@ import {
   type SandboxTarget,
   SandboxUnavailable,
   type SandboxUser,
-  SnapshotGone,
 } from "../vocabulary.js";
 
 /** One sandbox as the memory keeps it. */
@@ -48,9 +46,6 @@ export interface MemorySandboxRecord {
   status: SandboxStatus;
   running: string;
   tags: Readonly<Record<string, string>>;
-  snapshotId: string | undefined;
-  /** Whether a stop keeps its disk for a resume: true only for one a suite stood as created persistent before. */
-  readonly persistent: boolean;
   readonly createdAt: number;
   readonly from: SandboxSource;
   /** The drive it opened with and where it is mounted: a base drive it fills, or its own. */
@@ -82,14 +77,6 @@ export interface MemoryCommand {
   stderr: string;
 }
 
-/** A snapshot the memory took: the sandbox and run it was taken of, and how long it lasts after its last use. */
-export interface MemorySnapshot {
-  readonly id: string;
-  readonly name: string;
-  readonly running: string;
-  readonly lapseMs: number;
-}
-
 /** What a suite answers a command or a failure through. */
 export interface MemorySandboxHooks {
   /** What a command run to its end answers; a success with nothing printed where unsaid. */
@@ -116,19 +103,14 @@ export interface MemorySandboxState {
     readonly running: string;
     readonly policy: NetworkPolicy;
   }[];
-  readonly snapshots: MemorySnapshot[];
   /** Every drive standing, by name: a suite puts a base drive here to find it standing. */
   readonly drives: Map<string, MemoryDrive>;
   /** Every drive deleted, by name, in order. */
   readonly deletedDrives: string[];
-  /** The snapshots gone, which a resume or a create from one answers as gone. */
-  readonly goneSnapshots: Set<string>;
   /** Every run a stop ended, in order. */
   readonly stopped: { readonly name: string; readonly running: string }[];
   /** Every sandbox deleted, by name, in order. */
   readonly deleted: string[];
-  /** Every run a resume opened, in order. */
-  readonly resumed: { readonly name: string; readonly running: string }[];
   /** Every run a PTY was minted for, in order. */
   readonly interactive: { readonly name: string; readonly running: string }[];
   /** Every running run a touch reached, in order. */
@@ -142,7 +124,7 @@ export interface MemorySandbox {
   readonly layer: Layer.Layer<Sandbox>;
   readonly state: MemorySandboxState;
   readonly service: SandboxService;
-  /** A sandbox put in place as a create would open it, persistent unless the suite says otherwise, for a suite that starts from one standing. */
+  /** A sandbox put in place as a create would open it, for a suite that starts from one standing. */
   readonly stand: (
     sandbox: Partial<MemorySandboxRecord> & { readonly name: string },
   ) => MemorySandboxRecord;
@@ -150,7 +132,7 @@ export interface MemorySandbox {
   readonly exited: (commandId: string, code: number) => void;
 }
 
-/** A run's id or a snapshot's, minted in order. */
+/** A run's id or a command's, minted in order. */
 function counter(prefix: string): () => string {
   let next = 0;
 
@@ -173,7 +155,6 @@ function listedOf(record: MemorySandboxRecord): OpenedSandbox {
     status: record.status,
     running: record.running,
     tags: record.tags,
-    snapshotId: record.snapshotId,
     createdAt: record.createdAt,
     timeout: Duration.toMillis(SANDBOX_IDLE),
     vcpus: record.vcpus,
@@ -189,20 +170,16 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     commands: [],
     files: [],
     policies: [],
-    snapshots: [],
     drives: new Map(),
     deletedDrives: [],
-    goneSnapshots: new Set(),
     stopped: [],
     deleted: [],
-    resumed: [],
     interactive: [],
     touched: [],
     sessions: [],
   };
 
   const nextRun = counter("run_");
-  const nextSnapshot = counter("snap_");
   const nextCommand = counter("cmd_");
 
   /** The call's failure where the suite scripts one, else its work. */
@@ -275,10 +252,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
 
   const opened = (ask: SandboxCreate & { readonly user?: SandboxUser }) =>
     Effect.gen(function* () {
-      if ("snapshotId" in ask.from && state.goneSnapshots.has(ask.from.snapshotId)) {
-        return yield* new SnapshotGone({ call: SANDBOX_CALL.CREATE });
-      }
-
       const mounted = ask.drive === undefined ? undefined : yield* driveFor(ask.name, ask.drive);
       const drive = mounted?.drive;
 
@@ -287,8 +260,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         status: SANDBOX_STATUS.RUNNING,
         running: nextRun(),
         tags: { ...ask.tags },
-        snapshotId: undefined,
-        persistent: false,
         createdAt: yield* Clock.currentTimeMillis,
         from: ask.from,
         drive,
@@ -302,25 +273,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       state.sandboxes.set(ask.name, record);
 
       return { record, driveKept: mounted?.kept === true };
-    });
-
-  const resumed = (record: MemorySandboxRecord) =>
-    Effect.suspend(() => {
-      if (record.status === SANDBOX_STATUS.RUNNING) return Effect.succeed(record);
-
-      // Note that a stopped sandbox that is not persistent kept no disk to resume, unless a snapshot was taken of it.
-      const kept =
-        record.snapshotId === undefined
-          ? record.persistent
-          : !state.goneSnapshots.has(record.snapshotId);
-
-      if (!kept) return Effect.fail(new SnapshotGone({ call: SANDBOX_CALL.GET }));
-
-      record.status = SANDBOX_STATUS.RUNNING;
-      record.running = nextRun();
-      state.resumed.push({ name: record.name, running: record.running });
-
-      return Effect.succeed(record);
     });
 
   const command = (
@@ -412,18 +364,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         sandboxName,
         Effect.sync(() => state.drives.has(ownDriveName(sandboxName))),
       ),
-    resume: (name) =>
-      scripted(
-        SANDBOX_CALL.GET,
-        name,
-        Effect.suspend((): Effect.Effect<OpenedSandbox, SandboxError> => {
-          const record = state.sandboxes.get(name);
-
-          return record === undefined
-            ? Effect.fail(new SandboxGone({ call: SANDBOX_CALL.GET }))
-            : Effect.map(resumed(record), listedOf);
-        }),
-      ),
     create: (ask) =>
       scripted(
         SANDBOX_CALL.CREATE,
@@ -442,22 +382,17 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         Effect.gen(function* () {
           const standing = state.sandboxes.get(ask.name);
 
-          // A stopped sandbox whose own drive stands is made anew on that drive rather than resumed, where the ask names its own.
-          const replaced =
-            standing !== undefined &&
-            ask.drive !== undefined &&
-            "own" in ask.drive &&
-            standing.status === SANDBOX_STATUS.STOPPED &&
-            state.drives.has(ownDriveName(ask.name));
+          if (standing?.status === SANDBOX_STATUS.RUNNING) return listedOf(standing);
 
-          if (standing !== undefined && !replaced) {
-            const woken = yield* Effect.result(resumed(standing));
-
-            if (Result.isSuccess(woken)) return listedOf(woken.success);
-          }
-
-          // Note that a resume fails only with `SnapshotGone`, so a failed one is a sandbox to make anew.
+          // A sandbox not up kept nothing but its drive, so it is deleted and made anew, its own drive
+          // mounted again; its sessions go with it, its ended ones handed on first, as a delete hands them.
           if (standing !== undefined) {
+            const gone = state.sessions.filter((session) => session.sandboxName === ask.name);
+            const ended = gone.filter((session) => session.ended !== undefined);
+
+            if (ended.length > 0) yield* (yield* EndedSessionsOnDelete)(ended);
+
+            for (const session of gone) state.sessions.splice(state.sessions.indexOf(session), 1);
             state.sandboxes.delete(ask.name);
             state.deleted.push(ask.name);
           }
@@ -647,21 +582,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           state.policies.push({ name: record.name, running: record.running, policy });
         }),
       ),
-    snapshot: (target, expiresAfter) =>
-      scripted(
-        SANDBOX_CALL.SNAPSHOT,
-        nameOf(target),
-        Effect.gen(function* () {
-          const record = yield* up(SANDBOX_CALL.SNAPSHOT, target);
-          const id = nextSnapshot();
-          const lapseMs = Duration.isFinite(expiresAfter) ? Duration.toMillis(expiresAfter) : 0;
-          state.snapshots.push({ id, name: record.name, running: record.running, lapseMs });
-          stop(record);
-          record.snapshotId = id;
-
-          return id;
-        }),
-      ),
     touch: (name) =>
       scripted(
         SANDBOX_CALL.TOUCH,
@@ -685,8 +605,6 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         status: SANDBOX_STATUS.RUNNING,
         running: nextRun(),
         tags: {},
-        snapshotId: undefined,
-        persistent: true,
         createdAt: 0,
         from: { image: "memory-image" },
         drive: undefined,

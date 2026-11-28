@@ -116,7 +116,7 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
   );
 
   it.effect(
-    "answers the snapshot missing where the script says so, no sandbox stands for the session, or the stopped sandbox's own snapshot is gone, and failed where it exits otherwise",
+    "answers the snapshot missing where the script says so, no sandbox stands for the session, or the stopped sandbox's own drive is gone, and failed where it exits otherwise",
     () =>
       Effect.gen(function* () {
         assert.equal(
@@ -130,10 +130,8 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
         memory.stand({
           name: agentSandboxName(SESSION),
           status: SANDBOX_STATUS.STOPPED,
-          snapshotId: "snap_expired",
           tags: { sessionId: SESSION },
         });
-        memory.state.goneSnapshots.add("snap_expired");
 
         const outcome = yield* restoreCheckout(memory.service, {
           sessionId: SESSION,

@@ -9,7 +9,7 @@ import { Data, Duration, Effect, Option, type Redacted, Tracer } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import type { FirewallSources } from "./sandbox-firewall.js";
-import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
+import { SANDBOX_STATE_FOLDER } from "./sandbox-state-folder.js";
 
 /**
  * repository-shell.ts -- an agent's checkout of the task's GitHub repository in its session's sandbox: the clone, the workspace drive's folders, and the commit identity set in it.
@@ -95,7 +95,6 @@ const SHARED_CLONE = "-c core.sharedRepository=group";
 const CHECKOUT_SCRIPT = [
   "set -e",
   GROUP_WRITES,
-  LINK_SANDBOX_STATE_FOLDER,
   `if [ "$(cat ${SANDBOX_PATH.CHECKOUT_RECORD} 2>/dev/null)" != "$${SANDBOX_VARIABLE.REPOSITORY}" ]; then rm -rf repository; fi`,
   'partial="repository.$$"',
   'rm -rf "$partial"',
@@ -236,7 +235,6 @@ const NOT_HELD_EXIT = 3;
 const WORKSPACE_CLAIM_SCRIPT = [
   "set -e",
   GROUP_WRITES,
-  LINK_SANDBOX_STATE_FOLDER,
   `folder="$${SANDBOX_VARIABLE.FOLDER}"`,
   `if [ -L "$folder" ] || [ ! -d "$folder/.git" ]; then exit ${NOT_HELD_EXIT}; fi`,
   `branch="$${SANDBOX_VARIABLE.BRANCH}"`,

@@ -104,10 +104,9 @@ import { CURSOR_START } from "./transcript.js";
  * reasoning is left out, as a model does not read its earlier reasoning in
  * later turns either. The preamble
  * names where the source's work now stands: in the new agent's own
- * checkout, in a sandbox created from the latest snapshot of the source's
- * stopped one (`../machine/sandbox-machine.ts`), what it had not committed
- * included; for a source whose sandbox was not stopped on a snapshot, the
- * branch its checkout was copied to as the Start was made (`snapshot.ts`),
+ * checkout, on a fork of the drive of the source's stopped sandbox
+ * (`../machine/sandbox-machine.ts`), what it had not committed included; for
+ * a source whose sandbox was not stopped, the branch its checkout was copied to as the Start was made (`snapshot.ts`),
  * what it had not pushed included, or, where it could not be copied, the
  * branch and pull request it left, read from its row rather than from
  * GitHub, so the new agent checks that branch out and goes on there. A
@@ -711,16 +710,16 @@ function carriedWhere(carried: CarriedWork): string {
   );
 }
 
-/** Where the source's work reaches the new agent: in the latest snapshot of its stopped sandbox, or the copy pushed for it (`snapshot.ts`). */
-export const TAKEN_ON = { SNAPSHOT: "snapshot", COPY: "copy" } as const;
+/** Where the source's work reaches the new agent: on a fork of its stopped sandbox's drive, or the copy pushed for it (`snapshot.ts`). */
+export const TAKEN_ON = { DRIVE: "drive", COPY: "copy" } as const;
 
 export type SourceWork =
-  | { readonly on: typeof TAKEN_ON.SNAPSHOT; readonly sandbox: string }
+  | { readonly on: typeof TAKEN_ON.DRIVE; readonly sandbox: string }
   | { readonly on: typeof TAKEN_ON.COPY; readonly copy: SnapshotOutcome };
 
-/** What the new agent's row keeps of where the source's work reached it: the sandbox whose snapshot its own is created from, or the branch the copy was pushed to. */
+/** What the new agent's row keeps of where the source's work reached it: the sandbox whose drive its own is forked from, or the branch the copy was pushed to. */
 function startedOn(work: SourceWork): Pick<StoredStartedFrom, "branch" | "sandbox"> {
-  if (work.on === TAKEN_ON.SNAPSHOT) return { sandbox: work.sandbox };
+  if (work.on === TAKEN_ON.DRIVE) return { sandbox: work.sandbox };
 
   return work.copy.copied ? { branch: work.copy.branch } : {};
 }
@@ -742,13 +741,13 @@ function ownBranchWords(
 }
 
 /**
- * Where the source's work stands for the new agent whose sandbox is created
- * from the snapshot of the source's: in its own checkout, as the source
+ * Where the source's work stands for the new agent whose drive is forked
+ * from the source's: in its own checkout, as the source
  * left it, on the source's branch. A continue in its source's open pull request goes on
  * there; any other work moves to a branch of its own first, so it never
  * pushes onto the source's.
  */
-function onSnapshotWhere(
+function onDriveWhere(
   source: Agent,
   published: AgentPullRequest | null,
   carried: CarriedWork | undefined,
@@ -786,8 +785,8 @@ function whereOf(
   carried: CarriedWork | undefined,
   inPullRequest: boolean,
 ): string {
-  if (work.on === TAKEN_ON.SNAPSHOT) {
-    return onSnapshotWhere(source, published, carried, inPullRequest);
+  if (work.on === TAKEN_ON.DRIVE) {
+    return onDriveWhere(source, published, carried, inPullRequest);
   }
 
   const { copy } = work;
@@ -835,8 +834,8 @@ function whereOf(
 
 /**
  * What the new agent is told of the repositories its source worked in
- * beside its own, which it works in too: from a snapshot of the source's
- * sandbox, that their checkouts came with its own, as it left them; otherwise,
+ * beside its own, which it works in too: on a fork of the source's
+ * drive, that their checkouts came with its own, as it left them; otherwise,
  * checked out again at the branches they started on, that only the
  * source's own checkout was copied (`snapshot.ts`), so nothing it had not
  * pushed in them came along, and where it pushed a branch and opened a pull
@@ -847,7 +846,7 @@ function extrasWords(extras: readonly AgentRepositoryEntry[], work: SourceWork):
   if (extras.length === 0) return "";
   const named = extras.map((each) => `\`${each.repository}\``).join(", ");
 
-  if (work.on === TAKEN_ON.SNAPSHOT) {
+  if (work.on === TAKEN_ON.DRIVE) {
     return ` It also worked in ${named} beside its own repository, which you work in too, their checkouts copied with its own as it left them.`;
   }
 

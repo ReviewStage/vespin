@@ -7,8 +7,11 @@
  * the project `codex`, the thread as its session, and the file's path under
  * `CODEX_HOME` as its subpath, as the SDK keeps a file that belongs to a
  * session. A thread resumed or forked has each of its files written back
- * to its own path where it is missing, so app-server finds it by the
- * thread's id as ever. A mirror reads the file past what it already sent,
+ * to its own path where it is missing, as in every sandbox made again from
+ * the image, so app-server finds it by the thread's id as ever. Note that a
+ * file standing is left as it is, because a runner launched again in a
+ * sandbox still up finds the file its last launch wrote, which may hold
+ * lines the store does not hold yet. A mirror reads the file past what it already sent,
  * whole lines alone, and sends them; one the store did not take is sent
  * again with the next turn's.
  *

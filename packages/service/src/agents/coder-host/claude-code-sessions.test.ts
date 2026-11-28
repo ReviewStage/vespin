@@ -181,7 +181,6 @@ import {
   agentSandboxName,
   openAgentSandboxPromptly,
   reopenedOf,
-  SANDBOX_NAME,
   SESSION_TAG,
 } from "../agent-sandbox-open.js";
 import { turnContent } from "../attached-files.js";
@@ -2773,59 +2772,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
-  it.effect(
-    "a message to an agent whose sandbox stopped answers once its line is queued, and its turn's delivery resumes the sandbox once the stop's snapshot is taken",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
-        const sequence = { next: 0 };
-        // The resume is tried again a spacing apart while the stop's snapshot is taken.
-        const spaced = yield* spacedClock(CODER.RESUME_WHILE_ENDING.SPACING);
-
-        const sessions = yield* sessionsFor(userId, sequence).pipe(
-          Effect.provide(services(api)),
-          Effect.provideService(Clock.Clock, spaced.clock),
-        );
-
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(agent, "Fix the invitations."),
-        );
-
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        yield* recordHeldSession(userId, agent);
-        sequence.next = 42;
-        yield* runnerTook(agent.id);
-        yield* runnerEnded({
-          target: { userId, conversationId: agent.conversationId },
-          sessionId: opened.sessionId,
-          sequence: 41,
-        }).pipe(Effect.provide(api.layer));
-        api.idleStop();
-        // The stop's snapshot is still being taken as the message arrives, past more than one try.
-        api.snapshotting.remaining = 3;
-
-        const sent = yield* sessions.send(
-          opened.sessionId,
-          yield* writtenLine(agent, "Now the emails."),
-        );
-
-        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        assert.equal(api.sandboxes[0]?.status, "stopped");
-        assert.equal(api.commands.length, 1);
-        yield* spaced.waitedOut(sessions.deliverTurn(opened.sessionId, agent.conversationId));
-        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
-        assert.equal(api.commands.length, 2);
-        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
-        assert.equal(config.resume, CLI_SESSION);
-        assert.deepEqual((yield* handedLines(userId, api.commands[1])).map(developerContent), [
-          [{ type: "text", text: "Now the emails." }],
-        ]);
-      }),
-  );
-
   /**
    * An agent whose session opened with every experiment of its workspace off
    * and took one step, its runner since ended, and whose workspace then
@@ -3543,7 +3489,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   // Note that an agent from before the store keeps no transcript there, so its session starts fresh.
   for (const stored of [true, false]) {
     it.effect(
-      `a message after the stopped sandbox's snapshot expired deletes it and goes on in a fresh sandbox under the same name from the image, ${stored ? "resuming the CLI's session from the transcript the service keeps" : "starting the CLI's session fresh where the service keeps no transcript of it"}, and the installed skills written again`,
+      `a message after the sandbox stopped deletes it and goes on in a fresh sandbox under the same name from the image, ${stored ? "resuming the CLI's session from the transcript the service keeps" : "starting the CLI's session fresh where the service keeps no transcript of it"}, and the installed skills written again`,
       () =>
         Effect.gen(function* () {
           vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3586,7 +3532,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           api.idleStop();
           const [expired] = api.sandboxes;
           assert.ok(expired !== undefined);
-          expired.snapshotExpired = true;
 
           const sent = yield* sentAndDelivered(
             sessions,
@@ -3602,7 +3547,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           assert.equal(fresh.status, "running");
           assert.equal(fresh.name, expired.name);
           assert.equal(fresh.tags[SESSION_TAG], opened.sessionId);
-          assert.deepEqual([fresh.image, fresh.sourceSnapshotId], [expired.image, undefined]);
+          assert.equal(fresh.image, expired.image);
           const relaunch = api.commands[1];
           assert.equal(relaunch?.sandboxSessionId, fresh.currentSessionId);
           const { config } = yield* launchRead(relaunch, readClaudeCodeConfig);
@@ -3610,7 +3555,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           assert.equal(config.resume, stored ? CLI_SESSION : undefined);
           assert.ok(line?.type === INPUT_LINE.MESSAGE);
           assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
-          // The installed skills went with the expired disk, so the fresh sandbox is handed them again.
+          // The installed skills went with the old disk, so the fresh sandbox is handed them again.
           assert.equal(skillUploads(), 2);
           // The session is found again by its tag, in the new sandbox alone.
           const found = yield* sessions.send(opened.sessionId, message(agent, "And the docs."));
@@ -3621,7 +3566,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   }
 
   it.effect(
-    "a replacement for an expired sandbox that could not launch fails its turn and leaves the session standing for the next message",
+    "a sandbox made again that could not launch fails its turn and leaves the session standing for the next message",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -3646,7 +3591,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         api.idleStop();
         const [expired] = api.sandboxes;
         assert.ok(expired !== undefined);
-        expired.snapshotExpired = true;
         // The fresh sandbox's readying fails once, so its runner never starts.
         api.hooks.runExit = (args) => (args[0] === "-n" ? 1 : 0);
 
@@ -3659,7 +3603,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(failed, TURN_HANDOVER.FAILED);
-        // The replacement took the expired sandbox's place under the session's name, and stands.
+        // The replacement took the stopped sandbox's place under the session's name, and stands.
         const replacement = api.sandboxes[1];
         assert.ok(replacement !== undefined);
         assert.deepEqual([expired.deleted, replacement.deleted], [true, false]);
@@ -3675,55 +3619,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
         assert.equal(api.sandboxes.length, 2);
         assert.equal(replacement.status, "running");
-      }),
-  );
-
-  it.effect(
-    "a stopped legacy sandbox's next launch opens the sandbox under the session's name from its snapshot, leaves the legacy one stopped, and a reset deletes both",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
-        const sequence = { next: 0 };
-        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
-
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(agent, "Fix the invitations."),
-        );
-
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        sequence.next = 42;
-        yield* runnerTook(agent.id);
-        yield* runnerEnded({
-          target: { userId, conversationId: agent.conversationId },
-          sessionId: opened.sessionId,
-          sequence: 41,
-        }).pipe(Effect.provide(api.layer));
-        api.idleStop();
-        const [legacy] = api.sandboxes;
-        assert.ok(legacy !== undefined);
-        // A sandbox opened before sandboxes were named after their session stands under a UUID, its tags the session's.
-        legacy.name = `${SANDBOX_NAME}${randomUUID()}`;
-        legacy.currentSnapshotId = "snap_legacy";
-
-        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
-
-        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        const moved = api.sandboxes[1];
-        assert.ok(moved !== undefined);
-        assert.deepEqual(
-          [moved.name, moved.sourceSnapshotId, moved.status],
-          [agentSandboxName(opened.sessionId), "snap_legacy", "running"],
-        );
-        assert.deepEqual([legacy.status, legacy.deleted], ["stopped", false]);
-        const relaunch = api.commands.at(-1);
-        assert.equal(relaunch?.sandboxSessionId, moved.currentSessionId);
-        // A reset deletes the legacy sandbox with the session's own, so its disk never comes back.
-        const reset = yield* sessions.reset(opened.sessionId);
-        assert.equal(reset.outcome, SESSION_RESET_OUTCOME.RESET);
-        assert.deepEqual([moved.deleted, legacy.deleted], [true, true]);
       }),
   );
 
@@ -4907,7 +4802,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.commands.length, 1);
         const own = sandboxOfAgent(api, agent);
         const drive = mountedDrive(api, own);
-        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(own?.image, IMAGE);
         assert.ok(drive !== undefined && drive.forkedFrom === undefined);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 1);
@@ -5041,7 +4936,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         const own = sandboxOfAgent(api, agent);
-        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(own?.image, IMAGE);
         assert.equal(mountedDrive(api, own)?.forkedFrom, drive.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.equal(ownRuns.filter(isClone).length, 0);
@@ -5156,7 +5051,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a message after a drive agent's sandbox stopped makes it again from the image with the drive its first open forked mounted, never resuming its snapshot, and its turns' restore points are still offered",
+    "a message after a drive agent's sandbox stopped makes it again from the image with the drive its first open forked mounted, and its turns' restore points are still offered",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -5192,10 +5087,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const fresh = sandboxOfAgent(api, agent);
         assert.ok(fresh !== undefined && fresh !== stopped);
         assert.equal(stopped.deleted, true);
-        assert.deepEqual(
-          [fresh.name, fresh.image, fresh.sourceSnapshotId],
-          [stopped.name, IMAGE, undefined],
-        );
+        assert.deepEqual([fresh.name, fresh.image], [stopped.name, IMAGE]);
         assert.equal(mountedDrive(api, fresh), drive);
 
         const kept = yield* Effect.flatMap(Database, (db) =>
@@ -5279,7 +5171,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* Effect.gen(function* () {
           const standing = yield* (yield* Sandbox).get(agentSandboxName(opened.sessionId));
           assert.ok(standing !== undefined);
-          yield* openAgentSandboxPromptly(yield* reopenedOf(opened.sessionId, standing));
+          yield* openAgentSandboxPromptly(reopenedOf(opened.sessionId, standing));
         }).pipe(Effect.provide(Layer.merge(api.layer, FIXTURE_IMAGE)));
 
         // Its fresh disk holds no mark of a launch's readying.
@@ -5297,7 +5189,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       Effect.gen(function* () {
         const { api, source, own } = yield* continuedFromDrive(false);
 
-        assert.deepEqual([own?.image, own?.sourceSnapshotId], [IMAGE, undefined]);
+        assert.equal(own?.image, IMAGE);
         assert.equal(mountedDrive(api, own)?.forkedFrom, mountedDrive(api, source)?.name);
         const ownRuns = api.runs.filter((run) => run.session === own?.currentSessionId);
         assert.deepEqual(

@@ -2,14 +2,14 @@
  * vocabulary.ts -- what a caller of a sandbox speaks in, whichever provider runs it: a sandbox's statuses, the calls made and the failures they answer, and the shapes of a sandbox, its run, its commands, its files, and its network policy.
  *
  * Nothing here names who asks or who answers: a sandbox is named, tagged,
- * and opened from the image or snapshot its caller hands, with the drive it
+ * and opened from the image its caller hands, with the drive it
  * asks for, what a name or a tag means is the caller's, and how a provider
  * spells any of it is its adapter's (`vercel/`).
  */
 
 import { Data, type Redacted } from "effect";
 
-/** Where a sandbox stands: on its way up, up, on its way down, or down with its disk kept for a resume. */
+/** Where a sandbox stands: on its way up, up, on its way down, or down, its disk discarded. */
 export const SANDBOX_STATUS = {
   STARTING: "starting",
   RUNNING: "running",
@@ -51,7 +51,6 @@ export const SANDBOX_CALL = {
   TOUCH: "touch",
   NETWORK_POLICY: "network-policy",
   INTERACTIVE: "interactive",
-  SNAPSHOT: "snapshot",
   PORTS: "ports",
   RESIZE: "resize",
 } as const;
@@ -167,8 +166,6 @@ export interface ListedSandbox {
   /** The run it is up in, or last ran, opaque to every caller but the provider. */
   readonly running?: string | undefined;
   readonly tags?: Readonly<Record<string, string>> | undefined;
-  /** The snapshot it resumes from, which its last stop or snapshot made. */
-  readonly snapshotId?: string | undefined;
   /** When the sandbox was created, in epoch milliseconds. */
   readonly createdAt?: number | undefined;
   /** The timeout each run of the sandbox opens with, reapplied at every resume. */
@@ -306,26 +303,26 @@ export interface CommandAsk {
 export type DetachedCommandAsk = CommandAsk &
   ({ readonly sudo: boolean } | { readonly user: string });
 
-/** What a sandbox is opened from: an image in the project's registry, or a snapshot. */
-export type SandboxSource = { readonly image: string } | { readonly snapshotId: string };
+/** What a sandbox is opened from: an image in the project's registry. */
+export interface SandboxSource {
+  readonly image: string;
+}
 
 /** What a sandbox's own drive is forked from: a base drive, by its name, or the drive another sandbox owns, by that sandbox's name. */
 export type DriveOrigin = { readonly base: string } | { readonly ownedBy: string };
 
 /**
  * A drive a sandbox opens with, mounted writable at the absolute path
- * `at`, its files kept apart from the sandbox's own disk and its snapshots:
+ * `at`, its files kept apart from the sandbox's own disk:
  * a base drive, by its name, made empty where none stands, mounted to be
  * filled (`fill`), which one sandbox fills at a time and many fork; or a
  * drive of the sandbox's own forked from a base drive or from another
  * sandbox's own (`fork`), copying its files as they stand; or the sandbox's
  * own drive (`own`): the one an earlier create under its name forked or
- * made, mounted again as it stands, else one made empty. Where `getOrCreate`
- * names its own, a stopped sandbox under the name whose own drive stands is
- * never resumed from its snapshot: it is deleted, its drive kept, and made
- * again from the ask's source with that drive mounted, so its work comes
- * back on the drive and nothing else of its old disk does; one with no
- * drive of its own resumes as before. A sandbox owns the drive it forked or
+ * made, mounted again as it stands, else one made empty. A create under a
+ * name whose own drive stands mounts that drive whatever the ask names but a
+ * fill, so a stopped sandbox `getOrCreate` makes again comes back with its
+ * work on the drive and nothing else of its old disk. A sandbox owns the drive it forked or
  * made, which its delete deletes with it, so neither goes without the other;
  * it never owns a base drive, which no sandbox's delete touches. A fork whose
  * origin is missing, or was never filled, answers as gone (`SandboxGone`).
@@ -347,11 +344,11 @@ export interface SandboxUser {
 }
 
 /**
- * A sandbox opened from an image or a snapshot: its name, what it is opened
+ * A sandbox opened from an image: its name, what it is opened
  * from, the drive it opens with where it asks one, its tags, how large a run
  * is, and its variables. Each run lasts `SANDBOX_IDLE` past its last touch,
- * which no caller chooses. It is not persistent: a stop discards its disk
- * and keeps no snapshot, so only its drive outlives the run.
+ * which no caller chooses. It is not persistent: a stop discards its disk,
+ * so only its drive outlives the run.
  */
 export interface SandboxCreate {
   readonly name: string;

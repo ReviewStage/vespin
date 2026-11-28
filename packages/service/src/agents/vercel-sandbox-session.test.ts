@@ -38,7 +38,7 @@ it.effect(
       const sandbox = fake.sandboxes[0];
       assert.ok(sandbox !== undefined);
       sandbox.status = "stopped";
-      yield* api.resume(ref.name);
+      yield* api.getOrCreate(CREATE_ASK);
 
       yield* api.stop(ref);
       assert.equal(yield* api.commandExit(ref, command.id), COMMAND_GONE);
