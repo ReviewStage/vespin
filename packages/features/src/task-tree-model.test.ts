@@ -42,6 +42,16 @@ const SIDEBAR_VIEW = {
   now: 0,
 } as const;
 
+/** No group of the tree folded. */
+const NONE_FOLDED = () => false;
+
+/** Canceled tasks, every finished one shown, each sub-task folded under its parent. */
+const CANCELED_ALL: TaskTreeView = {
+  ...DEFAULT_TASK_TREE_VIEW,
+  statuses: [TASK_STATUS.CANCELED],
+  completed: COMPLETED_WINDOW.ALL,
+};
+
 /** A branch as the test reads it: a row's name, or its name and the branches under it. */
 type Named = string | readonly [string, readonly Named[]];
 
@@ -278,9 +288,27 @@ test("a settled task only Pinned holds draws no row the view's groups stand olde
   const all: TaskTreeView = { ...DEFAULT_TASK_TREE_VIEW, completed: COMPLETED_WINDOW.ALL };
 
   expect([
-    treeDrawsSettled(treeUnder(canceled), canceled),
-    treeDrawsSettled(treeUnder(all), all),
+    treeDrawsSettled(treeUnder(canceled), canceled, NONE_FOLDED),
+    treeDrawsSettled(treeUnder(all), all, NONE_FOLDED),
   ]).toEqual([false, true]);
+});
+
+test("a folded group draws no row for the paging to wait on, so it reads on while every group that may hold a settled task is folded", () => {
+  const tree = taskTree({
+    view: { tasks: [task("Digest", TASK_STATUS.TODO, "ada/relay", 40, { pinnedAt: 1 })] },
+    workspaceId: WORKSPACE,
+    readerId: READER,
+    noRepository: "No repository",
+    tasksHead: "My tasks",
+    treeView: CANCELED_ALL,
+    personName: (userId) => userId,
+    now: 0,
+  });
+
+  expect([
+    treeDrawsSettled(tree, CANCELED_ALL, NONE_FOLDED),
+    treeDrawsSettled(tree, CANCELED_ALL, () => true),
+  ]).toEqual([true, false]);
 });
 
 test("under All an open parent's finished sub-tasks past the list are read in whatever the statuses, while they fold under it", () => {

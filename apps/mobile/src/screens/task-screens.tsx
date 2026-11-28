@@ -3778,7 +3778,7 @@ type TasksSearch = { readonly search: string; readonly setSearch: (search: strin
  * first where it stops agents and its delete asking always, with the
  * questions that ask, and the pull that reads the list again.
  */
-function useTasksScreen({ search, setSearch }: TasksSearch) {
+function useTasksScreen({ search, setSearch }: TasksSearch, hold: TreeHold) {
   const read = useTasksListing(search);
   const doors = useTaskRowDoors(read.workspace?.id);
   const { listing, status, deletion } = useListingAsks(read, doors);
@@ -3789,6 +3789,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
     workspaceId: read.workspace?.id,
     treeView: read.treeView,
     tree: read.tree,
+    folded: hold.folded,
   });
 
   return { search, setSearch, listing, status, deletion, refreshTasks, viewMenu, settledPages };
@@ -4108,8 +4109,8 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
   const router = useRouter();
   const onTab = useOnTab();
   const [search, setSearch] = useState("");
-  const screen = useTasksScreen({ search, setSearch });
   const hold = useTreeHold();
+  const screen = useTasksScreen({ search, setSearch }, hold);
   const workspaceId = screen.listing.workspace?.id;
   const managers = useWorkspaceManagers(workspaceId);
   const managersListed = useManagersListed(workspaceId);
@@ -4181,8 +4182,8 @@ function TasksOwnRoot() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
-  const screen = useTasksScreen({ search, setSearch });
   const hold = useTreeHold();
+  const screen = useTasksScreen({ search, setSearch }, hold);
 
   return (
     <>

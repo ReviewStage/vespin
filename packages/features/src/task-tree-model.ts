@@ -558,14 +558,20 @@ export function treeGroupMayHoldSettled(group: TaskTreeGroup, treeView: TaskTree
   return group.head !== undefined && mayHoldSettled(group.head);
 }
 
-/** Whether any group of the tree that may hold a settled task draws a row, whose run has an end to come to (`settledRowsDrawn`). */
-export function treeDrawsSettled(tree: TaskTree, treeView: TaskTreeView): boolean {
+/** Whether any group of the tree that may hold a settled task draws a row, whose run has an end to come to (`settledRowsDrawn`); a group `folded` shut draws none, so it has no end to wait on. */
+export function treeDrawsSettled(
+  tree: TaskTree,
+  treeView: TaskTreeView,
+  folded: (group: TaskTreeGroup) => boolean,
+): boolean {
   return [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
     ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
-  ].some((group) => treeGroupMayHoldSettled(group, treeView) && group.rows.length > 0);
+  ].some(
+    (group) => treeGroupMayHoldSettled(group, treeView) && group.rows.length > 0 && !folded(group),
+  );
 }
 
 /**
