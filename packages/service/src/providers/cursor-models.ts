@@ -70,6 +70,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { ownApiKeyOf } from "../accounts/own-api-key.js";
 import { HostedEnvironment } from "../environment.js";
+import { afterResponse } from "../http/after-response.js";
 import { type OfferedModel, providerModelOf } from "./model-catalog.js";
 
 /** The first hosted API version (`HOSTED_API_VERSION`) whose clients read `cursor` as a provider; a catalog answer to an older one never holds a Cursor entry, which would refuse its whole read. */
@@ -80,6 +81,12 @@ const CURSOR_MODELS_URL = "https://api.cursor.com/v1/models";
 
 /** How long one account's read of Cursor's list stands before it is read again. */
 const CURSOR_MODELS_TTL = Duration.minutes(10);
+
+/** How long an expired list keeps standing while the read that replaces it is out, so concurrent calls start one read rather than each their own. */
+const CURSOR_MODELS_REFRESH_GRACE = Duration.minutes(1);
+
+/** The statuses by which Cursor says a key is no longer one it answers: revoked or invalid. */
+const CURSOR_KEY_REFUSED_STATUSES: readonly number[] = [401, 403];
 
 /** How many accounts' last lists the instance keeps, the least recently used let go first. */
 const CURSOR_MODELS_KEPT = 1_000;
@@ -438,7 +445,26 @@ function failureKind(failure: { readonly _tag: string }): string {
   return `${failure._tag}${status}`;
 }
 
-/** One read of Cursor's list on the key given, answered as the models we offer; none where Cursor did not answer it so. */
+/** What one read of Cursor's list came to: the models, Cursor's refusal of the key, or no list at all (down, timed out, an answer of another shape). */
+const CURSOR_READ = { LIST: "list", REFUSED: "refused", UNAVAILABLE: "unavailable" } as const;
+
+type CursorRead =
+  | { readonly kind: typeof CURSOR_READ.LIST; readonly models: readonly CursorModel[] }
+  | { readonly kind: typeof CURSOR_READ.REFUSED | typeof CURSOR_READ.UNAVAILABLE };
+
+/** The reads that carry no list. */
+const KEY_REFUSED: CursorRead = { kind: CURSOR_READ.REFUSED };
+const LIST_UNAVAILABLE: CursorRead = { kind: CURSOR_READ.UNAVAILABLE };
+
+/** Whether Cursor answered the failed read by refusing the key. */
+function keyRefused(failure: { readonly _tag: string }): boolean {
+  const response = Predicate.hasProperty(failure, "response") ? failure.response : undefined;
+  const status = Predicate.hasProperty(response, "status") ? response.status : undefined;
+
+  return CURSOR_KEY_REFUSED_STATUSES.some((refused) => refused === status);
+}
+
+/** One read of Cursor's list on the key given, answered as the models we offer, or as why there are none. */
 const readCursorList = Effect.fnUntraced(function* (
   client: HttpClient.HttpClient,
   key: Redacted.Redacted,
@@ -448,24 +474,24 @@ const readCursorList = Effect.fnUntraced(function* (
     HttpClientRequest.bearerToken(key),
   );
 
-  const models = yield* client.execute(request).pipe(
+  return yield* client.execute(request).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap(HttpClientResponse.schemaBodyJson(CursorListSchema)),
     Effect.scoped,
     Effect.timeout(CURSOR_MODELS_TIMEOUT),
-    Effect.map((answer) => cursorModelsOf(answer.items)),
+    Effect.map((answer): CursorRead => {
+      const models = cursorModelsOf(answer.items);
+
+      return models.length === 0 ? LIST_UNAVAILABLE : { kind: CURSOR_READ.LIST, models };
+    }),
     // Note that only the failure's kind and status are logged, because the request it describes carries the key.
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(`Cursor's model list could not be read: ${failureKind(failure)}`),
-        [],
+        keyRefused(failure) ? KEY_REFUSED : LIST_UNAVAILABLE,
       ),
     ),
   );
-
-  if (models.length === 0) return Option.none();
-
-  return Option.some(models);
 });
 
 /** One account's last read of Cursor's list, and until when it stands before it is read again. */
@@ -475,13 +501,16 @@ interface KeptList {
 }
 
 /**
- * Cursor's list as each account's key reads it, read again once
- * `CURSOR_MODELS_TTL` passed; the pinned models where the account saved no
- * Cursor key. Where Cursor's list could not be read, as when it timed out,
- * the account's last list stands until a read lands, the pinned models
- * where none was read yet, so an agent on a model Cursor listed keeps its
- * effort and window through Cursor's outage. The instance keeps the last
- * lists of `CURSOR_MODELS_KEPT` accounts.
+ * Cursor's list as each account's key reads it; the pinned models where the
+ * account saved no Cursor key. Only an account whose list this instance holds
+ * none of waits on Cursor: past `CURSOR_MODELS_TTL` the held list is answered
+ * at once and read again after the response. Where Cursor's list could not be
+ * read, as when it timed out, the account's last list stands until a read
+ * lands, the pinned models where none was read yet, so an agent on a model
+ * Cursor listed keeps its effort and window through Cursor's outage; where
+ * Cursor refuses the key, or the account no longer has one, the list is
+ * dropped. The instance keeps the last lists of `CURSOR_MODELS_KEPT`
+ * accounts.
  */
 export const cursorModelCatalogLayer = Layer.effect(
   CursorModelCatalog,
@@ -499,33 +528,58 @@ export const cursorModelCatalogLayer = Layer.effect(
       },
     );
 
-    const forAccount = Effect.fnUntraced(function* (userId: string) {
-      const now = yield* Clock.currentTimeMillis;
-      const standing = Option.flatten(yield* Cache.getOption(kept, userId));
-
-      if (Option.isSome(standing) && standing.value.until > now) return standing.value.models;
-
+    // Note that the read is keyed by the userId it is handed alone, so the key it reads and the list it keeps are always the one account's, whichever call or refresh it runs for.
+    const readAndKeep = Effect.fnUntraced(function* (userId: string) {
       const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.CURSOR, environment).pipe(
         Effect.catch(() => Effect.succeed(undefined)),
       );
 
-      if (key === undefined || key === PROVIDER_KEY_UNREADABLE) return PINNED_CURSOR_MODELS;
+      // A key the account no longer has leaves no list of it standing.
+      if (key === undefined || key === PROVIDER_KEY_UNREADABLE) {
+        yield* Cache.invalidate(kept, userId);
+
+        return Option.none<readonly CursorModel[]>();
+      }
+
       const read = yield* readCursorList(client, key);
 
-      if (Option.isNone(read)) {
-        return Option.match(standing, {
-          onNone: () => PINNED_CURSOR_MODELS,
-          onSome: (last) => last.models,
-        });
-      }
+      if (read.kind === CURSOR_READ.REFUSED) yield* Cache.invalidate(kept, userId);
+
+      if (read.kind !== CURSOR_READ.LIST) return Option.none<readonly CursorModel[]>();
+      const now = yield* Clock.currentTimeMillis;
 
       yield* Cache.set(
         kept,
         userId,
-        Option.some({ until: now + Duration.toMillis(CURSOR_MODELS_TTL), models: read.value }),
+        Option.some({ until: now + Duration.toMillis(CURSOR_MODELS_TTL), models: read.models }),
       );
 
-      return read.value;
+      return Option.some(read.models);
+    });
+
+    const forAccount = Effect.fnUntraced(function* (userId: string) {
+      const now = yield* Clock.currentTimeMillis;
+      const standing = Option.flatten(yield* Cache.getOption(kept, userId));
+
+      if (Option.isNone(standing)) {
+        return Option.getOrElse(yield* readAndKeep(userId), () => PINNED_CURSOR_MODELS);
+      }
+
+      if (standing.value.until > now) return standing.value.models;
+
+      // Note that an expired list is answered as it stands and read again past the answer, because it is the account's own last list and a call waiting on Cursor for a newer one would wait for nothing it needs; where Cursor refuses the key the read drops it, and where Cursor cannot be read it stands until a read lands.
+      yield* Cache.set(
+        kept,
+        userId,
+        Option.some({
+          until: now + Duration.toMillis(CURSOR_MODELS_REFRESH_GRACE),
+          models: standing.value.models,
+        }),
+      );
+
+      yield* afterResponse("Cursor's model list refresh", readAndKeep(userId));
+
+      return standing.value.models;
     });
 
     return { forAccount } satisfies CursorModelReader;

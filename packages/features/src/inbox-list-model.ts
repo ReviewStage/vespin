@@ -58,8 +58,10 @@ import {
   optionsCarryMedia,
   recommendedLabels,
 } from "./inbox-wire.js";
+import type { ReadLink } from "./link-grammar.js";
 import type { ManagerFace } from "./manager-face.js";
 import { insideCode } from "./mention-link.js";
+import { namedPlainLinks, type PlainLinkNames, placesSpelledIn } from "./place-chip-model.js";
 import { plainWords } from "./plain-words.js";
 import { matchesTokens } from "./search-tokens.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -78,6 +80,12 @@ export const SEARCH_INBOX = "Search inbox";
 
 /** What the Inbox says while the account's feed of its threads is first read. */
 export const READING_INBOX = "Reading your inbox…";
+
+/** What the placeholder row under All's rows says while the next page of older items is read. */
+export const READING_OLDER_INBOX = "Reading older items…";
+
+/** What the placeholder rows a search has found nothing in yet say while the service is still asked for older items it finds. */
+export const SEARCHING_OLDER_INBOX = "Searching older items…";
 
 /** What the Inbox, the window's or a task's own, says where a read of its items did not answer. */
 export const INBOX_NOT_READ = "The inbox could not be read.";
@@ -258,6 +266,11 @@ function closedByMember(item: InboxFields): boolean {
 /** A member named on an item, as an answer's or a message's writer. */
 type InboxMember = NonNullable<InboxItem["answeredBy"]>;
 
+/** A preview's plain words with each place of ours spelled bare said by its chip's name (`namedPlainLinks`), where the client hands what it holds; as written where it hands nothing. */
+function linksNamed(words: string, links: PlainLinkNames | undefined): string {
+  return links === undefined ? words : namedPlainLinks(words, links);
+}
+
 /** What parts a preview's words, as a menu's detail parts them. */
 const PREVIEW_PART = " · ";
 
@@ -291,10 +304,11 @@ export function inboxPreview(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.words);
+  return linksNamed(previewOf(line, nameOf, ticked, line.words), links);
 }
 
 /**
@@ -307,10 +321,11 @@ export function inboxPreviewHeard(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): string {
   const line = itemLine(item);
 
-  return previewOf(line, nameOf, ticked, line.heard);
+  return linksNamed(previewOf(line, nameOf, ticked, line.heard), links);
 }
 
 /** What an item's second line leads with, as its glyph says it: the kind of ask that waits, an answer that settled it, a member's resolve, or words alone. */
@@ -508,12 +523,28 @@ export function inboxPreviewPieces(
   item: InboxRow,
   nameOf: (member: InboxMember | undefined) => string,
   ticked?: readonly number[],
+  links?: PlainLinkNames,
 ): readonly InboxLinePiece[] {
   const line = itemLine(item);
 
-  if (line.ask !== undefined) return [previewOf(line, nameOf, ticked, line.words)];
+  if (line.ask !== undefined) {
+    return [linksNamed(previewOf(line, nameOf, ticked, line.words), links)];
+  }
 
-  return line.byAgent ? line.pieces : [`${nameOf(line.member)}: `, ...line.pieces];
+  const pieces = line.pieces.map((piece) =>
+    Predicate.isString(piece) ? linksNamed(piece, links) : piece,
+  );
+
+  return line.byAgent ? pieces : [`${nameOf(line.member)}: `, ...pieces];
+}
+
+/**
+ * Every place of ours an item's line spells bare (`placesSpelledIn`), which
+ * a client reads the names of before it says the line, by `inboxPreview`'s
+ * reading with no links named.
+ */
+export function inboxPreviewPlaces(item: InboxRow): readonly ReadLink[] {
+  return placesSpelledIn(itemLine(item).words);
 }
 
 /** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
@@ -745,6 +776,23 @@ function askWords(ask: InboxReadAsk | undefined): readonly string[] {
   return fieldWords(ask.fields ?? []);
 }
 
+/**
+ * Every line of words one message says, as a search reads it: its words,
+ * each file it names read as its name, and what it asks, picks, or fills in;
+ * those of an item's thread are its words after its title
+ * (`inboxItemWords`), and a thread kept apart from its messages keeps each
+ * message's beside it, so a search finds them where they are kept.
+ */
+export function inboxMessageWords(message: InboxMessage): readonly string[] {
+  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
+  return [
+    plainWords(markersAsNames(message.text)),
+    ...askWords(message.ask),
+    ...(message.answers?.choices ?? []),
+    ...valueWords(message.answers?.values),
+  ].filter((each) => each.length > 0);
+}
+
 /** Each item's words as `inboxItemWords` last read them, kept for as long as the item stands. */
 const itemWords = new WeakMap<InboxItem, readonly string[]>();
 
@@ -762,14 +810,7 @@ export function inboxItemWords(item: InboxItem): readonly string[] {
 
   if (kept !== undefined) return kept;
 
-  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
-  const said = (item.thread ?? []).flatMap((message) => [
-    plainWords(markersAsNames(message.text)),
-    ...askWords(message.ask),
-    ...(message.answers?.choices ?? []),
-    ...valueWords(message.answers?.values),
-  ]);
-
+  const said = (item.thread ?? []).flatMap(inboxMessageWords);
   const words = [item.title, ...said].filter((each) => each.length > 0);
   itemWords.set(item, words);
 
@@ -879,6 +920,14 @@ export type InboxWhose =
   | { readonly kind: typeof INBOX_WHOSE.EVERYONE }
   | { readonly kind: typeof INBOX_WHOSE.MINE }
   | { readonly kind: typeof INBOX_WHOSE.PERSON; readonly userId: string; readonly name: string };
+
+/** What the Inbox's view menu calls its choices beside its scopes: whom the items are addressed to, its people, and the switch that stands the pinned tasks' items first, on every client. */
+export const INBOX_VIEW_WORDS = {
+  WHOSE: "Addressed to",
+  ANYONE: "Anyone",
+  ME: "Me",
+  PINNED_FIRST: "Pinned tasks first",
+} as const;
 
 /** Anyone's items, as a task's own Inbox lists them. */
 export const EVERYONES: InboxWhose = { kind: INBOX_WHOSE.EVERYONE };
@@ -1053,7 +1102,7 @@ function needsReader(item: InboxRow, readerId: string | undefined): boolean {
  * Whether an item waits on the reader at `now`: it needs them (`needsReader`)
  * and holds no reminder still ahead (`remindsLater`), what Open lists for them
  * and every count of what needs them counts, the sidebar's Inbox row's among
- * them (`places-waiting.ts`'s `waitingThreads`).
+ * them.
  */
 export function waitsOnReaderNow(
   item: InboxRow,
@@ -1203,6 +1252,25 @@ export interface AgentThreadsLine {
   readonly opens: InboxRow;
 }
 
+/** Whether the agent `agentId` posted the thread, the one rule an agent's own Inbox, its Inbox tab and the line over its box count its threads by. */
+export function postedBy(agentId: string): (item: Pick<InboxFields, "agentId">) => boolean {
+  return (item) => item.agentId === agentId;
+}
+
+/** The groups narrowed to the threads the agent `agentId` posted, as an agent's own Inbox lists them, a group left with none let go. */
+export function agentInboxGroups<Holder extends InboxAnyHolder, Item extends InboxFields>(
+  groups: readonly InboxGroup<Holder, Item>[],
+  agentId: string,
+): InboxGroup<Holder, Item>[] {
+  const posts = postedBy(agentId);
+
+  return groups.flatMap((group) => {
+    const items = group.items.filter(posts);
+
+    return items.length === 0 ? [] : [{ holder: group.holder, items }];
+  });
+}
+
 /**
  * The line over an agent's box, as the panel's threads dock draws it: while
  * any of the agent's threads waits on the reader, Inbox and how many wait,
@@ -1215,7 +1283,7 @@ export function agentThreadsLine(
   readerId: string | undefined,
   now: number,
 ): AgentThreadsLine | undefined {
-  const posted = items.filter((item) => item.agentId === agentId);
+  const posted = items.filter(postedBy(agentId));
 
   const waiting = posted
     .filter((item) => waitsOnReaderNow(item, readerId, now))

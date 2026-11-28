@@ -12,7 +12,6 @@ import {
   ListSection,
   LoadingRow,
   ManagerFaceRow,
-  ManagerFaceSheet,
   MenuPickRow,
   PickRows,
   Screen,
@@ -25,6 +24,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
+import { FaceSheet } from "../agents/face-ask.js";
 import { useFollowedAgent } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { useAgentModelPick } from "../agents/use-agent-model.js";
@@ -282,7 +282,7 @@ export function NewManagerScreen() {
           </ListSection>
         </SettingsForm>
       </Screen>
-      <ManagerFaceSheet
+      <FaceSheet
         face={face}
         presented={facePicking}
         onDismiss={() => setFacePicking(false)}
@@ -372,7 +372,7 @@ export function ManagerSettingsScreen() {
           )}
         </SettingsForm>
       </Screen>
-      <ManagerFaceSheet
+      <FaceSheet
         face={agent?.face}
         presented={facePicking}
         onDismiss={() => setFacePicking(false)}

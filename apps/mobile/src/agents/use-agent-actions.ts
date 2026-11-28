@@ -29,7 +29,11 @@ import {
   UNARCHIVE_FAILED,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
+import {
+  MANAGER_FACE_FAILED,
+  type ManagerFace,
+  sameManagerFace,
+} from "@repo/features/manager-face";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import {
   archiveStopWords,
@@ -254,7 +258,7 @@ export function useAgentActions(agentId: string, address: string | undefined): A
       send(() => acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), ACT_FAILED.RENAME);
     },
     changeFace: (face) => {
-      if (agent?.face?.character === face.character && agent.face.color === face.color) return;
+      if (sameManagerFace(agent?.face, face)) return;
       send(() => acts[ACT_KIND.AGENTS_FACE]({ agentId, face }), MANAGER_FACE_FAILED);
     },
     pin: () =>

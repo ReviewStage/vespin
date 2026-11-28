@@ -15,7 +15,7 @@ catalog:
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.183
+  ai: 7.0.184
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
   vitest: 5.1.2
@@ -304,6 +304,26 @@ patchedDependencies:
 # keeps, a catalog image and inks on an empty state, a list's edit mode as a
 # binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
+#
+# `@shopify/flash-list` 2.3.2 keeps a reader's place as rows above them change
+# height by holding the first visible row where it stood, but looks for that
+# row only among the rows it has drawn, and searches the whole data only once
+# the data changed or a correction is settling. A transcript row far taller
+# than FlashList's estimate, such as an automation's 15k-character prompt,
+# held at about 80 pt until it is first drawn, grows by more than the drawn
+# window as it is measured and pushes the reader's row out of it, so the
+# correction was skipped: a scroll up left the offset inside the prompt, with
+# some 25,000 pt of rows suddenly above it, and the reader stood at its first
+# line (STAG-5272). The patch searches the whole data whenever the row is
+# not among those drawn, and so that the row it finds is one the reader
+# stands on, refreshes it on every scroll rather than once the scroll's
+# momentum ends, and holds the first visible row already measured, never one
+# still at its estimate. It patches `dist/`, which Metro reads, never `src/`.
+# Upstream tracks the missing estimate for an unmeasured row as
+# Shopify/flash-list#2526 (fix PR #2531, open), and rows misplaced as they
+# are measured during a fast scroll as #2175. Delete the patch when a release
+# finds the held row outside its drawn rows.
+  "@shopify/flash-list@2.3.2": patches/@shopify__flash-list@2.3.2.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code

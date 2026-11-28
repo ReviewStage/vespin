@@ -43,7 +43,7 @@ import type { FileProbe, SandboxUpload } from "../machine/sandbox-upload.js";
  * from the checkout as the file tools resolve one, so the agent spells it
  * as it spelled it to them. Each refusal is one sentence the model reads,
  * naming the path, so the agent mends the block rather than the item. A
- * post's body may name a PDF the same way (`readSandboxBodyFile`), sniffed
+ * post's body may name a PDF the same way (`storeSandboxBodyFile`), sniffed
  * by its `%PDF-` and held to a PDF's bound, which the post keeps as a file
  * of its message rather than drawing it.
  *

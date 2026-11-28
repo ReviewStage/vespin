@@ -45,8 +45,9 @@ import {
 /**
  * account-preferences-follow.ts -- the account's preferences row, held for the signed-in session, followed over the service's held poll into the sync engine's pool by the account, told whole on its app-state slice, and every write to it drawn over it the moment it is asked.
  *
- * Every surface that draws the default agent, the chapters model, or the
- * Slack notifications switch reads them from this one row, as the sound
+ * Every surface that draws the default agent, the chapters model, the
+ * Slack notifications switch, or where New task's Runs on starts reads them
+ * from this one row, as the sound
  * player and Settings read the sounds the account keeps of its own, which the host
  * follows from the gate opening until the session ends, so a default chosen
  * on another device draws on every open window within the service's
@@ -115,6 +116,8 @@ function poolRowOf(
     agentContextWindow: row?.agentContextWindow ?? null,
     chaptersModel: row?.chaptersModel ?? null,
     slackNotifications: row?.slackNotifications ?? null,
+    runsOnMachine: row?.runsOnMachine ?? null,
+    runsOnDeviceId: row?.runsOnDeviceId ?? null,
     sounds: accountSoundsOfLiveRows(sounds, choices),
   };
 }

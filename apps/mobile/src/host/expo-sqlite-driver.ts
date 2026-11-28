@@ -28,6 +28,7 @@
 
 import type {
   KeptCollectionsDatabase,
+  KeptWordsDatabase,
   LocalDatabaseConnection,
   LocalDatabaseDriverSeam,
   LocalDatabaseValue,
@@ -129,6 +130,25 @@ async function collectionsAt(
   };
 }
 
+/** Opens the database the kept messages' words stand in at `file`, each statement run through `expo-sqlite`'s async API, off the JavaScript thread. */
+async function wordsAt(
+  openDatabaseAsync: OpenDatabaseAsync,
+  file: string,
+): Promise<KeptWordsDatabase> {
+  const { name, folder } = placed(file);
+  const database = await openDatabaseAsync(name, undefined, folder);
+
+  return {
+    exec: (sql) => database.execAsync(sql),
+    run: async (sql, params) => {
+      await database.runAsync(sql, [...params]);
+    },
+    all: (sql, params) =>
+      database.getAllAsync<Readonly<Record<string, LocalDatabaseValue>>>(sql, [...params]),
+    close: () => database.closeAsync(),
+  };
+}
+
 /**
  * The local database's driver on the device, over `openDatabase`, and its
  * kept collections' over `openDatabaseAsync`: `expo-sqlite`'s own
@@ -141,5 +161,6 @@ export function expoSqliteDriver(
   return {
     open: (file) => openAt(openDatabase, file),
     collections: (file) => collectionsAt(openDatabaseAsync, file),
+    words: (file) => wordsAt(openDatabaseAsync, file),
   };
 }

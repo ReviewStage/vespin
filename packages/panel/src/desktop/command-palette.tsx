@@ -69,6 +69,7 @@ import { fileName } from "@repo/features/code-ref-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { holderName, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
+import type { PlainLinkNames } from "@repo/features/place-chip-model";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SEARCH_FOUND_KIND, SHOW_ALL } from "@repo/features/search-found-model";
@@ -248,7 +249,8 @@ import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
-import { FileCard, fileLook } from "../tasks/file-ref.js";
+import { fileLook } from "../tasks/file-look.js";
+import { FileCard } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
@@ -267,6 +269,7 @@ import {
 import { anyChoiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import { isOverviewTab } from "../tasks/use-main-tabs.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { useServiceTaskSearch } from "../tasks/use-service-task-search.js";
@@ -1359,8 +1362,9 @@ function snippetOf(
 function inboxWords(
   { holder, item }: InboxListed<InboxAnyHolder>,
   wordsOf: InboxSearch["wordsOf"],
+  links: PlainLinkNames,
 ): RowWords {
-  const title = cardTitle(item.title);
+  const title = cardTitle(item.title, links);
 
   return { label: title, terms: [title, holderName(holder)], keywords: wordsOf(item) };
 }
@@ -2537,7 +2541,8 @@ export function CommandPalette({
     tasks.signedIn &&
     (filter === PALETTE_FILTER.INBOX || tokens.length > 0 || (pageEmpty && inboxOn));
 
-  const inboxSearch = useInboxSearch(tasks, inboxAsked);
+  const inboxSearch = useInboxSearch(tasks, inboxAsked, sought);
+  const linkNames = usePlainLinkNames();
 
   // Note that each Inbox item's words are read once for the items pushed rather than on every key.
   const inboxList = useMemo(
@@ -2545,10 +2550,10 @@ export function CommandPalette({
       inboxAsked
         ? inboxSearch.items.map((listed) => ({
             listed,
-            words: inboxWords(listed, inboxSearch.wordsOf),
+            words: inboxWords(listed, inboxSearch.wordsOf, linkNames),
           }))
         : [],
-    [inboxAsked, inboxSearch.items, inboxSearch.wordsOf],
+    [inboxAsked, inboxSearch.items, inboxSearch.wordsOf, linkNames],
   );
 
   // Note that the automations are held the first time they are searched, on the Inbox's terms.

@@ -22,7 +22,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { POPOVER_WIDTH, STATUS_TONE } from "@repo/ui";
 import { GLYPH, SmileIcon } from "@repo/ui/icons";
-import { ManagerFaceMenuPanel } from "@repo/ui/manager-face-picker";
 import { type InlineRename, useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -52,12 +51,12 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceMenuPanel } from "./manager-face-recent.js";
 import {
   type ManagerSettingsSubject,
   useManagerSettingsDialog,
 } from "./manager-settings-dialog.js";
-import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
+import { type TranscriptRead, useTranscriptCopier } from "./transcript-copier.js";
 
 /**
  * agent-actions.tsx -- one coding agent's menu, built once (`agentMenuGroups`) and drawn the same wherever the agent is drawn: its tab's right-click and its column's ⋯ on a task, and its rows in the sidebar, a task's summary, a person's page, the sidebar's pins, and the summary's Archived.
@@ -555,9 +554,8 @@ export function useAgentActions(
               icon: <SmileIcon />,
               width: POPOVER_WIDTH.FIT,
               panel: ({ close }) => (
-                <ManagerFaceMenuPanel
+                <RecentManagerFaceMenuPanel
                   face={agent.face}
-                  recent={RECENT_MANAGER_FACES}
                   onChange={(next) => {
                     changeFace(next);
                     close();

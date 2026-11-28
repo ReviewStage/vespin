@@ -6,6 +6,7 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { LIVE_VOICE } from "@repo/features/voices";
 import { AGENT_ENTER, COMMIT_AUTHOR, EXPERIMENT, SOUND_WHEN } from "@repo/settings";
+import { DIFF_LAYOUT } from "@repo/settings/diff-view";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
@@ -29,8 +30,10 @@ import {
  * choice is a part of its own on the same terms: written alone, it moves no
  * instant, and the shared part's write leaves it standing. So is the
  * chapters model, which reads as Haiku until the account chooses and for a
- * stored value no build lists any more. The role is read off the account's
- * own row and no other's.
+ * stored value no build lists any more. The diff display's choices are
+ * read back through their settings' guards, so a theme no build lists any
+ * more reads as none. The role is read off the account's own row and no
+ * other's.
  *
  * Synthetic accounts throughout.
  */
@@ -95,6 +98,24 @@ it.layer(getTestDB())("the account store's experiments", (it) => {
       const read = yield* readAccountPreferences(userId);
       assert.deepEqual(read?.experiments, { [EXPERIMENT.MEMORY]: true });
     }),
+  );
+
+  it.effect(
+    "a diff theme no build lists any more reads as none, and the rest of the diff display still reads",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openAccount;
+        yield* writeAccountPreferences(userId, { diffLayout: DIFF_LAYOUT.SPLIT, wordWrap: false });
+        const db = yield* Database;
+        yield* db
+          .update(accountPreference)
+          // A theme written by a build that offered one this one no longer does.
+          .set({ diffDarkTheme: "retired-theme" })
+          .where(eq(accountPreference.userId, userId));
+
+        const read = yield* readAccountPreferences(userId);
+        assert.deepEqual(read?.preferences, { diffLayout: DIFF_LAYOUT.SPLIT, wordWrap: false });
+      }),
   );
 
   it.effect("an experiments write is no snapshot a Mac would take over its own settings", () =>

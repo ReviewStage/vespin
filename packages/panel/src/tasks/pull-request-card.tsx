@@ -75,10 +75,12 @@ import { usePlaceStanding } from "./use-link-standing.js";
  * end, and its labels as the tab's (`PullRequestLabels`). Its reviewers, where
  * known, are listed under a rule, each row a face and a name with where they
  * stand at its end, every one of them, scrolling past a few rows. At its foot,
- * under a rule as a task card's creator stands, one row says who opened it:
- * "Opened by octo-dev", or where one of the window's agents opened it for
- * them, the agent's tile wearing their face at its corner, "Opened by Invite
- * flow for octo-dev". Every face the card draws is one size, the tab's line's
+ * under a rule as a task card's creator stands, a row says who opened it, the
+ * person first, their face and their whole name, "Opened by octo-dev", as the
+ * tab's line leads with them; where one of the window's agents opened it for
+ * them, a row under it names the agent by its tile, "via Invite flow", and
+ * where no person is known the agent alone opened it, "Opened by Invite flow".
+ * Every face the card draws is one size, the tab's line's
  * (`ACTOR_SIZE.INLINE`), and every name in it hangs its card and opens what it
  * names: a person their page, an agent its tab.
  */
@@ -185,7 +187,16 @@ function ChecksRow({ pullRequest }: { pullRequest: CardedPullRequest }): React.J
   );
 }
 
-/** Its branches and the lines it changes, as the Pull request tab's header draws them on its branch row: each branch a chip that copies its name, `main ← topic`, then the lines; nothing where neither is known. */
+/**
+ * Its branches and the lines it changes, as the Pull request tab's header
+ * draws them on its branch row: each branch a chip that copies its name,
+ * `main ← topic`, then the lines; nothing where neither is known. Note that
+ * the branches are pulled back by a chip's lead, its inset and hairline,
+ * because the chips' glyphs stand that far inside their wash, so the base's
+ * glyph stands on the card's glyph column, as the tab's branch row is pulled
+ * back onto its line's faces; the lines, wrapped onto a line of their own
+ * where the branches fill the row, keep the card's edge.
+ */
 function BranchRow({
   branches,
   lines,
@@ -198,7 +209,9 @@ function BranchRow({
   return (
     <Inline gap={GAP.CONTROL} className="pull-request-card-branches min-w-0">
       {branches === undefined ? null : (
-        <PullRequestBranches base={branches.base} head={branches.head} />
+        <span className="inline-flex min-w-0 -ms-chip-lead">
+          <PullRequestBranches base={branches.base} head={branches.head} />
+        </span>
       )}
       {lines === undefined ? null : (
         <LinesChanged additions={lines.additions} deletions={lines.deletions} />
@@ -239,12 +252,14 @@ export function OpenedByRow({
 
 /**
  * The card's foot: who opened the pull request, as a task card says who
- * created a task (`task-card.tsx`'s `CreatorDetail`). Where one of the
- * window's agents opened it, the agent's tile wears the person's face at its
- * corner and the row says "Opened by Invite flow for octo-dev"; else the
- * person's face and "Opened by octo-dev". Each name hangs its card and opens
- * what it names, the agent its tab and the person their page. No time
- * stands here, since the head's line already says the age.
+ * created a task (`task-card.tsx`'s `CreatorDetail`), the person first as the
+ * Pull request tab's line leads with them: their face and "Opened by
+ * octo-dev". Where one of the window's agents opened it for them, a row under
+ * it names the agent by its tile, "via Invite flow", so the person's name is
+ * never cut short for the agent's; where no person is known, the agent's tile
+ * and "Opened by Invite flow". Each name hangs its card and opens what it
+ * names, the agent its tab and the person their page. No time stands here,
+ * since the head's line already says the age.
  */
 function OpenedFoot({
   opener,
@@ -256,47 +271,57 @@ function OpenedFoot({
   const name = useNamer();
   const person = opener === undefined ? undefined : name(opener);
 
-  if (person === undefined && agent === undefined) return null;
+  const agentRef =
+    agent === undefined ? null : (
+      <AgentActorRef subject={agent.subject} models={agent.models} onOpen={agent.onOpen} nameOnly />
+    );
 
-  const personRef = person === undefined ? null : <ActorRef actor={person} sentence nameOnly />;
+  const agentMark =
+    agent === undefined ? null : <ActorMark actor={agent.subject.tile} size={ACTOR_SIZE.INLINE} />;
+
+  if (person === undefined) {
+    return agent === undefined ? null : (
+      <HoverCardRow
+        data-pull-request-opener=""
+        look={HOVER_CARD_ROW_LOOK.DETAIL}
+        glyph={agentMark}
+        label={
+          <>
+            {"Opened by "}
+            {agentRef}
+          </>
+        }
+      />
+    );
+  }
 
   return (
-    <HoverCardRow
-      data-pull-request-opener=""
-      look={HOVER_CARD_ROW_LOOK.DETAIL}
-      glyph={
-        agent === undefined ? (
-          person === undefined ? null : (
-            <ActorMark actor={person} size={ACTOR_SIZE.INLINE} />
-          )
-        ) : (
-          <ActorMark actor={agent.subject.tile} size={ACTOR_SIZE.INLINE} forWhom={person} />
-        )
-      }
-      label={
-        <>
-          {"Opened by "}
-          {agent === undefined ? (
-            personRef
-          ) : (
+    <>
+      <HoverCardRow
+        data-pull-request-opener=""
+        look={HOVER_CARD_ROW_LOOK.DETAIL}
+        glyph={<ActorMark actor={person} size={ACTOR_SIZE.INLINE} />}
+        label={
+          <>
+            {"Opened by "}
+            <ActorRef actor={person} sentence nameOnly />
+          </>
+        }
+      />
+      {agent === undefined ? null : (
+        <HoverCardRow
+          data-pull-request-agent=""
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={agentMark}
+          label={
             <>
-              <AgentActorRef
-                subject={agent.subject}
-                models={agent.models}
-                onOpen={agent.onOpen}
-                nameOnly
-              />
-              {person === undefined ? null : (
-                <>
-                  {" for "}
-                  {personRef}
-                </>
-              )}
+              {"via "}
+              {agentRef}
             </>
-          )}
-        </>
-      }
-    />
+          }
+        />
+      )}
+    </>
   );
 }
 

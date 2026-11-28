@@ -131,6 +131,9 @@ const IOS = {
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
   PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
+  VIEW_CHOICES_RETRY: notYet(
+    "iOS follows the account's view choices, but doesn't read them again after a failed read yet; a sort stands at its default meanwhile",
+  ),
   MACHINE_ASKS_RETRY: notYet(
     "iOS follows a machine's asks and the machines that name them, but doesn't read either again after a failed read yet",
   ),
@@ -161,6 +164,12 @@ const IOS = {
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
+  INBOX_OLDER: notYet(
+    "iOS's Inbox All lists the items its feed holds; reading older ones at its end comes with its own screen",
+  ),
+  INBOX_SEARCH: notYet(
+    "iOS's Inbox and Search tabs search the items the phone holds; asking the service for more comes with its own screens",
+  ),
   ACTIVE_TASK: byDesign(
     "iOS follows each open task's description by its id (TASKS_HELD_FOLLOW), so it has no one active task to select or leave",
   ),
@@ -286,6 +295,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.VIEW_CHOICES_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.VIEW_CHOICES_RETRY]: panel(IOS.VIEW_CHOICES_RETRY),
+  [PORT_ACT_KIND.VIEW_CHOICE_WRITE]: EVERYWHERE,
   [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
@@ -367,6 +379,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: panel(IOS.INBOX_OLDER),
+  [PORT_ACT_KIND.AGENTS_INBOX_SEARCH]: panel(IOS.INBOX_SEARCH),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,
@@ -383,9 +397,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.BROWSER_LIVE_ATTACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),
   [PORT_ACT_KIND.BROWSER_LIVE_DETACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),
 
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: EVERYWHERE,
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 

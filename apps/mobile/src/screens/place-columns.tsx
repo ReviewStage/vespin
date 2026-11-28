@@ -3,6 +3,7 @@
 import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { FaceAsking } from "../agents/face-ask.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { tabGroupOf } from "../tab-route.js";
 import { AutomationsListColumn, AutomationsSearchProvider } from "./automation-screens.js";
@@ -38,6 +39,16 @@ function usePlaceStanding(): IosTab | undefined {
  * the last column reads too, and hands a pick to that page's route.
  */
 export function PlaceListColumn() {
+  // Note that the column stands the face picker its Managers' rows open (`FaceAsking`), as each iPhone list screen stands its own.
+  return (
+    <FaceAsking>
+      <PlaceList />
+    </FaceAsking>
+  );
+}
+
+/** The list of the place standing, in the middle column. */
+function PlaceList() {
   const place = usePlaceStanding();
 
   switch (place) {

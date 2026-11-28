@@ -177,7 +177,7 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
  * The services handed on with the caller's account among their log
  * annotations, as `userId`, so every line the procedure writes names the
  * account and every issue it raises names it as Sentry's user
- * (`observability/sentry.ts`), on the terms `procedureAnnotated` sets its path.
+ * (`observability/sentry.ts`), on the terms `procedureTraced` sets its path.
  */
 function forAccount(context: HostedContext, userId: string): WithEffectContext<WebServices> {
   const services = context["effect/context"];

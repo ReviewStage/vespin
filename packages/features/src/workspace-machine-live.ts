@@ -1,13 +1,6 @@
 import { Schema } from "effect";
 import { refuses } from "./contract/base.js";
-import {
-  LIVE_MODE,
-  LIVE_PARAM,
-  type LiveReadAnswer,
-  liveRead,
-  liveRows,
-  ORDER,
-} from "./live-read.js";
+import { LIVE_MODE, LIVE_PARAM, liveRead, liveRows, ORDER } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
@@ -56,5 +49,3 @@ export const WORKSPACE_MACHINES_READ = liveRead({
   },
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
 });
-
-export type WorkspaceMachinesLiveAnswer = LiveReadAnswer<typeof WORKSPACE_MACHINES_READ>;

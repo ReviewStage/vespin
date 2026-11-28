@@ -12,7 +12,7 @@ import {
 import { TASK_STATUS, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
-import { managerFaceAsset } from "./manager-face-look.js";
+import { managerFaceAsset, managerFaceEdge, managerFaceFill } from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, REPOSITORY_CORNER } from "./mark-look.js";
 import {
   PRIORITY_MARK_SYMBOL,
@@ -110,7 +110,7 @@ export type ChoiceMark =
   | { readonly kind: typeof CHOICE_MARK.INTEGRATION; readonly provider: IntegrationProvider }
   | {
       readonly kind: typeof CHOICE_MARK.MANAGER;
-      /** Its face, drawn at rest from the asset catalog in its own colors (`managerFaceAsset`), as its rows wear it, or its emoji alone where it wears one. */
+      /** Its face, drawn at rest from the asset catalog in its own colors (`managerFaceAsset`), as its rows wear it, or its emoji on its disc where it wears one. */
       readonly face: ManagerFace;
     }
   | { readonly kind: typeof CHOICE_MARK.HARNESS; readonly provider: ModelProvider }
@@ -193,13 +193,25 @@ export type ChoiceLook =
       /** The glyph that stands in its place until its photo is drawn, where a menu can't wait for it. */
       readonly fallback: Glyph;
     }
-  | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string }
+  | {
+      readonly kind: typeof MENU_ICON.EMOJI;
+      readonly emoji: string;
+      /** The disc it stands on, in the light theme's fill and the dark's, as a Manager's emoji face stands on its color; none for an emoji alone, such as a section's. */
+      readonly disc?: EmojiDisc | undefined;
+    }
   | {
       readonly kind: typeof MENU_ICON.MARK;
       readonly asset: string;
       /** Whether it is drawn fit in a glyph's square, as a harness's mark is, rather than at its own size, as an integration's is drawn for menus. */
       readonly sized: boolean;
     };
+
+/** The fill an emoji's disc stands in, in the light theme and the dark, which a menu picks between as it opens, and the hairline it stands inside in the light, where it has one. */
+type EmojiDisc = {
+  readonly light: string;
+  readonly dark: string;
+  readonly edge?: string | undefined;
+};
 
 /** An entity's mark as its choice's head, as its rows draw it. */
 export function markLook(mark: ChoiceMark): ChoiceLook {
@@ -244,11 +256,19 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
             corner: REPOSITORY_CORNER,
             fallback: GLYPH.REPOSITORY,
           };
-    // Note that a menu holds one image to an item, so an emoji face leads as its emoji alone, as a section's emoji does, with no disc under it.
+    // Note that a menu holds one image to an item, so an emoji face's disc is drawn into that image under its emoji, in both themes' fills, the native module's menu picking between them and `LookIcon` drawing the theme's own.
     case CHOICE_MARK.MANAGER:
       return mark.face.emoji === undefined
         ? { kind: MENU_ICON.MARK, asset: managerFaceAsset(mark.face, false), sized: false }
-        : { kind: MENU_ICON.EMOJI, emoji: mark.face.emoji };
+        : {
+            kind: MENU_ICON.EMOJI,
+            emoji: mark.face.emoji,
+            disc: {
+              light: managerFaceFill(mark.face, false),
+              dark: managerFaceFill(mark.face, true),
+              edge: managerFaceEdge(false),
+            },
+          };
     case CHOICE_MARK.SECTION_GLYPH:
       return { kind: MENU_ICON.GLYPH, glyph: mark.glyph, section: mark.color };
   }
@@ -385,7 +405,12 @@ type MenuIcon =
       readonly asset: string;
       readonly size?: number | undefined;
     }
-  | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string; readonly size: number };
+  | {
+      readonly kind: typeof MENU_ICON.EMOJI;
+      readonly emoji: string;
+      readonly size: number;
+      readonly disc?: EmojiDisc | undefined;
+    };
 
 /**
  * One node of a row's menu tree, a field it lacks standing `undefined`,
@@ -462,7 +487,7 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
   };
 }
 
-/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji, as `markContent` and `emojiContent` draw it. */
+/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji (`choiceLook`). */
 export function saysUnder(choice: MenuLead): boolean {
   const kind = choiceLook(choice)?.kind;
 
@@ -496,7 +521,12 @@ function choiceIcon(choice: LedItem, inks: MenuInks): MenuIcon | undefined {
         size: look.sized ? MARK_SIZE.MENU_PHOTO : undefined,
       };
     case MENU_ICON.EMOJI:
-      return { kind: MENU_ICON.EMOJI, emoji: look.emoji, size: MARK_SIZE.MENU_PHOTO };
+      return {
+        kind: MENU_ICON.EMOJI,
+        emoji: look.emoji,
+        size: MARK_SIZE.MENU_PHOTO,
+        disc: look.disc,
+      };
     case MENU_ICON.PHOTO:
       return {
         kind: MENU_ICON.PHOTO,
@@ -540,6 +570,19 @@ function actNode(
   };
 }
 
+/** A choice as a node, within the menus `path` names, the system checking it where it is on. */
+function choiceNode(choice: MenuChoice, inks: MenuInks, path: readonly string[]): MenuNode {
+  return {
+    kind: MENU_NODE.CHOICE,
+    label: choice.label,
+    // Note that a choice led by an integration's mark or an emoji says nothing under its words (`saysUnder`).
+    detail: saysUnder(choice) ? choice.detail : undefined,
+    icon: choiceIcon(choice, inks),
+    on: choice.on,
+    heard: heard(choice, path),
+  };
+}
+
 /** A menu as a node, within the menus `path` names: its choices, then its menus within, in `ink`, then its acts in the menu's own ink. */
 function submenuNode(
   submenu: RowSubmenu,
@@ -558,17 +601,7 @@ function submenuNode(
         : { kind: MENU_ICON.MARK, asset: submenu.picture },
     tint: ink,
     nodes: [
-      ...submenu.choices.map(
-        (choice): MenuNode => ({
-          kind: MENU_NODE.CHOICE,
-          label: choice.label,
-          // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
-          detail: saysUnder(choice) ? choice.detail : undefined,
-          icon: choiceIcon(choice, inks),
-          on: choice.on,
-          heard: heard(choice, within),
-        }),
-      ),
+      ...submenu.choices.map((choice) => choiceNode(choice, inks, within)),
       ...(submenu.submenus ?? []).map((inner) => submenuNode(inner, inks, ink, within)),
       ...(submenu.actions ?? []).map((action) => actNode(action, inks.act, true, within)),
     ],
@@ -595,6 +628,30 @@ export function menuTree(
       isSubmenu(item) ? submenuNode(item, inks, inks.act) : actNode(item, inks.act, true),
     ),
   );
+}
+
+/**
+ * A menu of choices alone, one group with no menu around them, as the
+ * native module builds a menu button's (`headerMenu`), such as a face's
+ * colors in the face picker; a press's place is `choicePressAt`'s.
+ */
+export function choiceTree(
+  choices: readonly MenuChoice[],
+  inks: MenuInks,
+): readonly (readonly MenuNode[])[] {
+  return choices.length === 0 ? [] : [choices.map((choice) => choiceNode(choice, inks, []))];
+}
+
+/** The press a place in `choiceTree`'s menu names: its one group, then the choice's place in it. */
+export function choicePressAt(
+  choices: readonly MenuChoice[],
+  path: readonly number[],
+): (() => void) | undefined {
+  const [group, at, ...rest] = path;
+
+  if (group !== 0 || at === undefined || rest.length > 0) return undefined;
+
+  return choices[at]?.onPress;
 }
 
 /**

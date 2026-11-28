@@ -117,6 +117,8 @@ export const AGENT_TOOL = {
   SEARCH_CHAT: "chat_search",
   // A Manager's reaction added to a message of its chat, or taken off it.
   REACT_CHAT: "chat_react",
+  // A Manager a Manager makes for the member who asked for one, in its own workspace.
+  CREATE_MANAGER: "create_manager",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;

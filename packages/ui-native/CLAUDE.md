@@ -27,7 +27,11 @@ builds a control of its own.
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
-  answer's fields, and `AskNote` for what a send that did not go said),
+  answer's fields, each with no press handed it standing as an answer left
+  it, its picks checked, at the head of the reply that answered it, as the
+  panel's answered card, `ResolvableAsk` standing an open card's × Resolve at
+  its top end, as the panel's question stands it, and `AskNote` for what a
+  send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under its heading), `ConfirmAsk` (the question
@@ -216,23 +220,36 @@ builds a control of its own.
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
   folder), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
-- **Every glyph is the panel's own Lucide glyph for the same place** (the
-  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
-  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
-  button, and a composer's button alike. `@repo/brand`'s generator outlines
-  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
-  the app's config writes into the asset catalog as a symbol set, so it
-  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
-  glyph is a branded `Glyph`, minted only in that table, so no component
-  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
-  items, which expo-router types as plain names, take `GLYPH.X` too
-  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, a sheet's close, the chevron
-  at the end of a Settings row that goes on, the small arrow out at the end
-  of one that leaves the app, and the up-and-down chevron at the end of one
-  whose press opens a menu) or where the panel draws a
-  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
-  server, the panel's product mark). A task's status ring is the panel's own
+- **A standard act is the system's symbol; our own things are the panel's glyph**
+  (the developer, Nov 27, 2026, refining the Nov 12 rule that every glyph
+  is the panel's). Every glyph is named once in `glyph.ts`'s `GLYPH`, by
+  what it marks: a tab, a row's and a status's mark, a menu's item, a
+  toolbar's button, and a composer's button alike. A standard act iOS has
+  its own symbol for (⋯ `ellipsis`, compose `square.and.pencil`, search,
+  +, copy, delete, rename, pin, mark read or unread, archive, move, a
+  reminder's time, the composer's and a call's buttons) is the SF Symbol
+  Apple's own apps draw for the same job, as Mail, Files, Notes and
+  Reminders draw it, so a bar, a menu, and a swipe read as theirs do; so
+  are Share, a sheet's close, the chevron at the end of a Settings row that
+  goes on, the small arrow out at the end of one that leaves the app, and
+  the up-and-down chevron at the end of one whose press opens a menu. Our
+  own places and things, which the brand draws the same on every client
+  (the Inbox, Tasks and Automations, the tab bar's included, an
+  automation's runs and triggers, an agent, a Manager, a task, a pull
+  request, a branch, an ask's kind, a skill, a memory), and an act SF
+  Symbols has no symbol for (Unlink), is the panel's own Lucide glyph for
+  the same place:
+  `@repo/brand`'s generator outlines each, at the `lucide-react` `@repo/ui`
+  pins, into a custom symbol template the app's config writes into the
+  asset catalog as a symbol set, so it sizes with Dynamic Type and weighs
+  with its words as an SF Symbol does. Where the panel draws a mark of its
+  own rather than a Lucide glyph (a check box, a face, an MCP server, the
+  panel's product mark), its drawing is SF Symbols' nearest. A glyph is a
+  branded `Glyph`, minted only in that table, so no component takes a bare
+  SF Symbol's name; `apps/mobile`'s tab icons and toolbar items, which
+  expo-router types as plain names, take `GLYPH.X` too (`glyphSymbol` where
+  a symbol's name is asked for, `glyphIcon` where the bottom bar or the tab
+  bar asks for `sf` or `xcasset`). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
   (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
   holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
@@ -437,15 +454,20 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   photo's Delete stands under Change photo.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
-  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
+  checks one, a "Recommended" tag before the check, and a detail line, its
+  label and detail drawn as Markdown so a link of ours stands as its chip,
+  whose press opens it and picks nothing; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it, at the system's regular size,
   Mark done filled as the card's one act and Couldn't do it its words
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
-  pad standing one Done over it for the card, a select's menu picker
-  under its label, reading "None" until a pick, a
-  boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
+  pad standing one Done over it for the card, a select's options as rows
+  under its label, the recommended one tagged as a decide's is and none
+  picked until the reader picks, as the panel's pills stand, and a yes or
+  no's round check beside its name, as a step's, never the system's switch,
+  since the panel's form draws a checkbox (the developer, Nov 27, 2026), the
+  rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
@@ -458,8 +480,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and files changed as rows counting them as the panel's tabs
-  do ("✓ 5", "4"), each glyph the panel's own (`pull-request-look.ts`), the
+  its checks, chapters, and files changed as rows counting them as the
+  panel's tabs do ("✓ 5", "3", "4"), each pushing a page of its own, the
+  chapters' told from `@repo/features/pull-request-chapters-shown` as the
+  panel's Chapters view tells them, each glyph the panel's own (`pull-request-look.ts`), the
   lines it changes after its branches; its reviewers as faces in its heading after who
   opened it, each wearing where they stand at its corner, as the panel's
   people line draws them; its Description and Conversation folding under

@@ -17,7 +17,7 @@ import {
 } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
-import type { InboxItemReads } from "@repo/features/inbox-digest";
+import type { InboxFields, InboxItemReads } from "@repo/features/inbox-digest";
 import {
   agentHolder,
   type InboxAgentHolder,
@@ -27,13 +27,15 @@ import {
   inboxGroup,
   inboxGroups,
 } from "@repo/features/inbox-list-model";
+import { inboxInOrder } from "@repo/features/inbox-live";
+import { INBOX_SEARCH_PLACE, type InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { TaskSummary } from "@repo/features/task-wire";
+import type { TaskRunsOnRequest, TaskSummary } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
 import { HOST_LIVE, TASKS_READ } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -57,6 +59,7 @@ import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
   type AppHostRead,
+  type AppInboxItems,
   type AppManagerChat,
   type AppMemories,
   type AppStateDelivery,
@@ -620,11 +623,11 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxI
  * each agent on no task holding items, a Manager among them, its items by
  * the agent's id (`AppInboxItems`' `agents`).
  */
-export interface InboxHoldings {
-  readonly read: InboxItemReads;
+export interface InboxHoldings<Item extends InboxFields = InboxItem> {
+  readonly read: ReadonlyMap<string, readonly Item[]>;
   readonly tasks: readonly { readonly taskId: string }[];
   readonly keptHolders: readonly TaskSummary[];
-  readonly agents: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly agents: Readonly<Record<string, readonly Item[]>>;
   /** That the feed's items are kept on disk and read through live queries (`AppInboxRead`'s `stored`), so `read` and `agents` hold none of them. */
   readonly stored?: true;
 }
@@ -680,6 +683,200 @@ export const selectInboxHoldings = memoizedSelect(
   },
 );
 
+/** No item older than the feed holds: the slice before All reads a page of them, and after a sign-out. */
+const NO_OLDER: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
+
+/**
+ * The account's settled items older than its feed holds, as All read them a
+ * page at a time past it (`LIVE_READ.INBOX_OLDER`), as a `select`: by the
+ * plan each is on, and on no task by its agent; none before a page is read.
+ * Note that they are All's alone: nothing that counts or badges reads them,
+ * since an older item may stand unread.
+ */
+export function selectInboxOlder(state: AppStateSnapshot): AppInboxItems {
+  return state[LIVE_READ.INBOX_OLDER].rows ?? NO_OLDER;
+}
+
+/**
+ * The items `place`'s search found on the service past what the host holds
+ * (`LIVE_READ.INBOX_FOUND`), as a `select`'s answer: by the plan each is on,
+ * and on no task by its agent; none while the place holds nothing found.
+ * Note that nothing that counts or badges reads them either.
+ */
+export function selectInboxFound(
+  state: AppStateSnapshot,
+  place: InboxSearchPlace,
+): AppInboxItems | undefined {
+  return state[LIVE_READ.INBOX_FOUND][place]?.rows?.items;
+}
+
+/** Each pair of items beyond the feed laid together, by the older items and then the found, so one pair answers one object while neither moves. */
+const besideHeld = new WeakMap<AppInboxItems, WeakMap<AppInboxItems, AppInboxItems>>();
+
+/**
+ * The items an Inbox lists past the account's feed: the older items All
+ * read (`selectInboxOlder`) and a place's found items (`selectInboxFound`),
+ * either where it alone is handed, the very one handed; an item both hold
+ * stands as the older items hold it, so a found item All already lists
+ * never moves. None where neither is handed. Lay the answer beside the
+ * feed's holdings with `inboxHoldingsWithOlder` (or `inboxWithOlder`), which
+ * leave out an item the holdings hold themselves. Note that the answer for
+ * one pair is one object, so a list grouping it groups again only as one
+ * of them moves.
+ */
+export function inboxBeyondFeed(
+  older: AppInboxItems | undefined,
+  found: AppInboxItems | undefined,
+): AppInboxItems | undefined {
+  if (older === undefined || found === undefined) return older ?? found;
+  const held = besideHeld.get(older)?.get(found);
+
+  if (held !== undefined) return held;
+  // Note that the found items are laid beside the older as the older are beside the feed, so the older copy of an item stands.
+  const beside = inboxWithOlder(older, found);
+
+  const byFound = besideHeld.get(older) ?? new WeakMap<AppInboxItems, AppInboxItems>();
+  byFound.set(found, beside);
+  besideHeld.set(older, byFound);
+
+  return beside;
+}
+
+/**
+ * What an Inbox lists past the account's feed, as a `select`: the older
+ * items All read, where `older` says the Inbox lists them, beside the items
+ * `place`'s search found (`inboxBeyondFeed`); none where neither stands.
+ * The same object while neither slice moves.
+ */
+export function selectInboxBeyondFeed(
+  state: AppStateSnapshot,
+  shown: { readonly older: boolean; readonly place: InboxSearchPlace },
+): AppInboxItems | undefined {
+  return inboxBeyondFeed(
+    shown.older ? state[LIVE_READ.INBOX_OLDER].rows : undefined,
+    selectInboxFound(state, shown.place),
+  );
+}
+
+/**
+ * Every item the host holds past the account's feed, as a `select` for a
+ * screen that opens one thread by its id: the older items All read, beside
+ * the items each place's search found (`inboxBeyondFeed`), so a thread found
+ * by a search opens as it is listed, wherever it was found; none where none
+ * stands. The same object while none of the slices moves.
+ */
+export function selectInboxHeldBeyondFeed(state: AppStateSnapshot): AppInboxItems | undefined {
+  return Object.values(INBOX_SEARCH_PLACE).reduce(
+    (held, place) => inboxBeyondFeed(held, selectInboxFound(state, place)),
+    state[LIVE_READ.INBOX_OLDER].rows,
+  );
+}
+
+/** Whether `older` holds no item on any holder, as before All reads a page. */
+function holdsNone(older: AppInboxItems): boolean {
+  return (
+    Object.keys(older[INBOX_SCOPE_KIND.TASK]).length === 0 &&
+    Object.keys(older.agents ?? {}).length === 0
+  );
+}
+
+/** Every id `lists` hold, of every holder. */
+function idsIn(lists: Iterable<readonly InboxItem[]>): ReadonlySet<string> {
+  const ids = new Set<string>();
+
+  for (const items of lists) for (const item of items) ids.add(item.id);
+
+  return ids;
+}
+
+/**
+ * Each holder's list of `live` with the items `older` puts on it that no
+ * list of the live ones holds (`liveIds`), in the order a holder's list
+ * draws them; a holder only older items stand on holds those alone, and
+ * every other list is the very one `live` holds.
+ */
+function listsWithOlder(
+  live: ReadonlyMap<string, readonly InboxItem[]>,
+  older: Readonly<Record<string, readonly InboxItem[]>> | undefined,
+  liveIds: ReadonlySet<string>,
+): Map<string, readonly InboxItem[]> {
+  const lists = new Map(live);
+
+  for (const [holder, items] of Object.entries(older ?? {})) {
+    const past = items.filter((item) => !liveIds.has(item.id));
+
+    if (past.length === 0) continue;
+    const own = live.get(holder);
+    lists.set(holder, own === undefined ? past : inboxInOrder([...own, ...past]));
+  }
+
+  return lists;
+}
+
+/**
+ * The feed's items as an Inbox listing every item lists them: each plan's
+ * and each agent's on no task with the older items All read past the feed
+ * (`selectInboxOlder`) beside its own, an item any of the feed's lists holds
+ * the feed's alone wherever its older copy stands, so a write that moved it
+ * back into the feed draws it once, as the feed holds it. The very `live`
+ * where no older item stands past it.
+ */
+export function inboxWithOlder(live: AppInboxItems, older: AppInboxItems): AppInboxItems {
+  if (holdsNone(older)) return live;
+  const onTasks = live[INBOX_SCOPE_KIND.TASK];
+  const onAgents = live.agents ?? {};
+  const liveIds = idsIn([...Object.values(onTasks), ...Object.values(onAgents)]);
+
+  const plans = listsWithOlder(
+    new Map(Object.entries(onTasks)),
+    older[INBOX_SCOPE_KIND.TASK],
+    liveIds,
+  );
+
+  const agents = listsWithOlder(new Map(Object.entries(onAgents)), older.agents, liveIds);
+
+  return agents.size === 0
+    ? { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(plans) }
+    : { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(plans), agents: Object.fromEntries(agents) };
+}
+
+/**
+ * The holdings an Inbox listing every item groups (`inboxGroupsIn`): those
+ * of `live`, each task's and each agent's items with the older ones All read
+ * past the feed beside them (`inboxWithOlder`), an item any live list holds
+ * the live list's alone; and the tasks only older items stand on after the
+ * live holdings' own, the one whose item changed latest first. Both the
+ * document's holdings and those the phone reads from its kept rows
+ * (`inbox-rows.ts`'s `inboxHoldingsOfRows`) are laid over so. Note that
+ * only All lists what this adds, and nothing counts it.
+ */
+export function inboxHoldingsWithOlder(live: InboxHoldings, older: AppInboxItems): InboxHoldings {
+  if (holdsNone(older)) return live;
+  const liveIds = idsIn([...live.read.values(), ...Object.values(live.agents)]);
+  const read = listsWithOlder(live.read, older[INBOX_SCOPE_KIND.TASK], liveIds);
+  const agents = listsWithOlder(new Map(Object.entries(live.agents)), older.agents, liveIds);
+  const named = new Set(live.tasks.map(({ taskId }) => taskId));
+
+  // Note that only a task the older items stand on is added, since the live holdings leave out a task they hold items of only where they mean to.
+  const added = Object.keys(older[INBOX_SCOPE_KIND.TASK])
+    .flatMap((taskId) => {
+      const items = read.get(taskId) ?? [];
+
+      return named.has(taskId) || items.length === 0
+        ? []
+        : [{ taskId, updatedAt: Math.max(...items.map((item) => item.updatedAt)) }];
+    })
+    .sort((one, other) => other.updatedAt - one.updatedAt)
+    .map(({ taskId }) => ({ taskId }));
+
+  return {
+    ...live,
+    read,
+    tasks: added.length === 0 ? live.tasks : [...live.tasks, ...added],
+    agents: Object.fromEntries(agents),
+  };
+}
+
 /** Each listed agent as an Inbox names it, kept while its row stands, so its holder, and every group made of it, is the one made last (`agentHolder`). */
 const namedAgents = new WeakMap<ListedAgent, InboxHolderAgent>();
 
@@ -709,11 +906,11 @@ function holderAgentOf(agent: ListedAgent): InboxHolderAgent {
  * names it. An agent the list holds none of yet groups nothing, as a task
  * not listed yet groups nothing.
  */
-function agentGroupsIn(
-  held: InboxHoldings["agents"],
+function agentGroupsIn<Item extends InboxFields>(
+  held: InboxHoldings<Item>["agents"],
   listedAgents: readonly ListedAgent[],
   workspaceId: string | undefined,
-): readonly InboxGroup<InboxAgentHolder, InboxItem>[] {
+): readonly InboxGroup<InboxAgentHolder, Item>[] {
   const byId = new Map(listedAgents.map((agent) => [agent.id, agent]));
 
   return Object.entries(held).flatMap(([agentId, items]) => {
@@ -743,12 +940,12 @@ function agentGroupsIn(
  * Each group holds its whole items, which the client reads as the list's
  * rows (`inboxRowGroups`) once it has drawn its own sends on them.
  */
-export function inboxGroupsIn(
-  holdings: InboxHoldings,
+export function inboxGroupsIn<Item extends InboxFields = InboxItem>(
+  holdings: InboxHoldings<Item>,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   listedAgents: readonly ListedAgent[],
-): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
+): readonly InboxGroup<InboxAnyHolder, Item>[] {
   const held = new Set(listed.map((task) => task.id));
   const kept = holdings.keptHolders.filter((task) => !held.has(task.id));
   const tasks = kept.length === 0 ? listed : [...listed, ...kept];
@@ -978,6 +1175,15 @@ export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undef
   const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
 
   return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
+}
+
+/** Where the account's last Start chose to run an agent, which New task's Runs on starts on (`runs-on-pick.ts`), as a `select`; none before the preferences are read, or where no Start named a place. */
+export function selectRunsOnPick(state: AppStateSnapshot): TaskRunsOnRequest | undefined {
+  const accountId = signedInAccountId(state.account);
+
+  return accountId === undefined
+    ? undefined
+    : state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.runsOn;
 }
 
 /** The repositories a workspace's GitHub reaches, or every workspace's under `EVERY_WORKSPACE`, as the host holds their read (`ACT_KIND.TASKS_REPOSITORIES_FOLLOW`), as a `select`; none before it is read. */

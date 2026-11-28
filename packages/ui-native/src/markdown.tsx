@@ -5,10 +5,19 @@ import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
+import { heldChipName } from "@repo/features/place-chip-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
@@ -25,6 +34,7 @@ import {
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { useChipNames } from "./chip-names.js";
 import { ContextMenu } from "./context-menu.js";
 import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
@@ -198,10 +208,21 @@ const styles = StyleSheet.create({
   measured: { alignSelf: "stretch" },
 });
 
+/** What VoiceOver hears of each chip by the name the app found for it, by chip, for the blocks the chips were read from. */
+interface NamedChips {
+  readonly blocks: readonly MarkdownBlock[];
+  readonly chips: ReadonlyMap<MarkdownChip, string>;
+}
+
+/** No chip named yet. */
+const NO_NAMED_CHIPS: ReadonlyMap<MarkdownChip, string> = new Map();
+
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
 interface Drawing {
   readonly colors: BrandColors;
   readonly fontScale: number;
+  /** What a line's words are set in, by the words' look (`MARKDOWN_LOOK`). */
+  readonly prose: TextStyle;
   /** The widest a chip may stand, the window's width, which a chip's name is cut to. */
   readonly lineWidth: number;
   readonly openLink: (address: string) => void;
@@ -219,6 +240,10 @@ interface Drawing {
   readonly linkStanding: (page: string) => LinkStanding | undefined;
   /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
   readonly markOf: ChipMarkOf;
+  /** What VoiceOver hears of a chip by the name the app now holds for it, as the chip reported it (`useNamedChip`); none until it does, or where it holds none. */
+  readonly heardNamed: (chip: MarkdownChip) => string | undefined;
+  /** Hands the words what VoiceOver hears of a chip by the name the app now holds, so its line's label and actions say what the chip shows. */
+  readonly onNamed: (chip: MarkdownChip, heard: string) => void;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
   /** The picture the words name by its marker, by its name, which its chip draws; none for a marker of no picture the message carries. */
@@ -280,7 +305,7 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
 
 /** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */
 function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
-  return standingLook(chip, drawing)?.heard ?? chip.heard;
+  return standingLook(chip, drawing)?.heard ?? drawing.heardNamed(chip) ?? chip.heard;
 }
 
 /**
@@ -328,6 +353,28 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/** A chip's name and what VoiceOver hears of it. */
+type ChipWords = Pick<MarkdownChip, "name" | "heard">;
+
+/**
+ * A chip's name and what VoiceOver hears of it, by the name the app holds
+ * now for what it names (`useChipNames`, `heldChipName`): a bare task
+ * link's title, as the panel's chip says it, and its words or its kind
+ * where the app holds none.
+ */
+function useNamedChip(chip: MarkdownChip): ChipWords {
+  const workspace = chip.target.kind === LINK_TARGET.PLACE ? chip.target.workspace : undefined;
+  const known = useChipNames(chip.of, workspace);
+
+  if (known === undefined || chip.of === undefined) return chip;
+  const name = heldChipName(chip.of, chip.name, chip.bare === true, known);
+
+  if (name === chip.name) return chip;
+  const word = entityWordHeard(chip.entity, name);
+
+  return { name, heard: word === undefined ? name : `${word} ${name}` };
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipMenu`). */
 function MentionChip({
   chip,
@@ -340,8 +387,15 @@ function MentionChip({
   const onPress = open(chip.target, drawing);
   const size = ROLE_SIZE.ROW_LINE;
   const standing = standingLook(chip, drawing);
-  const heard = standing?.heard ?? chip.heard;
-  const name = standing?.name ?? chip.name;
+  const named = useNamedChip(chip);
+  const { onNamed } = drawing;
+
+  // Note that the name the app holds is handed up to the words, since VoiceOver hears the chip through its line's label and actions, never the chip itself.
+  const heardNow = named.heard;
+
+  useEffect(() => onNamed(chip, heardNow), [chip, heardNow, onNamed]);
+  const heard = standing?.heard ?? named.heard;
+  const name = standing?.name ?? named.name;
   const menu = useChipMenu(chip.target, onPress);
 
   // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
@@ -790,7 +844,7 @@ function Line({
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
-      style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
+      style={[drawing.prose, style]}
     >
       <Runs runs={runs} drawing={drawing} />
       {after === undefined ? null : (
@@ -1505,9 +1559,32 @@ function Blocks({
   ));
 }
 
+/** How a run of words is set: as a message's, in the body's size and ink, as a row's muted line under its title, an option's detail say, or in the body's size in the muted ink, as an ask asked no longer stands stepped back (`SteppedBack`). */
+export const MARKDOWN_LOOK = {
+  MESSAGE: "message",
+  LINE: "line",
+  STEPPED_BACK: "stepped-back",
+} as const;
+
+export type MarkdownLook = (typeof MARKDOWN_LOOK)[keyof typeof MARKDOWN_LOOK];
+
+/** What a line's words are set in, by the look and the window's colors. */
+function proseOf(look: MarkdownLook, colors: BrandColors): TextStyle {
+  switch (look) {
+    case MARKDOWN_LOOK.LINE:
+      return { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
+    case MARKDOWN_LOOK.STEPPED_BACK:
+      return { fontSize: PROSE_SIZE, color: colors.TEXT_MUTED };
+    case MARKDOWN_LOOK.MESSAGE:
+      return { fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
+  }
+}
+
 type MarkdownProps = {
   /** The words, as written. */
   readonly words: string;
+  /** How its lines are set; a message's where none is given. */
+  readonly look?: MarkdownLook | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips; none where it has none. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as: on the app's own screen where it draws one, such as a `vespin.dev` place or a pull request, and in Safari otherwise. */
@@ -1610,6 +1687,7 @@ function noWordPicture(): undefined {
  */
 export function Markdown({
   words,
+  look = MARKDOWN_LOOK.MESSAGE,
   repository = null,
   onOpenLink,
   typed,
@@ -1654,9 +1732,32 @@ export function Markdown({
     [words, repository, typed, hidesHtml, diagrams, wordPictures],
   );
 
+  // The names the words' chips found as they drew, by chip, for the blocks they were read from, so a line's label and actions say what each chip shows; the words read again start none.
+  const [named, setNamed] = useState<NamedChips>({ blocks, chips: NO_NAMED_CHIPS });
+
+  const onNamed = useCallback(
+    (chip: MarkdownChip, heard: string) =>
+      setNamed((held) => {
+        // Note that a chip back at its words' own name lets go of the name it held, so its line says that name again.
+        const own = heard === chip.heard;
+
+        if (own ? !held.chips.has(chip) : held.chips.get(chip) === heard) return held;
+        const chips = new Map(held.chips);
+
+        if (own) chips.delete(chip);
+        else chips.set(chip, heard);
+
+        return { blocks: held.blocks, chips };
+      }),
+    [],
+  );
+
+  if (named.blocks !== blocks) setNamed({ blocks, chips: NO_NAMED_CHIPS });
+
   const drawing: Drawing = {
     colors,
     fontScale,
+    prose: proseOf(look, colors),
     lineWidth: measured ?? known ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
@@ -1666,6 +1767,8 @@ export function Markdown({
     headings,
     linkStanding,
     markOf,
+    heardNamed: (chip) => named.chips.get(chip),
+    onNamed,
     suggestion,
     wordPicture,
     viewPictures,

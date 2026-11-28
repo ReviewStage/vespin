@@ -1114,9 +1114,7 @@ export function ComposerFoot(props: ComposerProps) {
   // Note that the composer keeps its place under what stands over it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
   return (
     <VStack spacing={SPACE.TIGHT * 2}>
-      {props.above === undefined ? null : (
-        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
-      )}
+      {props.above ?? null}
       {foot}
     </VStack>
   );

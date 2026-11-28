@@ -36,10 +36,20 @@
  * by their name or key, the latest changed first, and every agent of them,
  * the same way (`taskSearchRead`), for a window searching tasks the list may
  * not hold.
+ * `GET /api/live/inbox-search?query=` answers the inbox items the query
+ * finds by their title, their threads' words, or their holder's name, of
+ * any age, the latest changed first and at most 50, each as the account's
+ * inbox items carry one (`inboxSearchRead`), for a client searching past
+ * the items it holds.
  * `GET /api/live/task-page?workspaceId=` answers one page of a workspace's
  * settled tasks and every agent of them, the newest finished first, past
  * `beforeAt` and `beforeId` where named (`taskPageRead`), for a list that
  * shows finished work the task list does not hold.
+ * `GET /api/live/inbox-older` answers one page of the account's settled
+ * inbox items older than its inbox items read carries, the latest changed
+ * first, past `before` where named, each whole as that read answers it,
+ * with the page after it beside them (`inboxOlderRead`), for an Inbox that
+ * lists items past what that read holds.
  * `GET /api/live/task-relations?id=` answers the tasks related to the task
  * `id` names, its sub-tasks, its parent, and its blocks, and every agent of
  * them, the same way (`taskRelationsRead`), for a window drawing an open or
@@ -111,6 +121,9 @@
  * `GET /api/live/machine-asks` answers the asks the account's machines hold
  * for its answer, each with the answer that stands on it, the account's own
  * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
+ * `GET /api/live/view-choices` answers the account's view choices, its own
+ * and each of a workspace it is still a member of, the account's own alone;
+ * woken by a choice made, changed, or forgotten (`viewChoicesRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -261,6 +274,8 @@ import {
 import { agentBrowserTabsRead, taskBrowserTabsRead } from "./reads/browser-tabs.js";
 import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
+import { inboxOlderRead } from "./reads/inbox-older.js";
+import { inboxSearchRead } from "./reads/inbox-search.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineAsksRead } from "./reads/machine-asks.js";
@@ -286,6 +301,7 @@ import {
   taskSearchRead,
   tasksRead,
 } from "./reads/tasks.js";
+import { viewChoicesRead } from "./reads/view-choices.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
 import { workspaceMachinesRead } from "./reads/workspace-machines.js";
@@ -346,7 +362,7 @@ interface ReadParts<Part extends string> {
   readonly queries: Record<Part, SealedLiveQueryWire>;
 }
 
-/** Which of the sealer's reads answers a part: its digest alone, or its rows with it. */
+/** Which of the sealer's reads answers a part: its digest alone, its rows with it, or its rows alone. */
 type PartRead = (sealer: LiveSealer) => LiveSealer["seal"];
 
 /** Each part read now at the poll address (`pollSealer`), as `how` reads it; unavailable where it could not be read. */
@@ -732,7 +748,7 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
   const statements = delta.statements(params, syncMovedOf(rows));
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
   const gone = new Map<PartOf<Read>, readonly string[]>();
 
   for (const [part, keys] of ownMovedKeys(delta.own, rows)) {
@@ -887,7 +903,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     const statements = query.statements(params);
 
     if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-    const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+    const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
     return { ...read, queries: syncedParts(read.queries, { next }, new Map()) };
   }
@@ -931,7 +947,7 @@ const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   const statements = page.statements(params, { keys: parents.keys, first: after === undefined });
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
   const sync = {
     next: String(at),
@@ -1122,6 +1138,8 @@ export function liveProcedures(seams: LiveProcedureSeams) {
   return {
     inbox: signedIn.inbox.effect(answerBoundRead(accountInboxRead)),
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
+    inboxOlder: signedIn.inboxOlder.effect(answerBoundRead(inboxOlderRead)),
+    inboxSearch: signedIn.inboxSearch.effect(answerBoundRead(inboxSearchRead)),
     tasks: signedIn.tasks.effect(answerBoundRead(tasksRead)),
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
     taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
@@ -1169,6 +1187,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
     workspaceMachines: signedIn.workspaceMachines.effect(answerBoundRead(workspaceMachinesRead)),
     machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
+    viewChoices: signedIn.viewChoices.effect(answerBoundRead(viewChoicesRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 

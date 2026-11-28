@@ -103,7 +103,8 @@ function GlyphLabel({
 /**
  * A choice's head as a system menu draws it (`choiceLook`): its glyph in
  * its section's color or its tone's ink, with a faint glyph under it where it has one; its photo,
- * drawn round; its emoji; or its integration's mark, each kept in its own
+ * drawn round; its emoji, on its disc where it has one, as a Manager's
+ * emoji face stands on its color; or its integration's mark, each kept in its own
  * colors, which a menu would otherwise template in its ink.
  */
 export function LookIcon({
@@ -133,7 +134,16 @@ export function LookIcon({
     case MENU_ICON.PHOTO:
       return <MenuPhoto photo={look.photo} corner={look.corner} />;
     case MENU_ICON.EMOJI:
-      return <Image emoji={look.emoji} emojiSize={MARK_SIZE.MENU_PHOTO} />;
+      return (
+        <Image
+          emoji={look.emoji}
+          emojiSize={MARK_SIZE.MENU_PHOTO}
+          {...(look.disc === undefined
+            ? {}
+            : { emojiDisc: dark ? look.disc.dark : look.disc.light })}
+          {...(look.disc?.edge === undefined || dark ? {} : { emojiDiscEdge: look.disc.edge })}
+        />
+      );
     case MENU_ICON.MARK:
       return look.sized ? (
         <Image assetName={look.asset} assetSize={MARK_SIZE.MENU_PHOTO} />

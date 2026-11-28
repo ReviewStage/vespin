@@ -11,6 +11,7 @@ import {
   linkStandingOf,
 } from "@repo/features/link-standing-model";
 import { MENTION_KIND, type Mention, type NumberedTaskIdOf } from "@repo/features/mention-link";
+import type { PlainLinkNames } from "@repo/features/place-chip-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { TaskListCollections } from "@repo/host/task-list-following";
@@ -20,6 +21,7 @@ import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { appStateIn, selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
+import { useKnownNames } from "./use-known-names.js";
 import { useTaskFound } from "./use-task-outside.js";
 
 /**
@@ -185,6 +187,25 @@ export function useNumberedTaskIdOf(): NumberedTaskIdOf {
   const { tasks } = useTaskListCollections();
 
   return (task) => numberedTaskIdIn(workspaces, tasks, task);
+}
+
+/**
+ * What the window holds to say a place of ours an address spells bare in
+ * plain words by its chip's name (`@repo/features/place-chip-model`'s
+ * `namedPlainLinks`), as a row's preview says one: the names it holds now,
+ * and the id of a task a link names by its number among the tasks it lists.
+ * It is made again as the names move, so a preview drawn before the list is
+ * read says the task's title once it is.
+ */
+export function usePlainLinkNames(): PlainLinkNames {
+  const known = useKnownNames();
+  const workspaces = useWorkspaces();
+  const { tasks } = useTaskListCollections();
+
+  return useMemo(
+    () => ({ known, taskIdOf: (task) => numberedTaskIdIn(workspaces, tasks, task) }),
+    [known, workspaces, tasks],
+  );
 }
 
 /** The places a task's links name it in, which a link written by the task's number names it in too. */

@@ -20,6 +20,7 @@ import {
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import type { AgentInboxSearchParams, InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -48,6 +49,8 @@ import type {
   AppHolderInbox,
   AppHolderInboxes,
   AppHostRead,
+  AppInboxFound,
+  AppInboxFoundPlaces,
   AppInboxItems,
   AppInboxSlice,
   AppInboxTask,
@@ -74,8 +77,9 @@ import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
+import { useInboxSearch } from "../tasks/use-inbox-search.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
-import type { InboxChoice } from "../tasks/use-tasks-tab.js";
+import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
 import {
@@ -324,12 +328,30 @@ class InboxWorld {
   deliverFeed: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
   /** Delivers the holders' own inboxes to the window as the host holds them, as main delivers a move of them; nothing before a mount. */
   deliverHolders: (held: AppHolderInboxes) => void = () => undefined;
+  /** The pages of the account's older items the host reads All, by the cursor each reads past, the first under none; a page none names answers none after it and reads nothing. */
+  olderPages = new Map<string, OlderPage>();
+  /** The cursor each read of a page of older items read past, in order, the first's empty. */
+  olderAsked: string[] = [];
+  /** Delivers the older items the host holds to the window, as main delivers a move of them; nothing before a mount. */
+  deliverOlder: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
+  /** The items the service's search finds by each query, by the task each stands on and those on no task by their agent; a query none names finds nothing. */
+  searchFinds = new Map<string, AppInboxItems>();
+  /** Each place's search the window asked the host for, in order. */
+  searchAsked: AgentInboxSearchParams[] = [];
+  /** What each place's search found, as the host holds it. */
+  foundAt = new Map<InboxSearchPlace, AppInboxFound>();
+  /** Delivers what each place's search found to the window, as main delivers a move of it; nothing before a mount. */
+  deliverFound: (found: AppInboxFoundPlaces) => void = () => undefined;
+  /** Opens ⌘K's search of the Inbox on `query`, or closes it with none, as the palette asks and stops asking (`use-inbox-search.ts`); nothing before a mount. */
+  searchEverything: (query: string | undefined) => void = () => undefined;
   /** Whether a read of a plan's agents is held open, never answering. */
   agentListHeld = false;
   /** How a read of a task from the start answers, where a test holds it in its own hands. */
   startRead: ((taskId: string) => Promise<ReadOutcome> | undefined) | undefined;
   /** The workspace the Inbox lists, and its automations as a read of them answers. */
   listedWorkspace: Workspace | undefined;
+  /** Tasks of another workspace than the one listed, which the account's list holds beside its own, as a member of two holds both. */
+  otherWorkspaceTasks: readonly TaskSummary[] = [];
   automations: readonly AutomationSummary[] = [];
   /** What the window copied, in order. */
   copied: string[] = [];
@@ -347,7 +369,54 @@ class InboxWorld {
   fileReads: TasksFileParams[] = [];
 }
 
+/** One page of the account's older items as the host reads it in: its items by task, and the page after it where one stands. */
+export interface OlderPage {
+  readonly items: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly next?: string;
+}
+
 export const world = new InboxWorld();
+
+/**
+ * The page of older items past `before` read in, as the host reads it: its
+ * items laid beside those read before on the document, and the page after
+ * it answered.
+ */
+function olderPageRead(before: string | undefined): FakeActAnswer {
+  world.olderAsked.push(before ?? "");
+  const page = world.olderPages.get(before ?? "");
+
+  if (page === undefined) return { status: FAKE_ANSWER.DONE, value: {} };
+
+  const read = new Map<string, readonly InboxItem[]>();
+
+  for (const cursor of new Set(world.olderAsked)) {
+    for (const [taskId, items] of Object.entries(world.olderPages.get(cursor)?.items ?? {})) {
+      read.set(taskId, [...(read.get(taskId) ?? []), ...items]);
+    }
+  }
+
+  world.deliverOlder({ rows: { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(read) } });
+
+  return { status: FAKE_ANSWER.DONE, value: page.next === undefined ? {} : { next: page.next } };
+}
+
+/** A place's search as the host answers it: what the words find held for the place and delivered, or the place let go. */
+function searchRead(params: AgentInboxSearchParams): FakeActAnswer {
+  world.searchAsked.push(params);
+
+  if (params.query === undefined) world.foundAt.delete(params.place);
+  else {
+    const items = world.searchFinds.get(params.query) ?? { [INBOX_SCOPE_KIND.TASK]: {} };
+    world.foundAt.set(params.place, { query: params.query, items });
+  }
+
+  world.deliverFound(
+    Object.fromEntries([...world.foundAt].map(([place, found]) => [place, { rows: found }])),
+  );
+
+  return { status: FAKE_ANSWER.DONE, value: {} };
+}
 
 /** A read of a task's inbox as the act answers it: done, carrying the view the service answered. */
 export interface ReadOutcome {
@@ -532,6 +601,15 @@ function feedNow(): AppHostRead<AppInboxItems> {
   };
 }
 
+/** ⌘K's search of the Inbox, standing drawn while shut as the palette does, opened on words and closed by `world.searchEverything`. */
+function EverythingSearch({ tasks }: { tasks: TasksControl }): null {
+  const [query, setQuery] = useState<string | undefined>(undefined);
+  world.searchEverything = setQuery;
+  useInboxSearch(tasks, query !== undefined, query ?? "");
+
+  return null;
+}
+
 /** The account's feed delivered to the window as it now stands, as main delivers a move of it. */
 function deliverFeed(): void {
   world.deliverFeed(feedNow());
@@ -561,6 +639,7 @@ beforeEach(() => {
   world.deliverFeed = () => undefined;
   world.agentListHeld = false;
   world.listedWorkspace = undefined;
+  world.otherWorkspaceTasks = [];
   world.automations = [];
   world.copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(world.copied), ...DESKTOP_LINKS, pageFrameUrl });
@@ -571,8 +650,24 @@ beforeEach(() => {
   world.fileReads = [];
   world.main = heldInboxes();
   world.deliverHolders = () => undefined;
+  world.olderPages = new Map();
+  world.olderAsked = [];
+  world.deliverOlder = () => undefined;
+  world.searchFinds = new Map();
+  world.searchAsked = [];
+  world.foundAt = new Map();
+  world.deliverFound = () => undefined;
+  world.searchEverything = () => undefined;
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> => {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) {
+        return Promise.resolve(olderPageRead(request.payload.before));
+      }
+
+      if (request.kind === ACT_KIND.AGENTS_INBOX_SEARCH) {
+        return Promise.resolve(searchRead(request.payload));
+      }
+
       if (request.kind === ACT_KIND.AGENTS_INBOX_ITEMS_RETRY) {
         deliverFeed();
 
@@ -760,6 +855,8 @@ export function mount({
 
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
+  world.deliverOlder = reads.deliverOlder;
+  world.deliverFound = reads.deliverFound;
   // Note that a workspace's automations are laid on the document as the window holds them, as the host lays them.
   holdAutomations(reads.deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: world.automations }),
@@ -809,14 +906,16 @@ export function mount({
     // Note that the agents on a task are laid on the document too, over whatever else it holds of the list, as the host lays the list it follows, which an item's agent is read from (`useTaskAgent`).
     const onTasks = world.agentListHeld ? undefined : liveAgents;
     // Note that the tasks stand in the workspace listed, where one is, as the window lists that workspace's tasks, and its Inbox their items alone.
-    const { listedWorkspace } = world;
+    const { listedWorkspace, otherWorkspaceTasks } = world;
 
     const inListed = useMemo(
-      () =>
-        listedWorkspace === undefined
+      () => [
+        ...(listedWorkspace === undefined
           ? listed
-          : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id })),
-      [listed, listedWorkspace],
+          : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id }))),
+        ...otherWorkspaceTasks,
+      ],
+      [listed, listedWorkspace, otherWorkspaceTasks],
     );
 
     // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.
@@ -883,9 +982,21 @@ export function mount({
             createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE }),
           );
 
+    const searched = createElement(
+      Fragment,
+      null,
+      createElement(EverythingSearch, { tasks: control }),
+      inbox,
+    );
+
     return withSidebar
-      ? createElement(Fragment, null, createElement(DesktopSidebar, sidebarProps(control)), inbox)
-      : inbox;
+      ? createElement(
+          Fragment,
+          null,
+          createElement(DesktopSidebar, sidebarProps(control)),
+          searched,
+        )
+      : searched;
   }
 
   function Paneled({ at }: { at: ShellRoom }) {

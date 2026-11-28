@@ -23,6 +23,13 @@ import {
  * button are the page's. A key goes on only where the owner takes it
  * (`onKey` answers whether it did), so a chord the window answers stays the
  * window's. While it is not driven it hands nothing on and takes no focus.
+ *
+ * While its owner picks elements on the page (`picking`), the surface wears
+ * a crosshair and hands nothing of the mouse on to the page, driven or not:
+ * where the pointer moves is told as an inspect, and none once it leaves;
+ * a main-button press is told as a pick; and Escape ends the picking. The
+ * wheel still goes to a page the member drives, so they may scroll it to
+ * what they want to pick.
  */
 
 /** What a mouse did over the surface. */
@@ -88,6 +95,16 @@ export interface RemoteKey {
   readonly modifiers: RemoteModifiers;
 }
 
+/** What the surface tells its owner while picking elements on the page. */
+export interface RemotePicking {
+  /** The pointer moved to a point, or left the surface. */
+  readonly onInspect: (point: RemotePoint | undefined) => void;
+  /** The main button went down at a point. */
+  readonly onPick: (point: RemotePoint) => void;
+  /** Escape was pressed on the surface. */
+  readonly onEnd: () => void;
+}
+
 /** The modifier keys `event` holds. */
 function modifiersOf(event: {
   altKey: boolean;
@@ -114,6 +131,7 @@ export function RemoteSurface({
   onWheel,
   onKey,
   onPaste,
+  picking,
 }: {
   /** What the surface is, for one who cannot see it. */
   label: string;
@@ -129,6 +147,8 @@ export function RemoteSurface({
   onKey: (input: RemoteKey) => boolean;
   /** Words pasted on the surface. */
   onPaste: (text: string) => void;
+  /** Whether the owner picks elements on the page, and what it is told as it does; none while it does not. */
+  picking?: RemotePicking | undefined;
 }): React.JSX.Element {
   const own = useRef<HTMLCanvasElement | null>(null);
 
@@ -171,6 +191,19 @@ export function RemoteSurface({
   };
 
   const mouse = (action: RemotePointerAction) => (event: MouseEvent<HTMLCanvasElement>) => {
+    if (picking !== undefined) {
+      if (action === REMOTE_POINTER_ACTION.MOVE) picking.onInspect(at(event));
+
+      // Note that the press's own focus is held back, because the owner may open a field on the pick that takes the focus, and the browser would move it back onto the surface.
+      if (action === REMOTE_POINTER_ACTION.DOWN && event.button === 0) {
+        event.preventDefault();
+        event.currentTarget.focus();
+        picking.onPick(at(event));
+      }
+
+      return;
+    }
+
     if (!driving) return;
 
     if (action === REMOTE_POINTER_ACTION.DOWN) event.currentTarget.focus();
@@ -186,6 +219,15 @@ export function RemoteSurface({
   };
 
   const key = (action: RemoteKeyAction) => (event: KeyboardEvent<HTMLCanvasElement>) => {
+    if (picking !== undefined) {
+      if (action !== REMOTE_KEY_ACTION.DOWN || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      picking.onEnd();
+
+      return;
+    }
+
     if (!driving) return;
 
     const taken = onKey({
@@ -208,13 +250,15 @@ export function RemoteSurface({
       className="ui-remote-surface"
       aria-label={label}
       data-driving={driving ? "" : undefined}
-      tabIndex={driving ? 0 : -1}
+      data-picking={picking === undefined ? undefined : ""}
+      tabIndex={driving || picking !== undefined ? 0 : -1}
       width={Math.round(width * ratio)}
       height={Math.round(height * ratio)}
       style={{ width, height }}
       onMouseDown={mouse(REMOTE_POINTER_ACTION.DOWN)}
       onMouseUp={mouse(REMOTE_POINTER_ACTION.UP)}
       onMouseMove={mouse(REMOTE_POINTER_ACTION.MOVE)}
+      onMouseLeave={() => picking?.onInspect(undefined)}
       onContextMenu={(event) => {
         if (driving) event.preventDefault();
       }}
@@ -231,7 +275,7 @@ export function RemoteSurface({
       onKeyDown={key(REMOTE_KEY_ACTION.DOWN)}
       onKeyUp={key(REMOTE_KEY_ACTION.UP)}
       onPaste={(event: ClipboardEvent<HTMLCanvasElement>) => {
-        if (!driving) return;
+        if (!driving || picking !== undefined) return;
         event.preventDefault();
         onPaste(event.clipboardData.getData("text/plain"));
       }}

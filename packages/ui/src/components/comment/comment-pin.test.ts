@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { CommentPin } from "./comment-pin.js";
+import { COMMENT_PIN_LOOK, CommentPin } from "./comment-pin.js";
 
 /**
  * comment-pin.test.ts -- a pin is named for the comments it opens and opens
@@ -62,4 +62,25 @@ test("a pin is named for its comments, opens them as pressed, and tells the poin
 
 test("a pin of one thread draws no count", () => {
   assert.equal(drawn(1).pin.textContent, "A");
+});
+
+test("a note's pin wears its number, and no face", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      createElement(CommentPin, {
+        look: COMMENT_PIN_LOOK.NOTE,
+        number: 2,
+        label: "Note 2",
+        preview: "Make this the primary action",
+        open: false,
+        onPress: () => undefined,
+        onHover: () => undefined,
+      }),
+    ),
+  );
+
+  assert.equal(container.querySelector("button")?.textContent, "2");
 });

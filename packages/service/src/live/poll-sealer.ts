@@ -51,6 +51,11 @@ export interface LiveSealer {
   readonly digest: (statement: LiveStatement) => Effect.Effect<SealedLiveQueryWire, SealRefused>;
   /** The statement's rows now, and their digest. */
   readonly seal: (statement: LiveStatement) => Effect.Effect<SealedLiveQueryWire, SealRefused>;
+  /**
+   * The statement's rows now, without their digest, for a read whose reader
+   * is held by sync id rather than by where its rows stand (`rowsSql`).
+   */
+  readonly rows: (statement: LiveStatement) => Effect.Effect<SealedLiveQueryWire, SealRefused>;
 }
 
 /**
@@ -88,6 +93,22 @@ function sealedSql(statement: LiveStatement): string {
     `case when row_number() over () = 1 then live_seal."${column}" end as "${column}"`;
 
   return `with live_rows as materialized ${subqueryOf(statement)} select ${first(DIGEST_COLUMN)}, ${first(SNAPSHOT_COLUMN)}, live_rows.* from (select ${digestOver("live_rows")} as "${DIGEST_COLUMN}", ${SNAPSHOT} as "${SNAPSHOT_COLUMN}") as live_seal left join live_rows on true`;
+}
+
+/** The column a statement read without its digest marks each of its own rows by, so a statement of no rows is told from one row of nulls. */
+const PRESENT_COLUMN = "_live_present";
+
+/**
+ * The statement's rows and the snapshot they were read at, without a
+ * digest: the statement read once, each of its rows marked present and
+ * joined onto the one row holding the snapshot, so a statement of no rows
+ * still answers it. Note that it names no digest because a read followed
+ * by sync id is held past the reader's sync id, never past where its rows
+ * stand, so a digest of them, an `md5` of every row's JSON sorted over a
+ * materialized copy, would be read for nothing.
+ */
+function rowsSql(statement: LiveStatement): string {
+  return `select case when row_number() over () = 1 then ${SNAPSHOT} end as "${SNAPSHOT_COLUMN}", live_rows.* from (select 1) as live_seal left join (select true as "${PRESENT_COLUMN}", live_statement.* from ${subqueryOf(statement)} as live_statement) as live_rows on true`;
 }
 
 /** The poll's sealer, over the service's own database client. */
@@ -150,6 +171,32 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
             expiresAt: now,
             rows,
             digest,
+            snapshot,
+          });
+        }),
+      ),
+    rows: (statement) =>
+      Effect.all({
+        read: sql.unsafe<Readonly<Record<string, WireValue>>>(rowsSql(statement), statement.params),
+        now: Clock.currentTimeMillis,
+      }).pipe(
+        Effect.mapError(refused),
+        Effect.flatMap(({ read, now }) => {
+          const snapshot = read[0]?.[SNAPSHOT_COLUMN];
+
+          if (!Predicate.isString(snapshot)) return Effect.fail(refused());
+
+          // Note that a statement of no rows answers the one row its snapshot rides on, which is unmarked.
+          const rows = read.flatMap(
+            ({ [SNAPSHOT_COLUMN]: _snapshot, [PRESENT_COLUMN]: present, ...row }) =>
+              present === true ? [row] : [],
+          );
+
+          return Effect.succeed({
+            capability: LIVE_POLL_URL,
+            queryFingerprint: LIVE_POLL_URL,
+            expiresAt: now,
+            rows,
             snapshot,
           });
         }),

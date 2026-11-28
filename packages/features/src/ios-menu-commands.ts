@@ -66,7 +66,6 @@ const MENU_ROUTE = {
   TASKS: "tasks",
   AGENT: "agent",
   PAGE: "page",
-  COMMENTS: "comments",
   HISTORY: "history",
   VERSION: "version",
   PULL: "pull",
@@ -124,7 +123,7 @@ function focusOn(
  * What the route stands in front, from its path and its params: `/inbox/<id>`
  * or the Inbox's choice is a thread; `/tasks/agent/<id>` and the pages
  * under it an agent; a pull request the agent it was opened from, where it
- * names one; a task's page, comments, history, or version the task they
+ * names one; a task's page, history, or version the task they
  * belong to; `/tasks/<id>` or the Tasks tab's choice a task; and any other
  * place nothing, Search among them.
  */
@@ -145,7 +144,6 @@ export function menuFocusOf(pathname: string, params: MenuRouteParams): MenuFocu
     case MENU_ROUTE.VERSION:
       return focusOn(MENU_SUBJECT.TASK, second);
     case MENU_ROUTE.PAGE:
-    case MENU_ROUTE.COMMENTS:
       return focusOn(MENU_SUBJECT.TASK, given(params.task));
     default:
       return focusOn(MENU_SUBJECT.TASK, first ?? given(params.selected));

@@ -19,9 +19,6 @@
       "path": "../../packages/brand"
     },
     {
-      "path": "../../packages/credentials"
-    },
-    {
       "path": "../../packages/database"
     },
     {
@@ -44,6 +41,9 @@
     },
     {
       "path": "../../packages/settings"
+    },
+    {
+      "path": "../../packages/sync"
     },
     {
       "path": "../../packages/ui"

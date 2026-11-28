@@ -26,5 +26,3 @@ export const billingRequiredDataSchema = EffectSchema.Struct({
   billingRefusal: EffectSchema.optionalKey(billingRefusalSchema),
   billingManager: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
-
-export type BillingRequiredData = typeof billingRequiredDataSchema.Type;

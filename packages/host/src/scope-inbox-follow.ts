@@ -79,7 +79,7 @@ export interface ScopeInboxDependencies {
   readonly accountId: () => string | undefined;
   /** The sync engine's pool, which each scope's items stand in while it is followed. */
   readonly pool: EntityPool;
-  /** The kind a scope's items stand on: the Inbox's own (`INBOX_ITEM`) unless said otherwise, as where the account's feed keeps that kind on disk (`INBOX_SCOPED_ITEM`). */
+  /** The kind a scope's items stand on: the Inbox's own (`INBOX_ITEM`) unless said otherwise, which a test may name otherwise. */
   readonly kind?: RowKind<PlacedInboxItem, InboxChange>;
 }
 

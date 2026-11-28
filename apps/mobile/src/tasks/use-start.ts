@@ -59,6 +59,7 @@ import {
   selectAgentDefault,
   selectModels,
   selectRepositoryList,
+  selectRunsOnPick,
 } from "@repo/host/app-state-reads";
 import { CHOICE_MARK, type PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -265,6 +266,26 @@ export function runsOnOptions(devices: readonly MacOffer[]): readonly PickOption
     { id: CLOUD, label: RUNS_ON_WORDS.CLOUD },
     ...devices.map((device) => ({ id: device.deviceId, label: device.name })),
   ];
+}
+
+/**
+ * Runs on's pick: the account's last, the place its last Start named on any
+ * device (`selectRunsOnPick`), where that device is offered, else Cloud,
+ * until the sheet picks another.
+ */
+export function useRunsOnPick(
+  devices: readonly MacOffer[],
+): readonly [string, (place: string) => void] {
+  const { data: last } = useQuery({ ...appStateQuery, select: selectRunsOnPick });
+  const [picked, setPicked] = useState<string | undefined>(undefined);
+
+  const lastRow =
+    last?.machine === AGENT_MACHINE.DEVICE &&
+    devices.some((device) => device.deviceId === last.deviceId)
+      ? last.deviceId
+      : CLOUD;
+
+  return [picked ?? lastRow, setPicked];
 }
 
 /** Where a start runs its agent, as it names it: the cloud, or a device by its id. */

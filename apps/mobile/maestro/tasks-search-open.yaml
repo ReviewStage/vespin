@@ -1,0 +1,44 @@
+# tasks-search-open.yaml -- a Tasks search's result opens its task again and again while another task's agent stands open, two searches taking turns, each typed over the other's words and each going on to its task's agent, and the app stands through every open.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture and opened on the rounding agent's
+# page, as `transcript-switch.yaml` opens it; nothing reaches a server. Each
+# search is made from the agent page the one before opened, so on an iPad
+# each pick goes back from that page to the Tasks split view, the two
+# searches taking turns as a reader going back and forth between two agents
+# does. Note that a pick that swapped the split view's detail for the new
+# task while the agent page still covered it crashed the iPad inside
+# SwiftUI's own List as the pop drew the split view again, UIKit asking a
+# row's separator (iOS simulators runs 46074454724, 46083002398, and
+# 46092600617); a pick with no page pushed over the list never did.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 30000
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          file: subflows/search-open.yaml
+          env:
+            WORDS: digest
+            TASK: Weekly digest email
+            AGENT: Send the weekly digest
+            SAID: Reading this week's merged pull requests before I write the digest.
+      - runFlow:
+          file: subflows/search-open.yaml
+          env:
+            WORDS: rounding
+            TASK: Ledger rounding
+            AGENT: Fix ledger rounding
+            SAID: "Rounding is settled: every total now rounds half-cents to even.*"
+- takeScreenshot: tasks-search-open

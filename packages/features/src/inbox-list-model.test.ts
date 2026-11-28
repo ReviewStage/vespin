@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
 import { type InboxRow, inboxRowOf } from "./inbox-digest.js";
 import {
+  agentHolder,
+  agentInboxGroups,
   agentThreadsLine,
   INBOX_MEDIA,
   inboxThreadEventsShown,
@@ -231,6 +233,36 @@ function posted(
     updatedAt,
   });
 }
+
+describe("agentInboxGroups", () => {
+  it("lists only the threads the agent posted, though its read answered another agent's beside them", () => {
+    const own = agentHolder({
+      id: "agent-1",
+      name: "Invitations",
+      model: "opus",
+      workspaceId: "w",
+      repository: null,
+    });
+
+    const other = agentHolder({
+      id: "agent-2",
+      name: "Digest",
+      model: "opus",
+      workspaceId: "w",
+      repository: null,
+    });
+
+    const groups = agentInboxGroups(
+      [
+        { holder: own, items: [posted("own-open", "agent-1", INBOX_STATUS.OPEN, 1, 1)] },
+        { holder: other, items: [posted("another-agent's", "agent-2", INBOX_STATUS.OPEN, 2, 2)] },
+      ],
+      "agent-1",
+    );
+
+    expect(groups.flatMap(({ items }) => items.map((item) => item.id))).toEqual(["own-open"]);
+  });
+});
 
 describe("agentThreadsLine", () => {
   it("counts only the agent's own threads that wait on the reader, opening the oldest posted of them", () => {

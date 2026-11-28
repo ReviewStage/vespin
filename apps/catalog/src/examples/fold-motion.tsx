@@ -1,5 +1,6 @@
 import {
   MARK_PROVIDER,
+  type MarkProvider,
   PROVIDER_MARK_SIZE,
   ProviderMark,
   RepositoryLines,
@@ -21,7 +22,7 @@ import { CatalogSection } from "../section";
  */
 
 /** A provider's mark, at the size a row's leading mark stands. */
-function Mark({ provider }: { provider: (typeof MARK_PROVIDER)[keyof typeof MARK_PROVIDER] }) {
+function Mark({ provider }: { provider: MarkProvider }) {
   return <ProviderMark provider={provider} size={PROVIDER_MARK_SIZE.ROW} />;
 }
 
@@ -31,7 +32,7 @@ function Connected({
   provider,
 }: {
   label: string;
-  provider: (typeof MARK_PROVIDER)[keyof typeof MARK_PROVIDER];
+  provider: MarkProvider;
 }): React.JSX.Element {
   return (
     <SettingsRow

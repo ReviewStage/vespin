@@ -61,7 +61,7 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
-import { fileLook } from "../tasks/file-ref.js";
+import { fileLook } from "../tasks/file-look.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
@@ -230,7 +230,7 @@ function Looker({ looked }: { looked: typeof DOCUMENT_TASK | undefined }): null 
   return null;
 }
 
-/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
+/** The palette over `DOCUMENT_TASK` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
 function paletteOverTask(): (
   looked: typeof DOCUMENT_TASK | undefined,
   over?: TasksControl,
@@ -2457,7 +2457,8 @@ test("under All, a query nothing else matches says the repository's files are st
   await settle();
 
   assert.deepEqual(rows(), []);
-  assert.equal(emptyLine(), "Reading the repository's files");
+  // Note that the Inbox's search of the service is out until typing pauses and it lands, which says the Inbox is read first.
+  await vi.waitFor(() => assert.equal(emptyLine(), "Reading the repository's files"));
   assert.equal(document.querySelector(".ui-note-line")?.getAttribute("role"), "status");
 
   await act(async () =>
@@ -2474,7 +2475,14 @@ test("under All, a query nothing else matches says the repository's files are st
   await vi.waitFor(() => assert.deepEqual(rows(), ["zqx.ts · src"]));
 
   type("nothing-at-all");
-  assert.equal(emptyLine(), "No results match", "once every source answered, it says so");
+  assert.equal(
+    emptyLine(),
+    "Reading your inbox",
+    "the service is still asked what the Inbox holds not",
+  );
+  await vi.waitFor(() =>
+    assert.equal(emptyLine(), "No results match", "once every source answered, it says so"),
+  );
 });
 
 test("Files says a failed read with a Retry that reads the repository's files again", async () => {

@@ -8,12 +8,11 @@ import {
   INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
-import { fileFolder } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { useTaskMentions } from "./task-mentions.js";
 
 /**
- * file-ref.tsx -- a file named anywhere in the window: its look as a row wears it, the card its tab hangs, and its mark, path, and lines as the one button that hangs that card and opens its tab.
+ * file-ref.tsx -- a file named anywhere in the window: the card its tab hangs, and its mark, path, and lines as the one button that hangs that card and opens its tab.
  *
  * A file of the task's repository is named in many places beside its own
  * tab: an inbox item's code, a mention, and ⌘K. Each wears
@@ -27,26 +26,6 @@ import { useTaskMentions } from "./task-mentions.js";
  * a new one at the strip's end, on the lines the place names, where it names
  * any.
  */
-
-/** A file as a row names it, in a menu, the summary, or ⌘K: its type's icon, its name, its folder after the name, and the whole path a search finds it by. */
-export interface FileLook {
-  readonly icon: React.JSX.Element;
-  readonly label: string;
-  readonly detail: string | undefined;
-  readonly terms: readonly string[];
-}
-
-/** How a file is named in a row, and its tab's icon and name the same. */
-export function fileLook(path: string): FileLook {
-  const name = fileName(path);
-
-  return {
-    icon: <FileTypeIcon name={name} />,
-    label: name,
-    detail: fileFolder(path),
-    terms: [path],
-  };
-}
 
 /**
  * A file's card, its tab's and every place naming it, drawn from the parts

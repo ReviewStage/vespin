@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { BRAND_ASSETS_DIRECTORY } from "@repo/brand/assets-directory";
 import { DMG_WINDOW } from "@repo/brand/dmg-window";
-import { buildAppIcon } from "./app-icon.mjs";
 import { LICENSE_RESOURCE_NAME, NOTICE_RESOURCE_NAME } from "./package-config.mjs";
 import { BUNDLED_HOST, LIQUID_GLASS_ADDON, NATIVE_HELPERS, NODE_PTY } from "./package-layout.mjs";
 
@@ -25,7 +24,11 @@ export function packageAssetPaths({ appRoot }) {
     plist: path.join(hostRoot, path.basename(BUNDLED_HOST.plistPath)),
   };
 
-  const iconPath = path.join(appRoot, ".build", "Vespin.icns");
+  // The app's icon is the Icon Composer bundle the iOS app ships too, which
+  // electron-builder compiles with Xcode's actool into the Assets.car macOS 26
+  // and later draw in each icon appearance (Default, Dark, Clear, Tinted), and
+  // into the `.icns` an earlier macOS reads.
+  const iconPath = path.join(BRAND_ASSETS_DIRECTORY, "ios", "Vespin.icon");
   const licensePath = path.join(appRoot, ".build", LICENSE_RESOURCE_NAME);
   const noticePath = path.join(appRoot, ".build", NOTICE_RESOURCE_NAME);
   const entitlementsPath = path.join(appRoot, "native", "macos", "entitlements.plist");
@@ -63,7 +66,6 @@ export function preparePackageAssets({ repoRoot, paths }) {
   fs.mkdirSync(path.dirname(paths.licensePath), { recursive: true });
   fs.copyFileSync(path.join(repoRoot, "LICENSE"), paths.licensePath);
   fs.copyFileSync(path.join(repoRoot, "NOTICE"), paths.noticePath);
-  buildAppIcon(paths.appRoot);
 }
 
 export function prepareElectronBuilderDmgAssets({ paths }) {

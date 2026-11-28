@@ -37,6 +37,7 @@ import { MACHINE_ASKS_READ } from "@repo/features/machine-ask-live";
 import { MACHINES_READ } from "@repo/features/machine-live";
 import { WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { CHATGPT_DEVICE_LOGIN, type ProviderKeysAnswer } from "@repo/features/provider-key-wire";
+import { VIEW_CHOICES_READ } from "@repo/features/view-choice-live";
 import { declaredWrite, type EntityPool } from "@repo/sync";
 import { Clock, Duration, Effect, Option, Schedule, type Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -64,6 +65,7 @@ import type { HeldSlice } from "./live-collection.js";
 import { heldMachineAsks } from "./machine-asks-follow.js";
 import { heldMachines, machineChange, machineRemove } from "./machines-follow.js";
 import { heldMemories, MemoriesKey, memoryForget, memorySave } from "./memory-follow.js";
+import { heldViewChoices, viewChoiceWritten } from "./view-choices-follow.js";
 import type { WindowFocus } from "./window-focus.js";
 
 /** The service's side of the account's asks, as this concern asks it. */
@@ -104,6 +106,7 @@ export type AccountAsksClient = Pick<
   | "renameSound"
   | "removeSound"
   | "chooseSound"
+  | "writeViewChoice"
   | "transcribeDictation"
   | "openVoiceSession"
   | "markActive"
@@ -180,6 +183,10 @@ interface LiveFollows {
   readonly machineAsks: HeldSlice<string>;
   /** The windows' one hold on the asks, under the account signed in. */
   readonly machineAsksHold: AccountHeld;
+  /** The account's view choices the windows hold, by the account. */
+  readonly viewChoices: HeldSlice<string>;
+  /** The windows' one hold on the view choices, under the account signed in. */
+  readonly viewChoicesHold: AccountHeld;
 }
 
 /** The reads the host fetches for the windows that hold them, and the windows' holds on them. */
@@ -273,6 +280,15 @@ function liveFollows(
       tell: liveTold(kernel.emit, AGENT_FOLLOWS.MACHINE_ASKS_FOLLOW),
     });
 
+    const viewChoices = yield* heldViewChoices({
+      seal: (userId, poll, after) =>
+        asked(client.liveRead(VIEW_CHOICES_READ, { userId }, poll ? { after } : undefined)),
+      accountId,
+      gate,
+      pool,
+      tell: liveTold(kernel.emit, ACCOUNT_ASK_FOLLOWS.VIEW_CHOICES_FOLLOW),
+    });
+
     return {
       memories,
       hosts,
@@ -281,6 +297,8 @@ function liveFollows(
       machinesHold: yield* accountHeld(machines, accountId),
       machineAsks,
       machineAsksHold: yield* accountHeld(machineAsks, accountId),
+      viewChoices,
+      viewChoicesHold: yield* accountHeld(viewChoices, accountId),
     };
   });
 }
@@ -530,7 +548,17 @@ function retriedFor(
 function actsOf(
   dependencies: AccountAsksDependencies,
   asked: Asked,
-  { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold }: LiveFollows,
+  {
+    memories,
+    hosts,
+    hostsHold,
+    machines,
+    machinesHold,
+    machineAsks,
+    machineAsksHold,
+    viewChoices,
+    viewChoicesHold,
+  }: LiveFollows,
   fetched: FetchedReads,
   commandsInTurn: <A>(write: Effect.Effect<A>) => Effect.Effect<A>,
 ): AccountAsksActs {
@@ -599,6 +627,16 @@ function actsOf(
       soundRenamed((rename) => asked(client.renameSound(rename)), dependencies.accountId),
     ),
     SOUND_REMOVE: (removal) => asked(client.removeSound(removal)),
+    // A view choice kept or forgotten is drawn over the held choices the moment it is asked.
+    VIEW_CHOICE_WRITE: declaredWrite(
+      pool,
+      viewChoiceWritten((write) => asked(client.writeViewChoice(write))),
+    ),
+    // The view choices are held for the windows while one draws a surface that reads one, under the account signed in.
+    VIEW_CHOICES_FOLLOW: {
+      hold: () => viewChoicesHold.hold,
+      retry: () => retriedFor(dependencies.accountId, viewChoices),
+    },
     SOUND_CHOOSE: declaredWrite(
       pool,
       soundChosen((choice) => asked(client.chooseSound(choice)), dependencies.accountId),
@@ -693,8 +731,17 @@ export function composeAccountAsks(
     const follows = yield* liveFollows(dependencies, asked);
     const fetched = yield* fetchedReads(dependencies, asked);
 
-    const { memories, hosts, hostsHold, machines, machinesHold, machineAsks, machineAsksHold } =
-      follows;
+    const {
+      memories,
+      hosts,
+      hostsHold,
+      machines,
+      machinesHold,
+      machineAsks,
+      machineAsksHold,
+      viewChoices,
+      viewChoicesHold,
+    } = follows;
 
     const { presence, presenceHold, keys, keysHold, token, tokenHold, commands, commandsHold } =
       fetched;
@@ -716,6 +763,7 @@ export function composeAccountAsks(
         yield* hostsHold.open;
         yield* machinesHold.open;
         yield* machineAsksHold.open;
+        yield* viewChoicesHold.open;
         yield* keysHold.open;
         yield* tokenHold.open;
         yield* commandsHold.open;
@@ -726,6 +774,7 @@ export function composeAccountAsks(
         yield* hosts.end;
         yield* machines.end;
         yield* machineAsks.end;
+        yield* viewChoices.end;
         yield* presence.end;
         yield* keys.end;
         yield* token.end;

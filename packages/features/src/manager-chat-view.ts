@@ -23,11 +23,13 @@
  * lines that reached it, and the messages and sets it sent. A turn that
  * has ended keeps its work folded over the Manager's first message of the
  * turn, words or a set, in the order it was done, as a chat app stands what
- * it thought over its answer; the turn under way's work opens under the
- * working line instead, so a finished chat draws no more than its messages
- * and its folds.
+ * it thought over its answer; the turn under way's work opens at the
+ * chat's end from the working line over its box instead
+ * (`managerWorkingLine`), so a finished chat draws no more than its
+ * messages and its folds.
  */
 
+import { waitingOnYouWords } from "./agent-approval-model.js";
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
 import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
@@ -39,6 +41,7 @@ import {
   type ManagerChatReaction,
   type ManagerChatReactionCount,
 } from "./manager-chat-live.js";
+import { WORKING_LINE } from "./time-format.js";
 import { isAgentTurn } from "./voice-call-lines.js";
 import { countWords } from "./words.js";
 
@@ -115,7 +118,7 @@ export interface ManagerChatView {
   readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
   readonly sending: ChatSendingPlaces;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
-  /** The turn under way's work so far, which its working line opens; none where no turn is under way or it has done none. */
+  /** The turn under way's work so far, which the working line over the box opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
 }
 
@@ -286,12 +289,60 @@ export function chatWorkWords(shown: boolean): string {
 }
 
 /**
+ * The line a Manager's chat stands just over its box while a turn runs, as
+ * a channel says who is typing by its box: never a row of the chat, so the
+ * chat holds only what was said. It says the Manager is working, or what a
+ * client's own words name of a turn that is doing something else
+ * (`phase`, such as stopping or waiting for a usage limit to reset), or,
+ * while the Manager holds a call for the reader's answer, that it waits on
+ * them. While it works, its face types; while it waits, it rests.
+ */
+export interface ManagerWorkingLine {
+  readonly words: string;
+  /** Whether the Manager waits on the reader's answer to a call it holds, rather than working. */
+  readonly waiting: boolean;
+  /** Whether the turn has done work its chat leaves out, which Show work beside the line opens. */
+  readonly work: boolean;
+}
+
+/** What a Manager's chat says over its box while it works: its name, or the bare working words where none is read yet. */
+function managerWorkingWords(name: string): string {
+  return name === "" ? WORKING_LINE : `${name} is working…`;
+}
+
+/**
+ * The line over a Manager's chat's box (`ManagerWorkingLine`): none while
+ * no turn runs; the approvals waiting on the reader, where any does;
+ * otherwise the client's own words for a turn that is doing something other
+ * than working (`phase`), else that the Manager is working.
+ */
+export function managerWorkingLine(
+  view: Pick<ManagerChatView, "live">,
+  standing: {
+    readonly working: boolean;
+    readonly name: string;
+    /** How many of the Manager's calls wait on the reader's answer. */
+    readonly waiting: number;
+    /** The client's words for a turn neither starting nor working; none where it is either. */
+    readonly phase?: string | undefined;
+  },
+): ManagerWorkingLine | undefined {
+  if (!standing.working) return undefined;
+  const work = view.live.length > 0;
+
+  if (standing.waiting > 0)
+    return { words: waitingOnYouWords(standing.waiting), waiting: true, work };
+
+  return { words: standing.phase ?? managerWorkingWords(standing.name), waiting: false, work };
+}
+
+/**
  * A Manager's chat as a page draws it: its rows, read newest first, drawn
  * oldest first, each placed in its sender's run; each ended turn's work,
  * from the transcript held, folded over the Manager's first message of the
- * turn; and the work of the turn under way (`running`, its id), drawn
- * under the working line. A turn whose journal is not held keeps its work
- * nowhere, so its messages offer none.
+ * turn; and the work of the turn under way (`running`, its id), which the
+ * working line over the box opens at the chat's end. A turn whose journal
+ * is not held keeps its work nowhere, so its messages offer none.
  */
 export function managerChatView(
   rows: readonly ManagerChatLiveMessage[],

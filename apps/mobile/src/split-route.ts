@@ -2,7 +2,13 @@
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import {
+  type NativeStackNavigationProp,
+  useFocusEffect,
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from "expo-router";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { showPickedPage } from "./split-columns.js";
 import { useOwnTab } from "./tab-route.js";
@@ -14,6 +20,9 @@ export const SPLIT_TAB = {
 } as const;
 
 export type SplitTab = (typeof SPLIT_TAB)[keyof typeof SPLIT_TAB];
+
+/** The route param an item pushed from a list its tab's root does not hold carries, such as a thread opened from an agent's own Inbox, so it stays a page over that list rather than handing itself to the root's split view, which would pop the list and the pages under it. */
+export const STAYS_PAGE = { PARAM: "stays", PAGE: "page" } as const;
 
 /** An item's pushed route on its own tab's stack. */
 function itemRoute(tab: SplitTab, id: string): string {
@@ -85,6 +94,9 @@ export function useSplitPicked(tab: SplitTab): string | undefined {
   return useSyncExternalStore(subscribe, () => picked.get(tab));
 }
 
+/** A tab root's own navigation, whose stack tells when its transition in ends and whose params hold its selection. */
+type RootNavigation = NativeStackNavigationProp<Record<string, { selected?: string } | undefined>>;
+
 /** An item just picked from the list, and the selection the route held when it was. */
 type HeldPick = { readonly id: string; readonly over: string | undefined };
 
@@ -107,13 +119,14 @@ type UseSplitSelectionResult = {
  * from the tab in front, so a tab behind keeps its item until it is shown.
  * Note that a pick stands selected at once, until the route's own selection
  * moves, because the route answers a few renders later, which iPadOS 26
- * drew as most of a second.
+ * drew as most of a second; but for a pick under a page pushed over the
+ * root, which stands selected once the pop has drawn the root again.
  */
 export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const navigation = useNavigation();
+  const navigation = useNavigation<RootNavigation>();
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const routed = selected ?? (regular ? picked.get(tab) : undefined);
 
@@ -141,13 +154,26 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     }, [regular, selected, router, tab]),
   );
 
-  const select = (id: string) => {
+  const pick = (id: string) => {
     hold({ id, over: routed });
     keepPick(tab, id);
+  };
 
-    // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place.
-    if (navigation.isFocused()) router.setParams({ selected: id });
-    else router.dismissTo({ pathname: tab, params: { selected: id } });
+  const select = (id: string) => {
+    if (navigation.isFocused()) {
+      pick(id);
+      router.setParams({ selected: id });
+    } else {
+      // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place; and that the item is picked only once the root's transition in has ended, because a detail swapped for the new item while the page still covered the split view crashed inside SwiftUI's own List as the pop drew it again.
+      const stop = navigation.addListener("transitionEnd", (event) => {
+        if (event.data.closing) return;
+        stop();
+        pick(id);
+        navigation.setParams({ selected: id });
+      });
+
+      router.dismissTo({ pathname: tab });
+    }
 
     showPickedPage();
   };

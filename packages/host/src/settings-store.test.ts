@@ -89,10 +89,9 @@ const PATH: Path.Path = Effect.runSync(Effect.provide(Path.Path, NodePath.layer)
 /**
  * The services this suite's own promise face runs the store's effects under: the
  * store's own methods are effects, and this suite holds them as the promises
- * its assertions are written against. `settings-store-awaited.ts` once
- * answered production callers the same shape by name and is now deleted;
- * this is that shape kept for the suite alone, where the run-outside-an-edge
- * rule does not reach (tests are exempt by extension).
+ * its assertions are written against, a shape kept for the suite alone,
+ * where the run-outside-an-edge rule does not reach (tests are exempt by
+ * extension).
  */
 const SERVICES: Context.Context<never> = Context.empty();
 
@@ -1012,6 +1011,32 @@ test("a first link choice made before the first sync is kept to be written, whet
       accountPreferencesParts(await mac.accountPreferences()).linkOpen,
       LINK_OPEN.MAC_APP,
     );
+  }
+});
+
+test("a diff choice a Mac made before the account carried it gives way to the account's, and stands to be written where the account holds none", async (t) => {
+  for (const remote of [{ diffLayout: DIFF_LAYOUT.UNIFIED }, {}]) {
+    const directory = await temporaryDirectory(t, "settings-");
+    const mac = storeIn(directory);
+    await mac.setAccount(TEST_ACCOUNT);
+    await mac.set("diffLayout", DIFF_LAYOUT.SPLIT);
+    await mac.setAccountPreferencesSyncBaseline(TEST_ACCOUNT.email, {});
+    // The baseline as a build before the diff display joined the account kept it, naming no fields.
+    const file = path.join(directory, SETTINGS_FILE_NAME);
+    const stored = JSON.parse(await readSettingsFile(directory));
+    const { fields: _fields, ...older } = stored.accountPreferencesSync;
+    await fs.writeFile(file, JSON.stringify({ ...stored, accountPreferencesSync: older }));
+
+    const updated = storeIn(directory);
+    const baseline = await updated.accountPreferencesSyncBaseline(TEST_ACCOUNT.email);
+    assert.ok(baseline, "the older baseline did not read");
+
+    await updated.applyAccountPreferences(
+      snapshotAccountPreferences(remote, false, await updated.accountPreferences()),
+      { accountEmail: TEST_ACCOUNT.email, preferences: baseline },
+    );
+
+    assert.equal(await updated.get("diffLayout"), remote.diffLayout ?? DIFF_LAYOUT.SPLIT);
   }
 });
 

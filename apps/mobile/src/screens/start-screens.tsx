@@ -77,6 +77,7 @@ import {
   startRefusalWords,
   useModelPick,
   useRepositoryPick,
+  useRunsOnPick,
   useStartAgent,
   useStartFork,
   useStartTask,
@@ -1272,7 +1273,6 @@ export function NewTaskScreen({
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const dictated = useDictation(prompt, setPrompt);
-  const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosen = useChosenWorkspace(workspaces).chosen;
   const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
@@ -1285,6 +1285,7 @@ export function NewTaskScreen({
   const repository = useRepositoryPick(workspace, draft?.repository ?? opensIn);
   const relation = useRelationPick(workspaceId, parent);
   const pick = useModelPick();
+  const [runsOn, setRunsOn] = useRunsOnPick(pick.devices);
   const [modelsShown, setModelsShown] = useState(false);
   const startTask = useStartedIn(useStartTask(workspaceId), workspaceId, section);
   const [note, setNote] = useState<string | undefined>(undefined);

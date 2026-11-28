@@ -1,15 +1,19 @@
 /**
- * working-mark.tsx -- the one mark an agent at work wears: two pixels standing mid-chase round the edge of a small grid, in the gray ink around it.
+ * working-mark.tsx -- the one mark an agent at work wears: two pixels chasing each other round the edge of a small grid, in the gray ink around it.
  *
  * Every place that says an agent is working draws this mark. It stands inside
  * the 16px icon seat: eight 3px cells lapped round a 3×3 grid, 2px apart,
- * two pixels and the fainter tail behind each lit on them, mid-lap, so the
- * mark always lights four cells and reads as working. Note that it stands
- * still: it once stepped round the lap five times a second, and a window
- * with any agent at work drew a frame on every step for as long as it
- * worked, so it holds the one frame instead. The mark itself
- * is decorative; the seat it stands in names it. Its side is 16px unless a
- * container sets `--ui-working-mark-size`.
+ * two pixels and the fainter tail behind each lit on them. The cells draw its
+ * still frame, mid-lap, so a still mark always lights four cells and reads
+ * as working. While endless loops run, its stylesheet hides them and plays
+ * the lap instead, each pixel stepping a cell five times a second
+ * (`working-mark.css`). Note that the lap runs no React and no timer, and
+ * that it is an animated image the compositor steps, not keyframes, because
+ * a running keyframe animation ticks on every vsync: a stepped lap of
+ * `transform` keyframes cost the renderer several times what the image does
+ * (`scripts/loop-frames.ts`, whose frames follow the geometry below). The
+ * mark itself is decorative; the seat it stands in names it. Its side is
+ * 16px unless a container sets `--ui-working-mark-size`.
  *
  * It is drawn in the Tailwind theme's utilities: every cell is placed and
  * sized in percentages of the mark's side, so the grid scales with the side
@@ -17,8 +21,8 @@
  */
 
 /**
- * The pixels the mark lights: each chaser and the fainter tail one cell
- * behind it, with the track cell it stands on.
+ * The pixels the still mark lights: each chaser and the fainter tail one
+ * cell behind it, with the track cell it stands on.
  */
 const WORKING_DOTS = [
   { dot: "lead", restsOn: 1, tail: false },

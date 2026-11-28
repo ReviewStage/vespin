@@ -173,10 +173,10 @@ test("a scroll that brings a line just focused or selected in the log into view,
   const found = document.createRange();
   found.selectNodeContents(line);
   found.getBoundingClientRect = () => placedAt(100, 120);
+  // Note that the scroll is heard before the selection's change event, as a frame that runs ahead of that event's task hears it.
   act(() => {
     document.getSelection()?.removeAllRanges();
     document.getSelection()?.addRange(found);
-    document.dispatchEvent(new Event("selectionchange"));
   });
   scrollTo(box, 500);
   assert.equal(anchor().stuck, false, "a selection moved up the log lets go of the end");

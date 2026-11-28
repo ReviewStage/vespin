@@ -212,7 +212,7 @@ const SECTIONS_FAILED = readFailedWords("the sections it changed");
 /** How wide each placeholder row of a revision's sections stands, a section's name as a share of its line. */
 const SECTIONS_SKELETON = ["46%", "62%", "38%"] as const;
 
-/** A placeholder revision's writer's mark, at a row's actor mark's size (`avatar.css`). */
+/** A placeholder revision's writer's mark, at a row's actor mark's size (`ACTOR_SIZE.ROW`, `actor-ref.tsx`). */
 const ROW_MARK_SKELETON = "20px";
 
 /** How wide a placeholder revision's time stands, a short moment's ("2h", "Mon"). */

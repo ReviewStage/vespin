@@ -243,7 +243,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       leaveStart: () => false,
     });
 
-    return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held });
+    return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held, staged: false });
   }
 
   // Note that the tasks and sections are read off main's document, as the window's surfaces read them (`task-row-doors.ts`, `use-pin-writes.ts`).

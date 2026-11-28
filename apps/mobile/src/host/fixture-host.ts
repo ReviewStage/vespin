@@ -39,6 +39,7 @@ import {
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
+  PortActCall,
   PortActKind,
   PortActPayload,
   PortActResult,
@@ -317,12 +318,10 @@ const NO_KEPT_CHAT: ReadonlyMap<string, readonly ManagerChatLiveMessage[]> = new
  */
 function keepChatSend(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_CHAT_SEND) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const sent = payload as PortActPayload<typeof ACT_KIND.AGENTS_CHAT_SEND>;
+  if (act.kind !== ACT_KIND.AGENTS_CHAT_SEND) return;
+  const sent = act.payload;
   const { account } = state.snapshot();
   const held = KEPT_CHAT.get(state) ?? NO_KEPT_CHAT;
   const rows = (held.get(sent.agentId) ?? []).filter((row) => row.clientKey !== sent.clientKey);
@@ -402,15 +401,13 @@ function sendsAppState(
  */
 function keepSend(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
   refused: boolean,
 ): boolean {
   const held = KEPT_SENDS.get(state) ?? NO_KEPT_SENDS;
 
-  if (kind === ACT_KIND.AGENTS_UNSEND) {
-    // SAFETY: the payload is the kind's, which the guard above names.
-    const { agentId, lineId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_UNSEND>;
+  if (act.kind === ACT_KIND.AGENTS_UNSEND) {
+    const { agentId, lineId } = act.payload;
     const lines = (held.get(agentId) ?? []).filter((line) => line.id !== lineId);
     KEPT_SENDS.set(state, new Map(held).set(agentId, lines));
     stageFixture(state);
@@ -418,9 +415,8 @@ function keepSend(
     return true;
   }
 
-  if (kind !== ACT_KIND.AGENTS_MESSAGE) return false;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const sent = payload as PortActPayload<typeof ACT_KIND.AGENTS_MESSAGE>;
+  if (act.kind !== ACT_KIND.AGENTS_MESSAGE) return false;
+  const sent = act.payload;
   const id = sentLineId(sent.clientKey);
 
   const line: SendingMessage = {
@@ -529,19 +525,14 @@ export function stageFixture(
  */
 function keepSentReply(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
   answer: PortActResult<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_INBOX_MESSAGE) return;
+  if (act.kind !== ACT_KIND.AGENTS_INBOX_MESSAGE) return;
 
   if (Predicate.isObject(answer) && "failure" in answer) return;
 
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const reply = inboxSentReply(
-    payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_MESSAGE>,
-    Date.now(),
-  );
+  const reply = inboxSentReply(act.payload, Date.now());
 
   if (reply === undefined) return;
   const sent = SENT_REPLIES.get(state) ?? NO_SENT_REPLIES;
@@ -579,12 +570,10 @@ const REMOTE_RECORDING_PATH = "/fixture-recording.mp4";
  */
 function remoteRecording(
   mediaOrigin: string | undefined,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): PortActResult<typeof ACT_KIND.ACCOUNT_PICTURE_SOURCE> | undefined {
-  if (mediaOrigin === undefined || kind !== ACT_KIND.ACCOUNT_PICTURE_SOURCE) return undefined;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const picture = payload as PortActPayload<typeof ACT_KIND.ACCOUNT_PICTURE_SOURCE>;
+  if (mediaOrigin === undefined || act.kind !== ACT_KIND.ACCOUNT_PICTURE_SOURCE) return undefined;
+  const picture = act.payload;
 
   if (picture.owner !== PICTURE_OWNER.AGENT || picture.pictureId !== FIXTURE_RECORDING_ID) {
     return undefined;
@@ -599,12 +588,10 @@ function remoteRecording(
 /** A picture a reply of this run carried, read back as the service answers one; none for any other act or attachment. */
 function sentFileRead(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> | undefined {
-  if (kind !== ACT_KIND.AGENTS_INBOX_ATTACHMENT) return undefined;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { attachmentId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT>;
+  if (act.kind !== ACT_KIND.AGENTS_INBOX_ATTACHMENT) return undefined;
+  const { attachmentId } = act.payload;
 
   return inboxSentFile(SENT_REPLIES.get(state) ?? NO_SENT_REPLIES, attachmentId);
 }
@@ -612,12 +599,10 @@ function sentFileRead(
 /** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepReminder(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_INBOX_REMIND) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
+  if (act.kind !== ACT_KIND.AGENTS_INBOX_REMIND) return;
+  const { itemId, until } = act.payload;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
   stageFixture(state);
 }
@@ -632,12 +617,10 @@ function keepReminder(
  */
 function keepReadMark(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): boolean {
-  if (kind !== ACT_KIND.TASKS_MARK_READ) return false;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { taskId, readMark } = payload as PortActPayload<typeof ACT_KIND.TASKS_MARK_READ>;
+  if (act.kind !== ACT_KIND.TASKS_MARK_READ) return false;
+  const { taskId, readMark } = act.payload;
   const kept: KeptReadMark = { mark: readMark, at: Date.now() };
   READ_MARKS.set(state, new Map(READ_MARKS.get(state) ?? NO_READ_MARKS).set(taskId, kept));
   stageFixture(state);
@@ -648,12 +631,10 @@ function keepReadMark(
 /** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepInboxReadMark(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_INBOX_READ_STATE) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { itemId, unread } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_READ_STATE>;
+  if (act.kind !== ACT_KIND.AGENTS_INBOX_READ_STATE) return;
+  const { itemId, unread } = act.payload;
   INBOX_READ_MARKS.set(
     state,
     new Map(INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS).set(itemId, unread),
@@ -664,12 +645,10 @@ function keepInboxReadMark(
 /** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
 function keepMachineAnswer(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.MACHINE_ASK_ANSWER) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { id } = payload as PortActPayload<typeof ACT_KIND.MACHINE_ASK_ANSWER>;
+  if (act.kind !== ACT_KIND.MACHINE_ASK_ANSWER) return;
+  const { id } = act.payload;
   ANSWERED_ASKS.set(state, new Set(ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS).add(id));
   stageFixture(state);
 }
@@ -677,12 +656,10 @@ function keepMachineAnswer(
 /** Keeps the words of a memory the fixture saved, over one of its own or as a new one, and lays them over the document at once (`savedMemoriesAppState`); nothing for any other act. */
 function keepMemory(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.MEMORIES_SAVE) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { text, replaces } = payload as PortActPayload<typeof ACT_KIND.MEMORIES_SAVE>;
+  if (act.kind !== ACT_KIND.MEMORIES_SAVE) return;
+  const { text, replaces } = act.payload;
 
   const id = replaces ?? NEW_MEMORY_ID;
   MEMORY_WORDS.set(state, new Map(MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS).set(id, text));
@@ -692,10 +669,9 @@ function keepMemory(
 /** Keeps an automation's switch the fixture turned, and lays it over the list at once, as the host draws a switch turned (`inboxAutomationsAppState`); nothing for any other act. */
 function keepAutomationSwitch(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  const turned = automationSwitchOf(kind, payload);
+  const turned = automationSwitchOf(act);
 
   if (turned === undefined) return;
   const switches = new Map(SWITCHES.get(state) ?? NO_SWITCHES);
@@ -706,10 +682,9 @@ function keepAutomationSwitch(
 /** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, pin, or archive, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  const changed = agentChangeOf(kind, payload);
+  const changed = agentChangeOf(act);
 
   if (changed === undefined) return;
   const held = CHOICES.get(state) ?? NO_CHOICES;
@@ -721,11 +696,10 @@ function keepChoice(
 /** Keeps the queue a change to it or a Stop the fixture took leaves its agent, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepQueue(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
   const held = QUEUES.get(state) ?? NO_QUEUES;
-  const after = queueAfter(held, kind, payload);
+  const after = queueAfter(held, act);
 
   if (after === undefined) return;
   QUEUES.set(state, new Map(held).set(after.agentId, after.queue));
@@ -735,12 +709,10 @@ function keepQueue(
 /** Keeps how a change the fixture took moved its pull request, or a review thread it resolved or opened again, and lays it over the document at once; nothing for any other act. */
 function keepMove(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): void {
-  if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
+  if (act.kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
+  const { number, request } = act.payload;
   const moves = MOVES.get(state) ?? NO_MOVES;
   const moved = pullRequestMovedBy(moves.get(number), request);
   const resolve = threadResolveOf(request);
@@ -761,13 +733,11 @@ function keepMove(
 function olderRead(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   profile: RunProfile,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): PortActResult<typeof ACT_KIND.AGENTS_TRANSCRIPT_OLDER> | undefined {
-  if (kind !== ACT_KIND.AGENTS_TRANSCRIPT_OLDER) return undefined;
+  if (act.kind !== ACT_KIND.AGENTS_TRANSCRIPT_OLDER) return undefined;
   const asks = (OLDER_ASKS.get(state) ?? 0) + 1;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const params = payload as PortActPayload<typeof ACT_KIND.AGENTS_TRANSCRIPT_OLDER>;
+  const params = act.payload;
   const answer = olderPageAnswer(profile, params, asks);
 
   if (answer === undefined) return undefined;
@@ -791,12 +761,10 @@ const EDIT_CONFLICT_AGENT = "Build the invite flow";
  */
 function startRefusedOnce(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
-  kind: PortActKind,
-  payload: PortActPayload<PortActKind>,
+  act: PortActCall,
 ): PortActResult<typeof ACT_KIND.TASKS_START> | undefined {
-  if (kind !== ACT_KIND.TASKS_START) return undefined;
-  // SAFETY: the payload is the kind's, which the guard above names.
-  const { id } = payload as PortActPayload<typeof ACT_KIND.TASKS_START>;
+  if (act.kind !== ACT_KIND.TASKS_START) return undefined;
+  const { id } = act.payload;
   const refused = STARTS_REFUSED.get(state) ?? new Set<string>();
 
   if (id === undefined || refused.has(id)) return undefined;
@@ -916,14 +884,14 @@ export function fixtureActs(
 
       // Note that each function under a kind takes that kind's payload.
       return (payload: PortActPayload<PortActKind>, ...rest: unknown[]) => {
-        // SAFETY: the port is keyed by act kind.
-        const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
+        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
+        const act = { kind, payload } as PortActCall;
+        const refused = refusesWrites ? REFUSED_WRITES.get(act.kind) : undefined;
 
         if (refused !== undefined) return Promise.resolve(refused(payload));
 
         // Note that a message to an agent is left unanswered too, and kept as the host keeps a refused line, so a flow sees it stand Not delivered.
-        // SAFETY: the port is keyed by act kind.
-        if (refusesWrites && keepSend(state, kind as PortActKind, payload, true)) {
+        if (refusesWrites && keepSend(state, act, true)) {
           return Promise.resolve(
             kind === ACT_KIND.AGENTS_UNSEND
               ? undefined
@@ -931,60 +899,40 @@ export function fixtureActs(
           );
         }
 
-        // SAFETY: the port is keyed by act kind.
-        const startRefused = refusesWrites
-          ? startRefusedOnce(state, kind as PortActKind, payload)
-          : undefined;
+        const startRefused = refusesWrites ? startRefusedOnce(state, act) : undefined;
 
         if (startRefused !== undefined) return Promise.resolve(startRefused);
-        // SAFETY: the port is keyed by act kind.
-        const older = olderRead(state, profile, kind as PortActKind, payload);
+        const older = olderRead(state, profile, act);
 
         if (older !== undefined) return Promise.resolve(older);
 
-        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
-        if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
+        if (keepReadMark(state, act)) return Promise.resolve(true);
 
-        // SAFETY: as above.
-        const remote = remoteRecording(mediaOrigin, kind as PortActKind, payload);
+        const remote = remoteRecording(mediaOrigin, act);
 
         if (remote !== undefined) return Promise.resolve(remote);
 
-        // SAFETY: as above.
-        const sentFile = sentFileRead(state, kind as PortActKind, payload);
+        const sentFile = sentFileRead(state, act);
 
         if (sentFile !== undefined) return Promise.resolve(sentFile);
 
-        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
-        const staged = inboxActAnswer(profile, kind as PortActKind, payload);
+        const staged = inboxActAnswer(profile, act.kind, act.payload);
 
         if (staged === undefined) return sent.call(target, payload, ...rest);
-        // SAFETY: as above.
-        keepMove(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepReminder(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepInboxReadMark(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepChoice(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepQueue(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepMemory(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepAutomationSwitch(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepMachineAnswer(state, kind as PortActKind, payload);
-        // SAFETY: as above.
-        keepSentReply(state, kind as PortActKind, payload, staged.answer);
-        // SAFETY: as above.
-        keepCommentThread(state, kind as PortActKind, staged.answer);
+        keepMove(state, act);
+        keepReminder(state, act);
+        keepInboxReadMark(state, act);
+        keepChoice(state, act);
+        keepQueue(state, act);
+        keepMemory(state, act);
+        keepAutomationSwitch(state, act);
+        keepMachineAnswer(state, act);
+        keepSentReply(state, act, staged.answer);
+        keepCommentThread(state, act.kind, staged.answer);
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
-        // SAFETY: as above.
-        keepSend(state, kind as PortActKind, payload, false);
+        keepSend(state, act, false);
         // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.
-        // SAFETY: as above.
-        keepChatSend(state, kind as PortActKind, payload);
+        keepChatSend(state, act);
 
         return Promise.resolve(staged.answer);
       };

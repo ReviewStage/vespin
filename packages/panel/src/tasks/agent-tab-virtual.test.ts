@@ -70,8 +70,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
-  // The find's choice of searching calls and thoughts is the window's, kept across draws.
-  window.localStorage.clear();
 });
 
 const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";

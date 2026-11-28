@@ -67,6 +67,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { FaceAsking } from "../agents/face-ask.js";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { AUTOMATIONS_ROUTE, automationRoute } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -942,10 +943,18 @@ export function SearchScreen() {
   const shared = useContext(SearchWordsContext);
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
 
-  if (shared !== undefined)
-    return regular ? <SearchPageScreen /> : <SearchStackScreen {...shared} />;
-
-  return <SearchOwnRoot />;
+  // Note that every layout stands the face picker its Managers' rows open (`FaceAsking`).
+  return (
+    <FaceAsking>
+      {shared === undefined ? (
+        <SearchOwnRoot />
+      ) : regular ? (
+        <SearchPageScreen />
+      ) : (
+        <SearchStackScreen {...shared} />
+      )}
+    </FaceAsking>
+  );
 }
 
 /** Search's root holding its own query and scope, where nothing above it holds them, as on an iPhone. */

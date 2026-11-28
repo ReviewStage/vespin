@@ -11,14 +11,21 @@
  * order it was asked, a block whose caller went away before its turn never
  * sent, and a process that died or stalled replaced by the next block's
  * own, its block drawn plain, which a window already draws for a block it
- * could not color. Nothing here names Electron or Node: the process is a
- * seam (`SpawnTaskCodeProcess`), so the desktop forks it with Electron's
- * `utilityProcess` and a test with Node's own child process.
+ * could not color. The process is a seam (`process-asking.ts`), so the
+ * desktop forks it with Electron's `utilityProcess` and a test with Node's
+ * own child process.
  */
 import { type CodeLines, type CodeToken, codeLinesSchema } from "@repo/features/tasks-view";
 import { catchAllButInterrupt } from "@repo/runtime/effect";
-import type { WireBoundaryInput } from "@repo/wire";
-import { type Cause, Deferred, Duration, Effect, Exit, Option, Queue, Schema, Scope } from "effect";
+import { Deferred, Duration, Effect, Exit, Option, Queue, Schema, Scope } from "effect";
+import {
+  type AskedProcess,
+  type AskedProcessListeners,
+  answerFor,
+  type SpawnAskedProcess,
+  type StandingProcess,
+  spawnInto,
+} from "./process-asking.js";
 
 /**
  * How many blocks wait for the process before a further ask waits for room.
@@ -51,31 +58,18 @@ export const taskCodeAnswerSchema = Schema.Struct({
 });
 
 /** A process that colors, as the asking side holds it: a message sent to it, and its end. */
-export interface TaskCodeProcess {
-  readonly send: (message: typeof taskCodeRequestSchema.Encoded) => void;
-  readonly kill: () => void;
-}
+export type TaskCodeProcess = AskedProcess<typeof taskCodeRequestSchema.Encoded>;
 
 /** What the process's spawner hands what it hears: each message, and the process's exit. */
-export interface TaskCodeProcessListeners {
-  readonly onMessage: (message: WireBoundaryInput) => void;
-  readonly onExit: () => void;
-}
+export type TaskCodeProcessListeners = AskedProcessListeners;
 
 /** Starts a process that colors, wired to `listeners`; a throw is a process that could not be started. */
-export type SpawnTaskCodeProcess = (listeners: TaskCodeProcessListeners) => TaskCodeProcess;
+export type SpawnTaskCodeProcess = SpawnAskedProcess<typeof taskCodeRequestSchema.Encoded>;
+
+type Spawned = StandingProcess<typeof taskCodeRequestSchema.Encoded>;
 
 /** A block's coloring as the window's act asks for it. */
 export type ColorCode = (language: string, code: string) => Effect.Effect<CodeLines>;
-
-/** One process standing: what it was spawned as, what it answered, and the scope that ends it. */
-interface Spawned {
-  readonly child: TaskCodeProcess;
-  readonly answers: Queue.Queue<WireBoundaryInput, Cause.Done>;
-  readonly scope: Scope.Closeable;
-  /** Whether the process has exited, so no further block is sent to it. */
-  readonly exited: () => boolean;
-}
 
 /** A block asked for and the answer its caller waits on, interrupted where the caller went away. */
 interface Asked {
@@ -90,48 +84,8 @@ export function plainCodeLines(code: string): CodeToken[][] {
 }
 
 /** The lines the process answered for `id`, or none where it ended first or answered what it should not. */
-function answerFor(
-  answers: Queue.Queue<WireBoundaryInput, Cause.Done>,
-  id: number,
-): Effect.Effect<CodeLines | undefined> {
-  return Effect.matchEffect(Queue.take(answers), {
-    onFailure: () => Effect.succeed(undefined),
-    onSuccess: (message) => {
-      const answer = Schema.decodeUnknownOption(taskCodeAnswerSchema)(message);
-
-      if (Option.isNone(answer)) return Effect.succeed(undefined);
-
-      // Note that an answer for an earlier id is one a stalled block gave too late, and is passed over.
-      return answer.value.id === id ? Effect.succeed(answer.value.lines) : answerFor(answers, id);
-    },
-  });
-}
-
-/** Spawns a process into a scope of its own under `parent`, so its scope's close, or the parent's, kills it. */
-function spawnInto(parent: Scope.Scope, spawn: SpawnTaskCodeProcess): Effect.Effect<Spawned> {
-  return Effect.gen(function* () {
-    const scope = yield* Scope.fork(parent);
-    const answers = yield* Queue.unbounded<WireBoundaryInput, Cause.Done>();
-    let exited = false;
-
-    const child = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        spawn({
-          onMessage: (message) => {
-            Queue.offerUnsafe(answers, message);
-          },
-          onExit: () => {
-            exited = true;
-            Queue.endUnsafe(answers);
-          },
-        }),
-      ),
-      (spawned) => Effect.sync(() => spawned.kill()),
-    ).pipe(Scope.provide(scope));
-
-    return { child, answers, scope, exited: () => exited };
-  });
-}
+const linesFor = (spawned: Spawned, id: number) =>
+  Effect.map(answerFor(spawned.answers, id, taskCodeAnswerSchema), (answer) => answer?.lines);
 
 /**
  * Coloring through a process `spawn` starts the first time a block is asked
@@ -175,7 +129,7 @@ export function taskCodeProcessColoring(
         );
 
         const lines = Exit.isSuccess(sent)
-          ? yield* Effect.timeoutOption(answerFor(spawned.answers, id), COLOR_DEADLINE)
+          ? yield* Effect.timeoutOption(linesFor(spawned, id), COLOR_DEADLINE)
           : Option.none();
 
         if (Option.isSome(lines) && lines.value !== undefined) return lines.value;
