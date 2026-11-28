@@ -1,4 +1,4 @@
-// index.tsx -- the app's root URL, which opens on the Inbox tab, or Tasks while the Inbox is off, or on the agent a launch names (`-agent <id>`), or on its pull request (`-pullRequest <number>`), or on the pill field's scratch page (`-pillField true`).
+// index.tsx -- the app's root URL, which opens on the Inbox tab, or Tasks while the Inbox is off, or on the agent a launch names (`-agent <id>`), or on its pull request (`-pullRequest <number>`), or on the pill field's scratch page (`-pillField true`), or the share page's (`-sharePage true`).
 
 import {
   iosAgentRoute,
@@ -8,11 +8,19 @@ import {
 } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { Redirect } from "expo-router";
-import { launchAgent, launchPillField, launchPullRequest } from "../../host/launch-arguments.js";
+import {
+  launchAgent,
+  launchPillField,
+  launchPullRequest,
+  launchSharePage,
+} from "../../host/launch-arguments.js";
 import { useInboxShown } from "../../inbox/inbox-shown.js";
 
 /** The pill field's scratch page, which a flow shoots the field on. */
 const PILL_FIELD_ROUTE = "/pill-field";
+
+/** The share page's scratch page, which a flow shoots the page on. */
+const SHARE_PAGE_ROUTE = "/share-page";
 
 /**
  * Where the launch opens: the agent it names, or that agent's pull request
@@ -22,6 +30,8 @@ const PILL_FIELD_ROUTE = "/pill-field";
  */
 function launchHref(inboxShown: boolean): string {
   if (launchPillField()) return PILL_FIELD_ROUTE;
+
+  if (launchSharePage()) return SHARE_PAGE_ROUTE;
   const agent = launchAgent();
 
   if (agent === undefined) {
