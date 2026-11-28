@@ -106,6 +106,7 @@
     "./installed-skill-wire": "./src/installed-skill-wire.js",
     "./ios-app-links": "./src/ios-app-links.js",
     "./ios-menu-commands": "./src/ios-menu-commands.js",
+    "./ios-share-destinations": "./src/ios-share-destinations.js",
     "./ios-share-wire": "./src/ios-share-wire.js",
     "./ios-sign-in-wire": "./src/ios-sign-in-wire.js",
     "./ios-system-activity": "./src/ios-system-activity.js",

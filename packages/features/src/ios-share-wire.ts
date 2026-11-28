@@ -16,12 +16,19 @@
  * JPEGs the extension writes beside it, under the fixed names
  * `SHARE_DRAFT_PICTURE_FILES` lists, which the draft names back; a name
  * outside that list is refused, so a draft can never point the app at
- * another file.
+ * another file. The snapshot also holds where a share may go in the
+ * workspace the phone works in (`ShareDestinations`, built by
+ * `ios-share-destinations.ts`): its Managers, open Inbox threads, recent
+ * tasks and recent agents, each as a row names it, never what a row reads
+ * live, such as whether an agent works, since the snapshot stands until the
+ * app writes it again.
  */
 
 import { Schema as EffectSchema, Option } from "effect";
 import { type ClientIdentity, clientHeaders } from "./client-identity.js";
-import type { TaskSummary } from "./task-wire.js";
+import { managerFaceSchema } from "./manager-face.js";
+import { MODEL_PROVIDER } from "./models-wire.js";
+import { TASK_STATUS, type TaskSummary } from "./task-wire.js";
 import { newestRepositories, workspaceReaches } from "./tasks-model.js";
 import type { Workspace } from "./workspace-wire.js";
 
@@ -38,6 +45,81 @@ interface ShareService {
   readonly headers: Readonly<Record<string, string>>;
 }
 
+/** What a share may be sent to: a Manager's chat, an agent, an Inbox thread's agent, or a task, on which it starts a new agent. */
+export const SHARE_DESTINATION_KIND = {
+  MANAGER: "manager",
+  AGENT: "agent",
+  THREAD: "thread",
+  TASK: "task",
+} as const;
+
+/** The most of each kind the snapshot holds for a workspace, newest moved first, so the extension reads a bounded file. */
+export const SHARE_DESTINATION_BOUNDS = {
+  MANAGERS: 10,
+  THREADS: 15,
+  TASKS: 15,
+  AGENTS: 10,
+  /** The most characters a row's name or title keeps. */
+  MAX_NAME_CHARS: 120,
+} as const;
+
+const destinationName = EffectSchema.String.check(
+  EffectSchema.isMaxLength(SHARE_DESTINATION_BOUNDS.MAX_NAME_CHARS),
+);
+
+const taskStatus = EffectSchema.Literals(Object.values(TASK_STATUS));
+
+/**
+ * One place a share may go, as its row names it, with when it last moved
+ * (`at`, epoch milliseconds), which orders the sheet's Recent: a Manager by
+ * its name and face; an agent by its name, the task it works on, and its
+ * model's harness; an Inbox thread by its title, the agent a reply goes to,
+ * and what holds it; a task by its name and status.
+ */
+const shareDestinationSchema = EffectSchema.Union([
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(SHARE_DESTINATION_KIND.MANAGER),
+    id: EffectSchema.String,
+    name: destinationName,
+    face: EffectSchema.optionalKey(managerFaceSchema),
+    at: EffectSchema.Number,
+  }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(SHARE_DESTINATION_KIND.AGENT),
+    id: EffectSchema.String,
+    name: destinationName,
+    task: destinationName,
+    harness: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(MODEL_PROVIDER))),
+    at: EffectSchema.Number,
+  }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(SHARE_DESTINATION_KIND.THREAD),
+    id: EffectSchema.String,
+    title: destinationName,
+    agentId: EffectSchema.String,
+    /** What holds it: its task, by its name and status, or the agent on no task that posted it, by its name and a Manager's face. */
+    holder: destinationName,
+    holderStatus: EffectSchema.optionalKey(taskStatus),
+    holderFace: EffectSchema.optionalKey(managerFaceSchema),
+    at: EffectSchema.Number,
+  }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(SHARE_DESTINATION_KIND.TASK),
+    id: EffectSchema.String,
+    name: destinationName,
+    status: taskStatus,
+    at: EffectSchema.Number,
+  }),
+]);
+
+export type ShareDestination = typeof shareDestinationSchema.Type;
+
+/** Where a share may go in one workspace, the one the phone works in. */
+export interface ShareDestinations {
+  readonly workspaceId: string;
+  readonly rows: readonly ShareDestination[];
+}
+
 /** The snapshot the app writes for the share sheet. */
 interface ShareSnapshot {
   /** The account it was read for, which a draft names back. */
@@ -46,6 +128,8 @@ interface ShareSnapshot {
   readonly chosenWorkspaceId: string | undefined;
   readonly workspaces: readonly ShareWorkspace[];
   readonly service: ShareService;
+  /** Where a share may go in the workspace the phone works in; none until its lists are read. */
+  readonly destinations?: ShareDestinations | undefined;
 }
 
 /** The files a draft's pictures are kept in, beside it at the group's root, one per picture the share sheet takes, in order. */
@@ -107,7 +191,8 @@ function workspaceRepositories(
  * workspaces with the repositories it reaches, read from the account's
  * tasks and from each workspace's list the app has read (`listedOf`), and
  * the workspace the phone works in, and where the sheet's Start is sent,
- * named as `client`.
+ * named as `client`, with where a share may go in the workspace the phone
+ * works in, where its lists were read.
  */
 export function shareSnapshotOf(
   accountId: string,
@@ -116,6 +201,7 @@ export function shareSnapshotOf(
   tasks: readonly Pick<TaskSummary, "id" | "repository" | "createdAt">[],
   listedOf: (workspaceId: string) => readonly string[] | undefined,
   service: { readonly origin: string; readonly client: ClientIdentity },
+  destinations?: ShareDestinations,
 ): ShareSnapshot {
   const recent = newestRepositories(tasks);
 
@@ -128,5 +214,6 @@ export function shareSnapshotOf(
       repositories: workspaceRepositories(workspace, recent, listedOf(workspace.id)),
     })),
     service: { origin: service.origin, headers: clientHeaders(service.client) },
+    ...(destinations === undefined ? undefined : { destinations }),
   };
 }
