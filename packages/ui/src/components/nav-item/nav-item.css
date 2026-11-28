@@ -31,13 +31,11 @@
     }
   }
 
-  /* The place standing open is lifted as a card is, in the surface's fill
-     with a hairline and the card's shadow. */
+  /* The place standing open is lifted as a column's open row is
+     (`--ui-row-current-*`): a card's sheet, or the sidebar's solid fill. */
   .ui-nav-item:is([aria-current="page"], [aria-current="location"]) {
-    background: var(--ui-color-surface);
-    box-shadow:
-      0 0 0 1px var(--ui-color-border),
-      var(--ui-shadow-card);
+    background: var(--ui-row-current-fill);
+    box-shadow: var(--ui-row-current-edge);
     color: var(--ui-color-text);
   }
 

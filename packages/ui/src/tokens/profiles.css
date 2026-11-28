@@ -75,19 +75,24 @@
   --ui-list-gap: var(--ui-space-2);
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
      in place of a control's height, the body's size, the list's and
-     section's gaps, a control's corner, a row's inset and a glyph's gap: how
-     tall a row stands, the size of its words, the room between two rows and
-     between the places at its top, the room over each group, a row's corner,
-     how far it holds its glyph from its edge, and the room between its glyph
-     and its words. */
-  --ui-sidebar-row-height: var(--ui-control-height);
-  --ui-sidebar-text-size: var(--ui-type-body-size);
-  --ui-sidebar-row-gap: var(--ui-list-gap);
-  --ui-sidebar-places-gap: var(--ui-list-gap);
+     section's gaps, a control's corner, a row's inset and a glyph's gap, a
+     group's heading's height, and an open row's ground and edge. Every row,
+     a place or a task, is one block a finger's target tall with crisp
+     corners, its glyph a list's inset in from its edge; the open one is
+     filled solid in the selected fill, flat, where elsewhere it is lifted
+     as a sheet. A group's heading is shorter than a row and set in the
+     group role's type, so it reads as the label over its rows. */
+  --ui-sidebar-row-height: var(--ui-touch-target);
+  --ui-sidebar-text-size: 14px; /* off-scale: a block row's words, a step over the window's body */
+  --ui-sidebar-row-gap: var(--ui-space-4);
+  --ui-sidebar-places-gap: var(--ui-space-4);
   --ui-sidebar-group-gap: var(--ui-section-gap);
-  --ui-sidebar-row-radius: var(--ui-control-radius);
-  --ui-sidebar-row-inset: var(--ui-row-inset);
-  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  --ui-sidebar-row-radius: var(--ui-radius-6);
+  --ui-sidebar-row-inset: var(--ui-list-inset);
+  --ui-sidebar-icon-gap: var(--ui-list-inset);
+  --ui-sidebar-head-height: var(--ui-space-32);
+  --ui-sidebar-row-current-fill: var(--ui-color-fill-selected);
+  --ui-sidebar-row-current-edge: 0 0 0 0 transparent;
   /* A task list's row: the room it keeps over and under a control's height. */
   --ui-task-row-block: var(--ui-space-6);
   /* How many lines an agent's empty box stands, before it grows with its words. */
@@ -400,19 +405,24 @@
   --ui-list-gap: var(--ui-space-2);
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
      in place of a control's height, the body's size, the list's and
-     section's gaps, a control's corner, a row's inset and a glyph's gap: how
-     tall a row stands, the size of its words, the room between two rows and
-     between the places at its top, the room over each group, a row's corner,
-     how far it holds its glyph from its edge, and the room between its glyph
-     and its words. */
-  --ui-sidebar-row-height: var(--ui-control-height);
+     section's gaps, a control's corner, a row's inset and a glyph's gap, a
+     group's heading's height, and an open row's ground and edge. Every row,
+     a place or a task, is one block a finger's target tall with crisp
+     corners, its glyph a list's inset in from its edge; the open one is
+     filled solid in the selected fill, flat, where elsewhere it is lifted
+     as a sheet. A group's heading is shorter than a row and set in the
+     group role's type, so it reads as the label over its rows. */
+  --ui-sidebar-row-height: var(--ui-touch-target);
   --ui-sidebar-text-size: var(--ui-type-body-size);
-  --ui-sidebar-row-gap: var(--ui-list-gap);
-  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-row-gap: var(--ui-space-4);
+  --ui-sidebar-places-gap: var(--ui-space-4);
   --ui-sidebar-group-gap: var(--ui-section-gap);
-  --ui-sidebar-row-radius: var(--ui-control-radius);
-  --ui-sidebar-row-inset: var(--ui-row-inset);
-  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  --ui-sidebar-row-radius: var(--ui-radius-6);
+  --ui-sidebar-row-inset: var(--ui-list-inset);
+  --ui-sidebar-icon-gap: var(--ui-list-inset);
+  --ui-sidebar-head-height: var(--ui-space-32);
+  --ui-sidebar-row-current-fill: var(--ui-color-fill-selected);
+  --ui-sidebar-row-current-edge: 0 0 0 0 transparent;
   /* A task list's row: the room it keeps over and under a control's height. */
   --ui-task-row-block: var(--ui-space-6);
   /* How many lines an agent's empty box stands, before it grows with its words. */

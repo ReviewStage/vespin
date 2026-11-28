@@ -303,3 +303,13 @@
 [data-ui-profile] {
   --ui-color-card-edge: var(--ui-color-border);
 }
+
+/* The open row of a column of rows (`NavItem`'s current place, `ListRow`'s
+   sheet look): its ground and its edge, lifted as a card is, in the
+   surface's fill with a hairline and the card's shadow. A column that
+   draws its open row another way sets both (the sidebar's,
+   `--ui-sidebar-row-current-*`). */
+[data-ui-profile] {
+  --ui-row-current-fill: var(--ui-color-surface);
+  --ui-row-current-edge: 0 0 0 1px var(--ui-color-border), var(--ui-shadow-card);
+}
