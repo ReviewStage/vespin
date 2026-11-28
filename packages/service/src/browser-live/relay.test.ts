@@ -750,6 +750,7 @@ it.effect(
         element: {
           box: { x: 50, y: 25, width: 50, height: 15 },
           pageBox: { x: 100, y: 50, width: 100, height: 30 },
+          tab: TARGET,
           ref: "e42",
           selector: "form#checkout > button.btn",
           role: "button",

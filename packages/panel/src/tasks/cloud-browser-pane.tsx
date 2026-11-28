@@ -1,5 +1,6 @@
 import type { AgentBrowserTab, BrowserTabsPlace } from "@repo/features/agent-browser-tab-wire";
 import { browserAddressOf, chordIsWindows } from "@repo/features/browser-acts";
+import type { BrowserLivePickedElement } from "@repo/features/browser-live-wire";
 import {
   BROWSER_LIVE_CLIENT,
   BROWSER_LIVE_CLOSE_REASON,
@@ -10,6 +11,12 @@ import {
   BROWSER_LIVE_MOUSE_BUTTON,
   type BrowserLiveHistory,
 } from "@repo/features/browser-live-wire";
+import {
+  BROWSER_NOTE_MAX_CHARS,
+  browserNoteElement,
+  browserNotesMessage,
+  notesFit,
+} from "@repo/features/browser-notes";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { BROWSER_TAB_OPEN_FAILURE, type BrowserTabOpenFailure } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -21,14 +28,24 @@ import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
+  COMMENT_PIN_LOOK,
+  COMMENT_PIN_STANDS,
+  CommentPin,
   FailureNote,
   FILL_ELEMENT,
   Fill,
   forkEffect,
+  GAP,
   IconButton,
+  Inline,
   PaneBar,
+  PickNoteCard,
+  PickNoteTray,
+  PickOutline,
+  POPOVER_SIDE,
   REMOTE_KEY_ACTION,
   REMOTE_POINTER_ACTION,
+  RectFloat,
   type RemoteKey,
   type RemoteModifiers,
   type RemotePointer,
@@ -52,6 +69,7 @@ import {
   HandIcon,
   MousePointerClickIcon,
   RotateCwIcon,
+  SquareMousePointerIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
@@ -68,6 +86,7 @@ import { CloudBrowserCursor, cursorPlacement } from "./cloud-browser-cursor.js";
 import {
   CLOUD_BROWSER_PHASE,
   type CloudBrowserFrame,
+  type CloudBrowserInspected,
   type CloudBrowserLive,
   type CloudBrowserView,
   type CloudBrowserViewport,
@@ -75,6 +94,7 @@ import {
   type InputMessage,
   OPENING_VIEW,
 } from "./cloud-browser-live.js";
+import { type HeldBrowserNote, nextPageMove, useCloudBrowserNotes } from "./cloud-browser-notes.js";
 import {
   CLOUD_BROWSER_AGENT_RECENT,
   type CloudBrowserDraft,
@@ -117,6 +137,19 @@ import { useWindowAccount, windowAccountOf } from "./window-account.js";
  * which the screen recording leaves blank, and no frame, address, or title is kept past the drawn tab. The agent's
  * pointer is drawn over the canvas, never in its frame, while the agent has
  * the tab (`cloud-browser-cursor.tsx`).
+ *
+ * Pick, beside Take over, lets the member note elements of the page for
+ * the agent, whoever drives it, without taking it over: the element under
+ * the pointer is outlined over the canvas, a press picks it and opens a
+ * card by it for the note's words, and each note waits in a tray under the
+ * page, numbered as the pin on its element is, until Send sends them all to
+ * the agent as one message, a crop of each element attached
+ * (`@repo/features/browser-notes`). The relay reads the page
+ * (`browser-live/pick.ts`); the notes are held in this window alone
+ * (`cloud-browser-notes.ts`). A pin stands only until the page moves under
+ * it, as the agent acts, the page goes elsewhere, the member scrolls, or
+ * the pane draws it at another size, since it was placed where the element
+ * stood; its note stays in the tray.
  */
 
 /** Who has the tab, or why a step was refused, in a quiet line under the bar, Take over or Hand back at its end, so the address keeps the bar. */
@@ -173,6 +206,24 @@ function fitted(body: CloudBrowserViewport, aspect: number | undefined): CloudBr
 
   return { width: Math.floor(width), height: Math.floor(width / aspect) };
 }
+
+/** A note being written on an element picked: a new one, or one held written again, by its id. */
+interface NoteWriting {
+  readonly id: string | undefined;
+  readonly element: BrowserLivePickedElement;
+  readonly words: string;
+  readonly moves: number;
+}
+
+/** Why a pick was not noted, or the notes not sent, said on the line under the bar. */
+const PICK_SAID = {
+  UNREAD: "That element can't be noted. Try another.",
+  FULL: "These notes fill one message. Send them before adding more.",
+  UNSENT: "The notes could not be sent. Try again.",
+  PICKING: "Click an element to note it. Escape stops.",
+} as const;
+
+type PickSaid = (typeof PICK_SAID)[keyof typeof PICK_SAID];
 
 /** Whose browser a cloud Browser tab lives in: its agent's name, and the glyph its strip tab and its card wear. */
 export interface CloudBrowserOwner {
@@ -566,6 +617,21 @@ export function CloudBrowserPane({
   const viewport = useRef<CloudBrowserViewport | undefined>(undefined);
   viewport.current = size.width > 0 && size.height > 0 ? size : undefined;
 
+  // The notes waiting to be sent, the one being written, and the element under the pointer while picking.
+  const account = useWindowAccount();
+  const [notes, setNotes] = useCloudBrowserNotes(account, tab.id);
+  const [picking, setPicking] = useState(false);
+  const [inspected, setInspected] = useState<CloudBrowserInspected | undefined>(undefined);
+  const [writing, setWriting] = useState<NoteWriting | undefined>(undefined);
+  const [pickSaid, setPickSaid] = useState<PickSaid | undefined>(undefined);
+  const [moves, setMoves] = useState(nextPageMove);
+  const picked = useRef<(element: BrowserLivePickedElement | undefined) => void>(() => undefined);
+
+  const onPicked = useCallback(
+    (element: BrowserLivePickedElement | undefined) => picked.current(element),
+    [],
+  );
+
   // Where the agent's pointer stands on the drawn page, and whether the page is dark beneath it.
   const placed = tab.cursor === undefined ? undefined : cursorPlacement(tab.cursor, size);
   const pointer = useRef(placed);
@@ -618,8 +684,10 @@ export function CloudBrowserPane({
         target: { agentId: tab.agentId, tabId: tab.id },
         viewport: () => viewport.current,
         onFrame,
+        onInspected: setInspected,
+        onPicked,
       }),
-    [tab.agentId, tab.id, onFrame, generation, watched],
+    [tab.agentId, tab.id, onFrame, onPicked, generation, watched],
   );
 
   // Note that a view is kept with the connection it came from, so a pane shown again opens anew.
@@ -675,6 +743,7 @@ export function CloudBrowserPane({
   };
 
   const wheelInput = (input: RemoteWheel) => {
+    setMoves(nextPageMove());
     const clamp = (delta: number) => Math.max(-10_000, Math.min(10_000, delta));
     live.input({
       type: BROWSER_LIVE_CLIENT.WHEEL,
@@ -735,16 +804,97 @@ export function CloudBrowserPane({
   const driver = view.driver?.driver ?? tab.driver;
   const driven = driver !== null;
 
+  // Note that a pin stands where its element stood, so any move of the page under it, or of the pane's size, takes it down.
+  useEffect(() => setMoves(nextPageMove()), [address, tab.lastActedAt, size.width, size.height]);
+
+  const noteTab = { title: view.page?.title ?? tab.title, address };
+
+  picked.current = (element) => {
+    if (element === undefined) return setPickSaid(PICK_SAID.UNREAD);
+
+    if (!notesFit(noteTab, [...notes, { words: "", element }])) {
+      return setPickSaid(PICK_SAID.FULL);
+    }
+
+    setPickSaid(undefined);
+    setWriting({ id: undefined, element, words: "", moves });
+  };
+
+  const stopPicking = () => {
+    setPicking(false);
+    setInspected(undefined);
+    setWriting(undefined);
+    setPickSaid(undefined);
+  };
+
+  const addNote = () => {
+    if (writing === undefined) return;
+
+    const note: HeldBrowserNote = {
+      id: writing.id ?? crypto.randomUUID(),
+      words: writing.words.trim().slice(0, BROWSER_NOTE_MAX_CHARS),
+      element: writing.element,
+      moves: writing.moves,
+    };
+
+    const next =
+      writing.id === undefined
+        ? [...notes, note]
+        : notes.map((held) => (held.id === note.id ? note : held));
+
+    if (!notesFit(noteTab, next)) return setPickSaid(PICK_SAID.FULL);
+    setNotes(next);
+    setWriting(undefined);
+  };
+
+  // Note that the notes go as one message, like a member's own words with pictures, and stay in the tray where it was not taken.
+  const sent = useMutation({
+    ...actMutation(ACT_KIND.AGENTS_MESSAGE),
+    onSuccess: (answer) => {
+      if ("failure" in answer) return setPickSaid(PICK_SAID.UNSENT);
+      setNotes([]);
+      stopPicking();
+    },
+    onError: () => setPickSaid(PICK_SAID.UNSENT),
+  });
+
+  const send = () => {
+    if (sent.isPending || notes.length === 0) return;
+    const message = browserNotesMessage(noteTab, notes);
+    setPickSaid(undefined);
+    sent.mutate({
+      agentId: tab.agentId,
+      text: message.text,
+      clientKey: crypto.randomUUID(),
+      attachments: [...message.attachments],
+    });
+  };
+
+  // The element's box in the window, which the note's card stands under.
+  const boxInWindow = (box: BrowserLivePickedElement["box"]) => {
+    const surface = canvas.current?.getBoundingClientRect();
+
+    if (surface === undefined) return undefined;
+
+    return {
+      left: surface.left + box.x,
+      top: surface.top + box.y,
+      right: surface.left + box.x + box.width,
+      bottom: surface.top + box.y + box.height,
+    };
+  };
+
   // A refusal says why first, then who has the tab.
   const refusal = view.takeoverRefused
-    ? "Only whoever started this agent can drive its tab."
+    ? "Only whoever started this agent can drive its tab or note its page."
     : view.stepRefused
       ? `${(driver === null ? undefined : memberName(driver.userId)) ?? "A teammate"} is driving this tab. Wait until they hand it back.`
       : undefined;
 
-  const said = refusal ?? standing;
+  const said = refusal ?? pickSaid ?? (picking ? PICK_SAID.PICKING : standing);
   // Note that who has the tab is said politely as it changes, and a refusal as an alert, since it answers a press.
   useAnnounce(ANNOUNCE.POLITE, refusal === undefined ? (standing ?? "") : "");
+  useAnnounceShown(ANNOUNCE.POLITE, pickSaid ?? "");
   useAnnounceShown(ANNOUNCE.ALERT, refusal ?? "");
   useAnnounceShown(ANNOUNCE.POLITE, notice?.waiting === false ? notice.words : "");
   const isLive = view.phase === CLOUD_BROWSER_PHASE.LIVE;
@@ -767,26 +917,38 @@ export function CloudBrowserPane({
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
           {said ?? ""}
         </Text>
-        {yours ? (
+        <Inline gap={GAP.CONTROL} wrap={false}>
           <Button
             size={BUTTON_SIZE.COMPACT}
-            variant={BUTTON_VARIANT.OUTLINE}
-            icon={<HandIcon aria-hidden="true" />}
-            onClick={live.handBack}
-          >
-            Hand back
-          </Button>
-        ) : (
-          <Button
-            size={BUTTON_SIZE.COMPACT}
-            variant={BUTTON_VARIANT.OUTLINE}
-            icon={<MousePointerClickIcon aria-hidden="true" />}
+            variant={picking ? BUTTON_VARIANT.PRIMARY : BUTTON_VARIANT.OUTLINE}
+            icon={<SquareMousePointerIcon aria-hidden="true" />}
             disabled={!isLive}
-            onClick={live.takeOver}
+            aria-pressed={picking}
+            onClick={() => (picking ? stopPicking() : setPicking(true))}
           >
-            Take over
+            Pick
           </Button>
-        )}
+          {yours ? (
+            <Button
+              size={BUTTON_SIZE.COMPACT}
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<HandIcon aria-hidden="true" />}
+              onClick={live.handBack}
+            >
+              Hand back
+            </Button>
+          ) : (
+            <Button
+              size={BUTTON_SIZE.COMPACT}
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<MousePointerClickIcon aria-hidden="true" />}
+              disabled={!isLive}
+              onClick={live.takeOver}
+            >
+              Take over
+            </Button>
+          )}
+        </Inline>
       </div>
       <PageIntro intro={INTRO.BROWSER} />
       <Fill clip ref={body} className={BODY_CLASS}>
@@ -801,7 +963,69 @@ export function CloudBrowserPane({
             onWheel={wheelInput}
             onKey={keyInput}
             onPaste={pasteInput}
+            picking={
+              picking && isLive
+                ? {
+                    onInspect: (point) =>
+                      point === undefined ? setInspected(undefined) : live.inspect(point),
+                    onPick: (point) => {
+                      setWriting(undefined);
+                      live.pick(point);
+                    },
+                    onEnd: stopPicking,
+                  }
+                : undefined
+            }
           />
+          {picking && writing === undefined && inspected !== undefined ? (
+            <PickOutline box={inspected.box} label={inspected.label} />
+          ) : null}
+          {notes.map((note, at) =>
+            note.moves === moves ? (
+              <span
+                key={note.id}
+                className="cloud-browser-note-pin absolute"
+                style={{ left: note.element.box.x, top: note.element.box.y }}
+              >
+                <CommentPin
+                  look={COMMENT_PIN_LOOK.NOTE}
+                  number={at + 1}
+                  stands={COMMENT_PIN_STANDS.INSIDE}
+                  label={`Note ${String(at + 1)}`}
+                  preview={note.words}
+                  open={writing?.id === note.id}
+                  onPress={() =>
+                    setWriting({
+                      id: note.id,
+                      element: note.element,
+                      words: note.words,
+                      moves: note.moves,
+                    })
+                  }
+                  onHover={() => undefined}
+                />
+              </span>
+            ) : null,
+          )}
+          <RectFloat
+            open={writing !== undefined}
+            anchor={() => (writing === undefined ? undefined : boxInWindow(writing.element.box))}
+            side={POPOVER_SIDE.BELOW}
+            // Note that a press away lets go of a note only while it holds no words, so a stray press never loses what was written.
+            onPressAway={() => {
+              if (writing?.words.trim() === "") setWriting(undefined);
+            }}
+          >
+            {writing === undefined ? null : (
+              <PickNoteCard
+                value={writing.words}
+                onChange={(words) => setWriting({ ...writing, words })}
+                onAdd={addNote}
+                onCancel={() => setWriting(undefined)}
+                adds={writing.id === undefined ? "Add note" : "Save"}
+              />
+            )}
+          </RectFloat>
           <CloudBrowserCursor
             cursor={tab.cursor}
             lastActedAt={tab.lastActedAt}
@@ -830,6 +1054,20 @@ export function CloudBrowserPane({
           </div>
         )}
       </Fill>
+      <PickNoteTray
+        notes={notes.map((note, at) => ({
+          id: note.id,
+          number: at + 1,
+          words: note.words,
+          element: browserNoteElement(note.element),
+          picture: `data:image/jpeg;base64,${note.element.crop}`,
+        }))}
+        sendLabel={`Send to ${owner.name}`}
+        sending={sent.isPending}
+        onRemove={(id) => setNotes(notes.filter((note) => note.id !== id))}
+        onClear={() => setNotes([])}
+        onSend={send}
+      />
     </Fill>
   );
 }

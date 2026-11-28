@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import {
   BROWSER_LIVE_CLIENT,
   BROWSER_LIVE_CLOSE_CODE,
@@ -226,6 +227,126 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
         message.type !== BROWSER_LIVE_CLIENT.VIEWPORT,
     ),
     [{ type: BROWSER_LIVE_CLIENT.TAKE_OVER }, { type: BROWSER_LIVE_CLIENT.HAND_BACK }],
+  );
+});
+
+test("a member picks an element, notes it, and sends the notes to the agent as one message with the element's crop", async () => {
+  const sent: { type: string }[] = [];
+  const messages: { text: string; attachments?: readonly { name: string; data: string }[] }[] = [];
+  let listener: BrowserLiveListener | undefined;
+  fakeAppPlatform({
+    openBrowserLive: (_target, heard) => {
+      listener = heard;
+
+      return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
+    },
+  });
+  fakeActPort({
+    [ACT_KIND.AGENTS_MESSAGE]: (payload) => {
+      messages.push(payload);
+
+      return Promise.resolve({
+        agent: {
+          id: AGENT_ID,
+          taskId: TASK,
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          title: null,
+          createdAt: 1,
+          status: AGENT_STATUS.RUNNING,
+          turnId: null,
+        },
+      });
+    },
+  });
+
+  const say = async (message: BrowserLiveServerMessage) => {
+    await act(async () => listener?.message(JSON.stringify(message)));
+    await settle();
+  };
+
+  const press = async (name: string) => {
+    const button = [...document.querySelectorAll("button")].find(
+      (each) => each.textContent === name,
+    );
+
+    assert.ok(button, `a ${name} button`);
+    await act(async () => button.click());
+    await settle();
+  };
+
+  draw(
+    createElement(CloudBrowserPane, {
+      tab: LISTED,
+      owner: { name: "Invite expiry", icon: createElement("span") },
+      shown: true,
+      memberName: () => undefined,
+    }),
+  );
+  await settle();
+  await say({
+    type: BROWSER_LIVE_SERVER.FRAME,
+    data: "/9j/AA==",
+    pageWidth: 1280,
+    pageHeight: 800,
+  });
+  await press("Pick");
+  const canvas = document.querySelector("canvas");
+  assert.ok(canvas);
+  act(() => {
+    canvas.dispatchEvent(new MouseEvent("mousemove", { bubbles: true }));
+  });
+  await say({
+    type: BROWSER_LIVE_SERVER.INSPECTED,
+    box: { x: 10, y: 40, width: 46, height: 15 },
+    label: "button.btn · 92×30",
+  });
+  assert.ok(document.body.textContent?.includes("button.btn · 92×30"), "the element is outlined");
+  act(() => {
+    canvas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+  });
+  await say({
+    type: BROWSER_LIVE_SERVER.PICKED,
+    element: {
+      box: { x: 10, y: 40, width: 46, height: 15 },
+      pageBox: { x: 20, y: 80, width: 92, height: 30 },
+      tab: "page-1",
+      ref: "e42",
+      selector: "button.btn",
+      role: "button",
+      name: "Place order",
+      tag: '<button class="btn">',
+      text: "Place order",
+      crop: "QUJD",
+    },
+  });
+  assert.deepEqual(
+    sent.flatMap(({ type }) => (type === BROWSER_LIVE_CLIENT.VIEWPORT ? [] : [type])),
+    [BROWSER_LIVE_CLIENT.INSPECT, BROWSER_LIVE_CLIENT.PICK],
+    "picking takes nothing over",
+  );
+
+  const field = document.querySelector("textarea");
+  assert.ok(field, "a card opened for the note");
+  const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+  act(() => {
+    setValue?.call(field, "Make this the primary action");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await press("Add note");
+  await press("Send to Invite expiry");
+
+  assert.equal(messages.length, 1);
+  assert.ok(messages[0]?.text.includes('1. "Make this the primary action"'));
+  assert.ok(messages[0]?.text.includes('Element: button "Place order", button.btn'));
+  assert.deepEqual(
+    messages[0]?.attachments?.map(({ name, data }) => [name, data]),
+    [["note-1.jpg", "QUJD"]],
+  );
+  assert.equal(
+    document.querySelector('[aria-label="Notes"]'),
+    null,
+    "the tray emptied as they went",
   );
 });
 
