@@ -865,9 +865,6 @@ importers:
       '@repo/brand':
         specifier: workspace:*
         version: link:../../packages/brand
-      '@repo/credentials':
-        specifier: workspace:*
-        version: link:../../packages/credentials
       '@repo/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -1867,9 +1864,6 @@ importers:
         specifier: 3.7.1
         version: 3.7.1
     devDependencies:
-      '@effect/vitest':
-        specifier: 'catalog:'
-        version: 4.0.4(effect@4.0.4)(vitest@5.1.2)
       '@fontsource-variable/geist':
         specifier: 'catalog:'
         version: 5.3.0
