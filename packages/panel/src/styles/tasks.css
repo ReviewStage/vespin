@@ -1666,6 +1666,13 @@ summary button[data-tool-agent-ref]:focus-visible {
   justify-content: flex-start;
 }
 
+/* The turn under way's work, which the working line's Show work opens at
+   the chat's end (`manager-working-dock.tsx`), stands in its messages'
+   words' column, as an ended turn's stands under its message. */
+.manager-live-work {
+  padding-inline-start: calc(var(--spacing-channel-avatar) + var(--ui-space-8));
+}
+
 /* Coding agents --------------------------------------------------------- */
 
 /* A line the agent refused for good or for now (`undelivered-mark.tsx`): its

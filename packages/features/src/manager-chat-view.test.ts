@@ -4,7 +4,12 @@ import { test } from "vitest";
 import { AGENT_PART, type AgentPart } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
-import { CHAT_LANDING, chatMessageLanding, managerChatView } from "./manager-chat-view.js";
+import {
+  CHAT_LANDING,
+  chatMessageLanding,
+  managerChatView,
+  managerWorkingLine,
+} from "./manager-chat-view.js";
 
 /**
  * manager-chat-view.test.ts -- a Manager's chat drawn from its rows: oldest
@@ -170,4 +175,24 @@ test("a link to a message lands on its row in the chat, a reply standing in its 
       { kind: CHAT_LANDING.UNREAD },
     ],
   );
+});
+
+test("the line over a Manager's box names it while it works, says what waits on the reader over that, takes a client's words for a turn doing something else, offers Show work once the turn did work, and stands nowhere while no turn runs", () => {
+  const idle = { live: [] };
+  const busy = { live: [{ kind: AGENT_PART.OTHER } as const] };
+  const working = { working: true, name: "Release manager", waiting: 0 };
+
+  assert.equal(managerWorkingLine(idle, { ...working, working: false }), undefined);
+  assert.deepEqual(managerWorkingLine(idle, working), {
+    words: "Release manager is working…",
+    waiting: false,
+    work: false,
+  });
+  assert.deepEqual(managerWorkingLine(busy, { ...working, waiting: 2 }), {
+    words: "Waiting on you · 2 approvals",
+    waiting: true,
+    work: true,
+  });
+  assert.equal(managerWorkingLine(idle, { ...working, phase: "Stopping…" })?.words, "Stopping…");
+  assert.equal(managerWorkingLine(idle, { ...working, name: "" })?.words, "Working…");
 });
