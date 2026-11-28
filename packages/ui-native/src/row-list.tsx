@@ -450,6 +450,8 @@ type ListSectionProps = {
   readonly repository?: string | undefined;
   /** Whose the group's rows are, their picture in the glyph's place: a workspace's tile, or a person's photo or letter, as the panel's Automations groups lead with their owner. */
   readonly owner?: SectionOwner | undefined;
+  /** Whether its rows stand on a row's lead column (`TaskRow`'s, `MARK_SIZE.LEAD` wide past `inset.lead`), so its header's glyph stands centered in the same column and its title where theirs start; a section of rows laid out otherwise, such as a form's or an automation's, keeps its glyph beside its title. */
+  readonly leadColumn?: boolean | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
@@ -529,6 +531,7 @@ function GroupHeader({
   emoji,
   repository,
   owner,
+  leadColumn,
   folded,
 }: {
   readonly title: string;
@@ -540,13 +543,40 @@ function GroupHeader({
   readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly owner: SectionOwner | undefined;
+  readonly leadColumn: boolean;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
+
+  const lead =
+    owner !== undefined ? (
+      // Note that the picture is hidden, since the title beside it names the owner already.
+      <HStack modifiers={[accessibilityHidden()]}>
+        {"workspace" in owner ? (
+          <WorkspaceTile workspace={owner.workspace} size={glyphSize} />
+        ) : (
+          <Avatar name={owner.person.name} picture={owner.person.picture} size={glyphSize} />
+        )}
+      </HStack>
+    ) : repository !== undefined ? (
+      <RepositoryPicture repository={repository} size={glyphSize} />
+    ) : emoji !== undefined ? (
+      <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
+        {emoji}
+      </Text>
+    ) : glyph === undefined ? null : (
+      <Image
+        {...glyphImage(glyph)}
+        size={glyphSize}
+        color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
+        modifiers={[accessibilityHidden()]}
+      />
+    );
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -559,37 +589,22 @@ function GroupHeader({
         accessibilityAddTraits(["isHeader"]),
       ]}
     >
-      {owner !== undefined ? (
-        // Note that the picture is hidden, since the title beside it names the owner already.
-        <HStack modifiers={[accessibilityHidden()]}>
-          {"workspace" in owner ? (
-            <WorkspaceTile workspace={owner.workspace} size={glyphSize} />
-          ) : (
-            <Avatar name={owner.person.name} picture={owner.person.picture} size={glyphSize} />
-          )}
-        </HStack>
-      ) : repository !== undefined ? (
-        <RepositoryPicture repository={repository} size={glyphSize} />
-      ) : emoji !== undefined ? (
-        <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
-          {emoji}
+      {/* Note that over rows on a row's lead column, what leads the title stands centered in that column and the title past it where a row's title starts, so a header's icon and words line up with its rows' marks and titles at every text size. */}
+      <HStack spacing={leadColumn ? SPACE.ROW : SPACE.TIGHT + 2}>
+        {lead === null || !leadColumn ? (
+          lead
+        ) : (
+          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        )}
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {title}
         </Text>
-      ) : glyph === undefined ? null : (
-        <Image
-          {...glyphImage(glyph)}
-          size={glyphSize}
-          color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
-          modifiers={[accessibilityHidden()]}
-        />
-      )}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
-        ]}
-      >
-        {title}
-      </Text>
+      </HStack>
       {mark === undefined ? null : (
         <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.GROUP_HEADER} hidden />
       )}
@@ -780,6 +795,7 @@ export function ListSection({
   emoji,
   repository,
   owner,
+  leadColumn = false,
   foldable = false,
   folded: held,
   onFold,
@@ -821,6 +837,7 @@ export function ListSection({
         emoji={emoji}
         repository={repository}
         owner={owner}
+        leadColumn={leadColumn}
         folded={foldable ? folded : undefined}
       />
     );

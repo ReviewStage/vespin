@@ -1558,6 +1558,7 @@ function GroupSection({
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
+      leadColumn
       count={group.rows.length}
       foldable={group.rows.length > 0}
       folded={hold.folded(group)}
