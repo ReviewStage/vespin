@@ -161,10 +161,13 @@ appId: dev.vespin.ios
     text: "20"
 - takeScreenshot: answer-fields-filled
 - tapOn: "Send"
+# Note that the form stands at the head of the reply as it was filled, in the stamp's place, as the panel's answered card does, so the thread reads answered rather than "Submitted".
 - extendedWaitUntil:
-    visible: "Submitted"
+    visible: "Answered"
     timeout: 5000
 - assertNotVisible: "Every member, Recommended"
+- waitForAnimationToEnd
+- takeScreenshot: answer-fields-sent
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.
