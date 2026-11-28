@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions and a section header's menu built from data.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, React Native's presses inside a SwiftUI host canceled by a scroll around it, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions and a section header's menu built from data.
 
 import {
   createModifier,
@@ -13,6 +13,7 @@ const MODIFIER = {
   COLUMN_SUBTITLE: "vespinColumnSubtitle",
   STACK_SUBTITLE: "vespinStackSubtitle",
   STACK_SCROLL_EDGE: "vespinStackScrollEdge",
+  SCROLL_CANCELS_PRESSES: "vespinScrollCancelsPresses",
   SIDE_MARGINS: "vespinSideMargins",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
@@ -69,6 +70,11 @@ export type BarTitleMark = { readonly title: string; readonly asset: string };
  */
 export function stackScrollEdge(): ModifierConfig {
   return createModifier(MODIFIER.STACK_SCROLL_EDGE, {});
+}
+
+/** React Native views hosted in SwiftUI whose presses the scroll views they stand in cancel as they start to scroll, as UIKit cancels a control's touches, which React Native's touch handler does not for a SwiftUI list inside its surface (`HostedViews`). */
+export function scrollCancelsPresses(): ModifierConfig {
+  return createModifier(MODIFIER.SCROLL_CANCELS_PRESSES, {});
 }
 
 /** A scroll view's content set in from its sides by `length` points, SwiftUI's `contentMargins` for its scroll content, while the scroll view keeps its whole width, so the ground beside the content still scrolls it. */

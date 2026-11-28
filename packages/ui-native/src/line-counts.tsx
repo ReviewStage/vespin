@@ -66,7 +66,10 @@ export function LineCounts({
       spacing={SPACE.TIGHT}
       modifiers={
         heard
-          ? [accessibilityElement("ignore"), accessibilityLabel(lineCountsHeard(additions, deletions))]
+          ? [
+              accessibilityElement("ignore"),
+              accessibilityLabel(lineCountsHeard(additions, deletions)),
+            ]
           : []
       }
     >

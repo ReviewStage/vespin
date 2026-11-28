@@ -1,0 +1,20 @@
+# picture-at.yaml -- asserts the thread's picture stands at `POINT`: a long press there opens the picture's own menu, its Save to Photos, which is then put away, and no viewer opened.
+#
+# Note that this is how a swipe written as points is held to the picture it
+# must start on, since Maestro swipes from an element only to near the
+# window's edge and finds no element by its place: a picture that moved off
+# the point fails here rather than leaving the swipes to start on something
+# else and pass. The menu is put away at the window's trailing margin, as
+# `keep.yaml` puts it away.
+appId: dev.vespin.ios
+---
+- longPressOn:
+    point: "${POINT}"
+- assertVisible: "Save to Photos"
+- runFlow:
+    file: dismiss.yaml
+    env:
+      POINT: "94%, 60%"
+- assertNotVisible: "Save to Photos"
+- assertNotVisible:
+    id: "picture-viewer-close"

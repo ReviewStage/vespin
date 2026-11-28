@@ -1,6 +1,6 @@
 // choice-list.tsx -- a decide ask's options as a compact bordered card: one row each, its words drawn as Markdown so a link of ours stands as its chip, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import { Button, HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -20,6 +20,7 @@ import { Pressable } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
+import { HostedViews } from "./hosted-views.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
 import { useSteppedBack } from "./stepped-back.js";
@@ -144,7 +145,7 @@ function ChoiceRow({
       ]}
     >
       <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        <RNHostView matchContents={{ vertical: true }}>
+        <HostedViews matchContents={{ vertical: true }}>
           <Pressable accessible={false} onPress={onPress} style={{ gap: 2 }}>
             <Markdown
               words={choice.label}
@@ -161,7 +162,7 @@ function ChoiceRow({
               />
             )}
           </Pressable>
-        </RNHostView>
+        </HostedViews>
         {stacked ? tag : null}
       </VStack>
       {onPress === undefined ? (
@@ -193,9 +194,9 @@ function ChoiceRow({
 /** What an option carries, under its row: every piece as an equal tile, in React Native views SwiftUI hosts. */
 function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] }) {
   return (
-    <RNHostView matchContents={{ vertical: true }}>
+    <HostedViews matchContents={{ vertical: true }}>
       <ChoiceMediaTiles media={media} />
-    </RNHostView>
+    </HostedViews>
   );
 }
 

@@ -1,14 +1,6 @@
 // marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile or a Manager's face, the needs-you, working, and failed marks and a glyph in its tone.
 
-import {
-  Circle,
-  Gauge,
-  HStack,
-  Image,
-  RNHostView,
-  RoundedRectangle,
-  ZStack,
-} from "@expo/ui/swift-ui";
+import { Circle, Gauge, HStack, Image, RoundedRectangle, ZStack } from "@expo/ui/swift-ui";
 import {
   Animation,
   accessibilityHidden,
@@ -45,6 +37,7 @@ import { memo, useState, useSyncExternalStore } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
+import { HostedViews } from "./hosted-views.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { managerFaceAsset } from "./manager-face-look.js";
 import {
@@ -313,7 +306,7 @@ export function AvatarPhoto({
   const round = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
 
   return (
-    <RNHostView>
+    <HostedViews>
       <View
         style={round}
         accessibilityElementsHidden
@@ -321,7 +314,7 @@ export function AvatarPhoto({
       >
         <Photo source={{ uri: address }} onError={onFail} style={round} />
       </View>
-    </RNHostView>
+    </HostedViews>
   );
 }
 

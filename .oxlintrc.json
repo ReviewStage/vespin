@@ -117,6 +117,36 @@
     },
     {
       "files": ["apps/mobile/**", "packages/ui-native/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@expo/ui/swift-ui",
+                "importNames": ["RNHostView"],
+                "message": "Host React Native views in SwiftUI through `HostedViews` (`packages/ui-native/src/hosted-views.tsx`), whose presses a scroll around them cancels; a bare `RNHostView`'s fire as a swipe that began on them lifts."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@repo/ui/icons", "lucide-react", "lucide-react/**"],
+                "importNamePattern": "Sparkle",
+                "message": "Never draw a sparkle, in any of its glyphs: draw the act's own glyph from `GLYPH`, such as `GLYPH.RETRY` for an act that runs again."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/ui-native/src/hosted-views.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["apps/mobile/**", "packages/ui-native/**"],
       "plugins": ["react"],
       "rules": {
         "react/refs": "error",

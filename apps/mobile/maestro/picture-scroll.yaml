@@ -1,0 +1,114 @@
+# picture-scroll.yaml -- a thread's picture is left alone by a swipe that starts on it, and opens full screen only on a tap: short swipes up and down begun on the picture open no viewer, then a tap on it opens the viewer.
+#
+# Note that a finger dragging a list stays over the content it started on,
+# so a swipe begun on a picture also ends on it; the picture's press must
+# lose to the swipe, as every system control's does, rather than opening it
+# as the finger lifts. Maestro's swipe from an element runs to near the
+# window's edge, long and fast, and never lost to the press on main; a short
+# one did, on the description (`description-scroll.yaml`). So each swipe is
+# written as points inside the picture, 280 by 158 points where the thread
+# is scrolled to it, and each point is held to the picture first by a long
+# press there opening the picture's own menu (`subflows/picture-at.yaml`),
+# so a picture that moved fails rather than leaving the swipe to start on
+# something else and pass. Each swipe is made several times, so one lucky
+# pass counts for nothing.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as `keep.yaml` is, so the thread and
+# its picture are the fixture's and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite page"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+# Short swipes up and back down, each round from the picture scrolled to
+# again, each swipe begun and ended inside the picture:
+# an iPhone's about 46% across and between 36% and 44% down, an iPad's 60%
+# across, in the detail column, and between 28% and 35% down.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "The invite page"
+            DIRECTION: UP
+            BESIDE: ${FLOATING_TABS}
+      - runFlow:
+          when:
+            true: ${FLOATING_TABS != 'true'}
+          commands:
+            - runFlow:
+                file: subflows/picture-at.yaml
+                env:
+                  POINT: "46%, 44%"
+            - swipe:
+                start: "46%, 44%"
+                end: "46%, 36%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible:
+                id: "picture-viewer-close"
+            - assertVisible: "Recorded the invite flow"
+            - runFlow:
+                file: subflows/picture-at.yaml
+                env:
+                  POINT: "46%, 36%"
+            - swipe:
+                start: "46%, 36%"
+                end: "46%, 44%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible:
+                id: "picture-viewer-close"
+            - assertVisible: "Recorded the invite flow"
+      - runFlow:
+          when:
+            true: ${FLOATING_TABS == 'true'}
+          commands:
+            - runFlow:
+                file: subflows/picture-at.yaml
+                env:
+                  POINT: "60%, 35%"
+            - swipe:
+                start: "60%, 35%"
+                end: "60%, 28%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible:
+                id: "picture-viewer-close"
+            - assertVisible: "Recorded the invite flow"
+            - runFlow:
+                file: subflows/picture-at.yaml
+                env:
+                  POINT: "60%, 28%"
+            - swipe:
+                start: "60%, 28%"
+                end: "60%, 35%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible:
+                id: "picture-viewer-close"
+            - assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: picture-scrolled
+# A tap on the picture still opens it full screen.
+- tapOn: "The invite page"
+- assertVisible:
+    id: "picture-viewer-close"
+- tapOn:
+    id: "picture-viewer-close"
+- waitForAnimationToEnd
+- assertVisible: "Recorded the invite flow"
