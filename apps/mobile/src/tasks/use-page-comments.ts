@@ -10,6 +10,10 @@
  * after a lost answer start one thread. The words typed are kept for the
  * spot they were typed on until they go, and again where the service
  * refused them, so Comment pressed again on the same words opens on them.
+ * Note that they are let go when the account signs out, as an agent's
+ * composer drafts are (`composer-drafts.ts`), and a refusal answered after
+ * that keeps nothing, so the next account signed in never opens on
+ * another's words.
  */
 
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
@@ -21,7 +25,7 @@ import type { PageMark } from "@repo/features/page-pick";
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import {
   type AttachedPictures,
@@ -62,6 +66,27 @@ const WHOLE_PAGE = "";
 
 /** Each new thread's draft, by the page, then the element's path, then the words selected, so it outlives the sheet it was typed in. */
 const pageDrafts = new Map<string, Map<string, Map<string, PageDraft>>>();
+
+/** Whether an account stood signed in when the root last looked, so a sign-out is seen as it happens. */
+let wasSignedIn = false;
+
+/** How many sign-outs the drafts have been let go for, so a refusal answered after one keeps nothing. */
+let signOuts = 0;
+
+/** Follows whether an account is signed in, letting every page draft go as one signs out. */
+function followPageDraftsAccount(signedIn: boolean): void {
+  if (wasSignedIn && !signedIn) {
+    pageDrafts.clear();
+    signOuts += 1;
+  }
+
+  wasSignedIn = signedIn;
+}
+
+/** Lets every page comment draft go when the account signs out, so the next account's fields open empty. */
+export function usePageDraftsSignOut(signedIn: boolean): void {
+  useEffect(() => followPageDraftsAccount(signedIn), [signedIn]);
+}
 
 /** The draft kept on one spot of a page; none kept. */
 function draftOf(spot: PageSpot): PageDraft | undefined {
@@ -190,8 +215,9 @@ export function usePageCommentStart(taskId: string, spot: PageSpot): PageComment
         threadId: repeated?.threadId ?? randomUUID(),
       };
 
-      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below.
+      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, for the same account alone.
       keepDraft(spot, undefined);
+      const sentUnder = signOuts;
       const { element } = spot;
 
       void write(
@@ -217,7 +243,7 @@ export function usePageCommentStart(taskId: string, spot: PageSpot): PageComment
           unanswered: COMMENT_NOTE.NOT_POSTED,
           inPlace: (why, noticed) => {
             // Note that words typed on the same spot since, in a field opened on it again, are kept over the refused ones.
-            if ((draftOf(spot)?.words ?? "").trim() === "") {
+            if (sentUnder === signOuts && (draftOf(spot)?.words ?? "").trim() === "") {
               keepDraft(spot, { words: kept, pictures: carried, sent: start });
             }
 

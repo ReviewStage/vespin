@@ -18,6 +18,7 @@ import { sealedPageDocument } from "@repo/features/sealed-page";
 import { Option, Schema } from "effect";
 import {
   type ComponentType,
+  Fragment,
   type RefAttributes,
   useCallback,
   useEffect,
@@ -74,6 +75,12 @@ function startingDocument(title: string): string {
 /** The acts of the menu over words selected in a page its reader comments on, by the key the web view hands back. */
 const PAGE_MENU = {
   COPY: "copy",
+  COMMENT: "comment",
+} as const;
+
+/** Which menu over selected words a page's web view was set up with, WebKit's own or ours with Comment, which keys the view so it is set up anew as Comment comes or goes. */
+const PAGE_MENU_SET = {
+  PLAIN: "plain",
   COMMENT: "comment",
 } as const;
 
@@ -276,6 +283,11 @@ function usePageComments(
     ask({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.MARK, marks });
   }, [ask, loads, marks]);
 
+  // Note that words selected in a page going away go with it, so a later version's Comment never quotes the earlier one's.
+  const loadStarted = () => {
+    selected.current = undefined;
+  };
+
   const heard = (event: WebViewMessageEvent) => {
     const said = Option.getOrUndefined(decodePick(event.nativeEvent.data));
 
@@ -305,6 +317,7 @@ function usePageComments(
     picks,
     view,
     webView: {
+      onLoadStart: loadStarted,
       ...(picks ? { onMessage: heard } : undefined),
       ...(onComment === undefined
         ? undefined
@@ -396,15 +409,17 @@ function SealedPageAt({
 export function SealedPage({ html, title, onLoaded, ...comments }: SealedPageProps) {
   const { fontScale } = useWindowDimensions();
 
-  // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again.
+  // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again; and once Comment is offered or taken away, since react-native-webview sets up the menu over selected words only as the view first stands.
   return (
-    <SealedPageAt
-      key={fontScale}
-      html={html}
-      title={title}
-      onLoaded={onLoaded}
-      fontScale={fontScale}
-      {...comments}
-    />
+    <Fragment key={comments.onComment === undefined ? PAGE_MENU_SET.PLAIN : PAGE_MENU_SET.COMMENT}>
+      <SealedPageAt
+        key={fontScale}
+        html={html}
+        title={title}
+        onLoaded={onLoaded}
+        fontScale={fontScale}
+        {...comments}
+      />
+    </Fragment>
   );
 }

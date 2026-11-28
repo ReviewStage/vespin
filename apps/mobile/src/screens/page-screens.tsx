@@ -20,7 +20,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PAGE_NEWEST, usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -53,8 +53,10 @@ const PAGE_WORDS = {
  * while it stands; the elements they are on, marked in the page; Comment,
  * which opens a new thread on the words selected; a press on an element
  * marked, which opens its thread, or the page's list where several stand
- * on it; and the page's list itself. None of it starts a thread until the
- * version read is known, since a thread names the version it was left on.
+ * on it; and the page's list itself. A thread names the version drawn,
+ * whose words were selected, so none starts until one is drawn. Note that
+ * Comment is offered as soon as the task is known, since the web view sets
+ * its menu up only as it first stands (`SealedPage`).
  */
 function usePageCommenting(
   page: Omit<CommentedPage, "taskId" | "version"> & {
@@ -88,9 +90,11 @@ function usePageCommenting(
     marks,
     onOpenMark,
     onComment:
-      commented === undefined
+      taskId === undefined
         ? undefined
-        : ({ path, quote, section }: PagePicked) => openNew(commented, { path, quote, section }),
+        : ({ path, quote, section }: PagePicked) => {
+            if (commented !== undefined) openNew(commented, { path, quote, section });
+          },
     onCommentPage: commented === undefined ? undefined : () => openNew(commented, undefined),
     onList: taskId === undefined ? undefined : () => openList(taskId, pageId),
   };
@@ -186,7 +190,11 @@ export function PageScreen({
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
   const shown = usePageShownCount(asked !== undefined, "html" in read);
-  const comments = usePageCommenting({ taskId, pageId, version, title: named });
+  // Note that the version a comment is left on is the one the web view draws, which stands while a later version is read, as `SealedPage` keeps it, so a comment never pairs one version's words with another's number.
+  const [drawn, setDrawn] = useState<number | undefined>(undefined);
+
+  if ("html" in read && read.version !== drawn) setDrawn(read.version);
+  const comments = usePageCommenting({ taskId, pageId, version: drawn, title: named });
 
   const actions = [
     ...(comments.onCommentPage === undefined
