@@ -36,18 +36,12 @@ import { SqlClient } from "effect/sql";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
 /**
- * The first hosted API version no build that took a first page for the
- * whole answer sends. Note that no version gates pages any more, since a
- * version another change took (#11100) once sent them to builds that never
- * followed them; a reader asks for pages itself (`LIVE_FIRST_PAGE`).
- */
-const FIRST_PAGE_TAKEN_BEFORE_API_VERSION = 12;
-
-/**
  * The first hosted API version answered a whole answer in pages before any
- * build followed them (#10886): its builds and those up to
- * `FIRST_PAGE_TAKEN_BEFORE_API_VERSION` took the first page for the whole
- * answer.
+ * build followed them (#10886). Note that a build from it on may hold a
+ * first page for the whole answer, whatever version it sends now, since a
+ * build that took one and was updated since keeps the rows and the sync id
+ * it kept them at. No version gates pages any more; a reader asks for them
+ * itself (`LIVE_FIRST_PAGE`).
  */
 const FIRST_PAGE_TAKEN_API_VERSION = 10;
 
@@ -109,9 +103,10 @@ interface PageParents {
 
 /**
  * Whether the build asking may hold a read's first page for its whole
- * answer, past `past`: a build at a version answered pages it never
- * followed, reading past a sync id from before those pages stopped, which
- * is answered whole once so the parents past that page come back to it.
+ * answer, past `past`: a build at or past a version answered pages it never
+ * followed, or updated from one, reading past a sync id from before those
+ * pages stopped, which is answered whole once so the parents past that page
+ * come back to it.
  */
 export function mayHoldFirstPage(request: Request, past: number): boolean {
   const client = presentedClient(request.headers);
@@ -119,7 +114,6 @@ export function mayHoldFirstPage(request: Request, past: number): boolean {
   return (
     client !== undefined &&
     client.apiVersion >= FIRST_PAGE_TAKEN_API_VERSION &&
-    client.apiVersion < FIRST_PAGE_TAKEN_BEFORE_API_VERSION &&
     past < FIRST_PAGES_HEALED_AT
   );
 }
