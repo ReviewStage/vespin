@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, and a search by path narrowing them.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, scrolled mid-list under the bar's search field, and a search by path narrowing them.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -7,10 +7,10 @@ env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, whose invitations agent's ready pull
-# request, #128, changes eight invented files (`@repo/host/fixture-inbox`'s
+# request, #128, changes 38 invented files (`@repo/host/fixture-inbox`'s
 # `fixtureChanges`): a change in place, files added, one deleted, one moved,
-# a picture, a lockfile, and a generated table of 5,000 lines. Nothing
-# reaches a server.
+# a picture, a lockfile, a generated table of 5,000 lines, and 30 tests, so
+# the list runs past the window. Nothing reaches a server.
 - launchApp:
     clearState: true
     arguments:
@@ -43,6 +43,20 @@ env:
 - assertVisible: "legacy-mailer.ts"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-files
+# Scrolled mid-list, the rows pass under the bar and its search field, which
+# the system tucks away over the list's top edge effect rather than drawing
+# a row's words through it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "magic-link.test.ts"
+- takeScreenshot: pull-request-files-scrolled
+# Back at the list's top, the bar's search field stands again.
+- scrollUntilVisible:
+    element: "Find a file"
+    direction: UP
+    timeout: 30000
+- waitForAnimationToEnd
 # A search keeps the files whose path holds what is typed.
 - tapOn: "Find a file"
 - inputText: "invite-messages"

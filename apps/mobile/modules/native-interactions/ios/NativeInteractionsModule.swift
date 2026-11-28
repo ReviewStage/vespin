@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses and its search field tucks away as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -200,22 +200,53 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// (iOS 26), the picture standing as tall as the title's line, drawn for the
 /// screen's appearance and again as it changes; it clears that title as it
 /// clears its subtitle.
+///
+/// Where it is handed `runs` with an ink of their own, such as a pull
+/// request's lines added in green, it writes them as the item's attributed
+/// subtitle (iOS 26), each run in its color and the rest left to the bar's
+/// own gray, and clears that as it clears the plain one.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
   @Field var leading: Bool = false
   @Field var title: String = ""
   @Field var titleMark: String = ""
+  @Field var runs: [SubtitleRun] = []
 
   func body(content: Content) -> some View {
     content.background(
-      StackSubtitleProbe(subtitle: subtitle, leading: leading, title: title, titleMark: titleMark)
+      StackSubtitleProbe(
+        subtitle: subtitle,
+        inked: inkedSubtitle(),
+        leading: leading,
+        title: title,
+        titleMark: titleMark
+      )
     )
   }
+
+  /// The runs as one attributed string, each in its own color where it names one; none where no run names a color, so the plain subtitle stands.
+  private func inkedSubtitle() -> AttributedString? {
+    guard runs.contains(where: { $0.color != nil }) else { return nil }
+    var built = AttributedString()
+    for run in runs {
+      var piece = AttributedString(run.text)
+      if let color = run.color { piece.uiKit.foregroundColor = color }
+      built.append(piece)
+    }
+    return built
+  }
+}
+
+/// A run of a stack bar's subtitle: its words, and the color they take, where they take one of their own.
+internal struct SubtitleRun: Record {
+  @Field var text: String = ""
+  @Field var color: UIColor? = nil
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
 private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
+  let inked: AttributedString?
   let leading: Bool
   let title: String
   let titleMark: String
@@ -227,6 +258,7 @@ private struct StackSubtitleProbe: UIViewRepresentable {
   func updateUIView(_ view: StackSubtitleView, context: Context) {
     view.leading = leading
     view.marked = titleMark.isEmpty || title.isEmpty ? nil : (title: title, mark: titleMark)
+    view.inked = inked
     view.subtitle = subtitle
   }
 
@@ -242,9 +274,18 @@ private final class StackSubtitleView: UIView {
   private var styleFound: UINavigationItem.ItemStyle?
   /// The attributed title this probe wrote, so it clears only its own.
   private var writtenTitle: AttributedString?
+  /// The attributed subtitle this probe wrote, so it clears only its own.
+  private var writtenInked: AttributedString?
 
   var subtitle = "" {
     didSet { write() }
+  }
+
+  /// The subtitle with some runs in their own colors; none for a plain one.
+  var inked: AttributedString? {
+    didSet {
+      if inked != oldValue { write() }
+    }
   }
 
   var leading = false {
@@ -286,6 +327,10 @@ private final class StackSubtitleView: UIView {
       item.attributedTitle = nil
     }
     writtenTitle = nil
+    if let item, let writtenInked, item.attributedSubtitle == writtenInked {
+      item.attributedSubtitle = nil
+    }
+    writtenInked = nil
     if let item, let styleFound, item.style == .editor {
       item.style = styleFound
     }
@@ -308,6 +353,18 @@ private final class StackSubtitleView: UIView {
     held.navigationItem.subtitle = shown
     item = held.navigationItem
     written = shown
+    ink(held.navigationItem, shown: shown)
+  }
+
+  /// Writes the subtitle's inked runs as the item's attributed subtitle while there are words to show, or takes away the one it wrote once there are none.
+  private func ink(_ held: UINavigationItem, shown: String?) {
+    guard shown != nil, let inked else {
+      if let writtenInked, held.attributedSubtitle == writtenInked { held.attributedSubtitle = nil }
+      writtenInked = nil
+      return
+    }
+    held.attributedSubtitle = inked
+    writtenInked = inked
   }
 
   /// Leads the item's title with the picture `marked` names, as one attributed title, or takes away the one it wrote once it names none.
@@ -359,7 +416,7 @@ private final class StackSubtitleView: UIView {
 
 // MARK: - Scroll edge
 
-/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does.
+/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does, and a search field in the bar stands over the list's scroll edge, as Settings' does.
 ///
 /// Note that UIKit finds the scroll view a bar follows only as its screen's
 /// view's first descendant, or by the screen's `contentScrollView(for:)`,
@@ -368,9 +425,15 @@ private final class StackSubtitleView: UIView {
 /// while the rows scrolled under it. So the list carries a probe that finds
 /// the scroll view it stands beside and sets it on the screen's controller
 /// (`setContentScrollView(_:for:)`). It acts only for a react-native-screens
-/// screen that stands a large title, so a SwiftUI split view's own columns,
-/// which SwiftUI follows itself, and a pushed page's inline bar are left as
-/// they were.
+/// screen that stands a large title or a search field in its bar, so a
+/// SwiftUI split view's own columns, which SwiftUI follows itself, and a
+/// pushed page's plain inline bar are left as they were.
+///
+/// Note that a pushed page's search field under its inline title, such as a
+/// pull request's Find a file, is the system's own to tuck away as the list
+/// scrolls and to stand over the list's top edge effect, which UIKit does
+/// only for the scroll view it follows: unfollowed, the field stood still
+/// over the rows, a row's words drawn clear through it.
 internal struct StackScrollEdgeModifier: ViewModifier, Record {
   func body(content: Content) -> some View {
     content.background(StackScrollEdgeProbe())
@@ -411,20 +474,22 @@ private final class StackScrollEdgeView: UIView {
     handOver()
   }
 
-  /// Sets the list's scroll view as the top edge's on the screen that stands a large title, where it isn't already.
+  /// Sets the list's scroll view as the top edge's on the screen whose bar follows a scroll, where it isn't already.
   func handOver() {
-    guard window != nil, let screen = largeTitleScreen(), let scrollView = nearestScrollView() else { return }
+    guard window != nil, let screen = followingScreen(), let scrollView = nearestScrollView() else { return }
     if screen.contentScrollView(for: .top) === scrollView { return }
     screen.setContentScrollView(scrollView, for: .top)
   }
 
-  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar stands a large title.
-  private func largeTitleScreen() -> UIViewController? {
+  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar follows a scroll: it stands a large title or a search field.
+  private func followingScreen() -> UIViewController? {
     var responder: UIResponder? = next
     while let current = responder {
       if let controller = current as? UIViewController, let stack = controller.parent as? UINavigationController {
         let native = NSStringFromClass(type(of: stack)).hasPrefix("RNS")
-        return native && controller.navigationItem.largeTitleDisplayMode == .always ? controller : nil
+        let item = controller.navigationItem
+        let follows = item.largeTitleDisplayMode == .always || item.searchController != nil
+        return native && follows ? controller : nil
       }
       responder = current.next
     }

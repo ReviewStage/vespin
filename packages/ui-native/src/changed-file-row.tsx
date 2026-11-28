@@ -11,10 +11,15 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { AgentChangedFile, ChangedFileStatus } from "@repo/features/agent-wire";
 import { CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
-import { folderAndName, STATUS_LETTER, STATUS_WORDS } from "@repo/features/changed-files";
+import {
+  CHANGES_COUNT,
+  folderAndName,
+  STATUS_LETTER,
+  STATUS_WORDS,
+} from "@repo/features/changed-files";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { lineCount } from "./line-counts.js";
+import { lineCount, lineCountInk } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";
 import { Text } from "./text.js";
@@ -58,7 +63,6 @@ export function ChangedFileRow({
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const { folder, name } = folderAndName(file.path);
 
-  // Note that the counts are inked as the pull request card inks its own, removed lines in danger's words ink so they hold their contrast.
   const count = (amount: number, sign: string, ink: string) =>
     amount === 0 ? null : (
       <Text
@@ -91,8 +95,8 @@ export function ChangedFileRow({
       ink={viewed ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={
         <HStack spacing={SPACE.TIGHT}>
-          {count(file.additions, "+", colors.COMPLETE)}
-          {count(file.deletions, "−", colors.DANGER_TEXT)}
+          {count(file.additions, "+", lineCountInk(colors, CHANGES_COUNT.ADDED))}
+          {count(file.deletions, "−", lineCountInk(colors, CHANGES_COUNT.REMOVED))}
         </HStack>
       }
     />

@@ -11,6 +11,7 @@ import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import {
   BAR_TITLE,
   ChangedFileRow,
+  changesSubtitle,
   EmptyState,
   footerToneOf,
   GLYPH,
@@ -36,13 +37,13 @@ const FILES_WORDS = {
   NONE_FOUND: "No files match.",
 } as const;
 
-/** What the bar says under the title: how many files, and the lines they add and remove together, as GitHub's tab counts them. */
-function summaryOf(files: readonly { readonly additions: number; readonly deletions: number }[]) {
-  return changesLine({
+/** What the bar counts under the title: how many files, and the lines they add and remove together, as GitHub's tab counts them. */
+function tallyOf(files: readonly { readonly additions: number; readonly deletions: number }[]) {
+  return {
     files: files.length,
     additions: files.reduce((sum, file) => sum + file.additions, 0),
     deletions: files.reduce((sum, file) => sum + file.deletions, 0),
-  });
+  };
 }
 
 /**
@@ -50,7 +51,9 @@ function summaryOf(files: readonly { readonly additions: number; readonly deleti
  * its number, read as the screen first shows (`usePullRequestChanges`) and
  * on a pull down. The files stand in one list, in the order the desktop's
  * tree lists them (`treeOrder`), each a row naming the folder it stands in
- * under its name (`ChangedFileRow`), as Dean picked. The bar's search
+ * under its name (`ChangedFileRow`), as Dean picked. The bar's subtitle
+ * counts them, its lines added and removed inked as the rows ink theirs
+ * (`changesSubtitle`), as Dean asked. The bar's search
  * keeps the files whose path holds what is typed, as the desktop's does
  * (`filterFiles`). A press opens the file's diff on GitHub, at its anchor
  * on the Files changed tab, until the app draws diffs itself. Where GitHub
@@ -77,6 +80,7 @@ export function PullRequestFilesScreen() {
   const changes = usePullRequestChanges(key);
   const [search, setSearch] = useState("");
   const files = changes.files;
+  const tally = files === undefined ? undefined : tallyOf(files);
 
   // Note that the address GitHub answered with is used where the read gave one, so a file opens on the pull request as GitHub spells it.
   const url =
@@ -101,7 +105,11 @@ export function PullRequestFilesScreen() {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
-      <StackSubtitle words={files === undefined ? "" : summaryOf(files)} leading={regular} />
+      <StackSubtitle
+        words={tally === undefined ? "" : changesLine(tally)}
+        inked={tally === undefined ? undefined : changesSubtitle(colors, tally)}
+        leading={regular}
+      />
     </>
   );
 

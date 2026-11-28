@@ -67,15 +67,36 @@ export function filesWords(files: number): string {
 /** The minus sign a count of removed lines wears, as GitHub writes it. */
 const MINUS = "−";
 
-/** How many files a pull request changes and the lines they add and remove together, as GitHub's Files changed tab counts them: "6 files · +212 −38". */
-export function changesLine(changed: {
+/** Which count a run of the changes' line is: the lines added, or those removed. */
+export const CHANGES_COUNT = { ADDED: "added", REMOVED: "removed" } as const;
+
+export type ChangesCount = (typeof CHANGES_COUNT)[keyof typeof CHANGES_COUNT];
+
+/** A run of the changes' line: its words, and which count they are, where they are one. */
+export type ChangesRun = { readonly words: string; readonly count?: ChangesCount | undefined };
+
+/** How many files a pull request changes, and the lines they add and remove together. */
+export type ChangesTally = {
   readonly files: number;
   readonly additions: number;
   readonly deletions: number;
-}): string {
-  const noun = changed.files === 1 ? "file" : "files";
+};
 
-  return `${changed.files} ${noun} · +${changed.additions} ${MINUS}${changed.deletions}`;
+/** The line `changesLine` writes, in runs, each count marked as the lines added or removed, so a client may ink them as each file's row inks its own. */
+export function changesRuns(changed: ChangesTally): readonly ChangesRun[] {
+  return [
+    { words: `${filesWords(changed.files)} · ` },
+    { words: `+${changed.additions}`, count: CHANGES_COUNT.ADDED },
+    { words: " " },
+    { words: `${MINUS}${changed.deletions}`, count: CHANGES_COUNT.REMOVED },
+  ];
+}
+
+/** How many files a pull request changes and the lines they add and remove together, as GitHub's Files changed tab counts them: "6 files · +212 −38". */
+export function changesLine(changed: ChangesTally): string {
+  return changesRuns(changed)
+    .map((run) => run.words)
+    .join("");
 }
 
 /**

@@ -39,12 +39,15 @@ export function cellFocusRingOff(): ModifierConfig {
  * compact screen, whose bar no SwiftUI modifier reaches. Note that a view
  * takes it whether or not it has a subtitle, an empty one drawing none,
  * since adding or removing a modifier redraws everything under the view.
+ * A stack's subtitle may stand in `inked` runs, some in an ink of their
+ * own, which a build without them draws as the plain `subtitle`.
  */
 export function barSubtitle(
   bar: BarKind,
   subtitle: string | undefined,
   leading = false,
   titleMark?: BarTitleMark,
+  inked: readonly InkedWords[] = [],
 ): ModifierConfig {
   if (bar === BAR_KIND.COLUMN)
     return createModifier(MODIFIER.COLUMN_SUBTITLE, { subtitle: subtitle ?? "", leading });
@@ -54,18 +57,26 @@ export function barSubtitle(
     leading,
     title: titleMark?.title ?? "",
     titleMark: titleMark?.asset ?? "",
+    runs: inked.map((run) =>
+      run.ink === undefined ? { text: run.words } : { text: run.words, color: run.ink },
+    ),
   });
 }
+
+/** A run of a stack bar's subtitle: its words, and the ink they take where they take one of their own, the subtitle's own gray elsewhere. */
+export type InkedWords = { readonly words: string; readonly ink?: string | undefined };
 
 /** A picture of the asset catalog a stack's bar leads its title with, such as a Manager's face, and the title it leads. */
 export type BarTitleMark = { readonly title: string; readonly asset: string };
 
 /**
  * A list the native stack's bar follows as it scrolls, so a tab root's large
- * title collapses into the bar as Mail's does, which UIKit never finds on
- * its own inside a hosting controller. Note that it acts only under a stack
- * bar standing a large title, so every list may carry it, a pushed page's
- * and a split view's column standing as before.
+ * title collapses into the bar as Mail's does, and a search field in the bar
+ * tucks away and stands over the list's top edge effect as Settings' does,
+ * which UIKit never finds on its own inside a hosting controller. Note that
+ * it acts only under a stack bar standing a large title or a search field,
+ * so every list may carry it, a pushed page's plain bar and a split view's
+ * column standing as before.
  */
 export function stackScrollEdge(): ModifierConfig {
   return createModifier(MODIFIER.STACK_SCROLL_EDGE, {});

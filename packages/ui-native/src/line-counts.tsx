@@ -1,4 +1,4 @@
-// line-counts.tsx -- the lines a pull request or a change adds and removes, as every place draws them: "+32" in the complete green and "−2" in the danger red.
+// line-counts.tsx -- the lines a pull request or a change adds and removes, as every place draws them: "+32" in the complete green and "−2" in the danger red, a Files bar's subtitle among them.
 
 import { HStack } from "@expo/ui/swift-ui";
 import {
@@ -9,8 +9,15 @@ import {
   lineLimit,
   monospacedDigit,
 } from "@expo/ui/swift-ui/modifiers";
+import {
+  CHANGES_COUNT,
+  type ChangesCount,
+  type ChangesTally,
+  changesRuns,
+} from "@repo/features/changed-files";
+import type { InkedWords } from "./interactions.js";
 import { Text } from "./text.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -25,6 +32,24 @@ export function lineCount(sign: string, count: number): string {
   const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
 
   return `${sign}${short}`;
+}
+
+/** The ink a count of lines takes: the complete green for those added, and danger's words ink for those removed, which holds its contrast on either ground. */
+export function lineCountInk(colors: BrandColors, count: ChangesCount): string {
+  return count === CHANGES_COUNT.ADDED ? colors.COMPLETE : colors.DANGER_TEXT;
+}
+
+/**
+ * A pull request's Files changed subtitle, "43 files · +235 −58", as runs
+ * for `StackSubtitle`: the count of files in the bar's own gray, and the
+ * lines added and removed in the inks every count of lines takes.
+ */
+export function changesSubtitle(colors: BrandColors, changed: ChangesTally): readonly InkedWords[] {
+  return changesRuns(changed).map((run) =>
+    run.count === undefined
+      ? { words: run.words }
+      : { words: run.words, ink: lineCountInk(colors, run.count) },
+  );
 }
 
 /** What a pair of counts is heard as. */
@@ -66,17 +91,20 @@ export function LineCounts({
       spacing={SPACE.TIGHT}
       modifiers={
         heard
-          ? [accessibilityElement("ignore"), accessibilityLabel(lineCountsHeard(additions, deletions))]
+          ? [
+              accessibilityElement("ignore"),
+              accessibilityLabel(lineCountsHeard(additions, deletions)),
+            ]
           : []
       }
     >
       {hidesNone && additions === 0 ? null : (
-        <Text modifiers={[...look, foregroundStyle(colors.COMPLETE)]}>
+        <Text modifiers={[...look, foregroundStyle(lineCountInk(colors, CHANGES_COUNT.ADDED))]}>
           {lineCount(LINE_SIGN.ADDED, additions)}
         </Text>
       )}
       {hidesNone && deletions === 0 ? null : (
-        <Text modifiers={[...look, foregroundStyle(colors.DANGER_TEXT)]}>
+        <Text modifiers={[...look, foregroundStyle(lineCountInk(colors, CHANGES_COUNT.REMOVED))]}>
           {lineCount(LINE_SIGN.REMOVED, deletions)}
         </Text>
       )}

@@ -226,6 +226,8 @@ export {
   writeSettled,
 } from "./latest-writes-model.js";
 
+export { changesSubtitle } from "./line-counts.js";
+
 export {
   ListRow,
   type LongPressGroup,
