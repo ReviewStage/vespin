@@ -581,7 +581,6 @@ const FINISH_WORDS = {
   DISCARD_QUESTION: "Discard your pending review?",
   DISCARD_WHY: "This deletes every pending comment you added to it.",
   DISCARD_REVIEW: "Discard review",
-  NONE: "You have no pending review on this pull request.",
   where: (path: string, line: number | null) =>
     line === null ? folderAndName(path).name : `${folderAndName(path).name} · line ${line}`,
 } as const;
@@ -693,7 +692,7 @@ export function PullRequestReviewScreen() {
         look={LIST_LOOK.PLAIN}
         empty={
           pending === undefined ? (
-            <EmptyState title={FINISH_WORDS.NONE} symbol={GLYPH.COMMENT} />
+            <EmptyState title={REVIEW_PANEL_WORDS.lead(0)} symbol={GLYPH.COMMENT} />
           ) : undefined
         }
       >

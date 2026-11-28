@@ -49,16 +49,12 @@ import { TaskMentions } from "./task-mentions.js";
  * question over the window leaves the panel open.
  */
 
-/** What submitting says, where GitHub publishes the review. */
-const LEAD = "Submitted on GitHub as you.";
-
 /** The press's and the panel's words on a pull request. */
 const REVIEW_WORDS: ReviewWords = {
-  open: "Review",
-  openWith: (count) => `Review, ${REVIEW_PANEL_WORDS.pending(count)}`,
+  open: REVIEW_PANEL_WORDS.OPEN,
+  openWith: REVIEW_PANEL_WORDS.openWith,
   title: REVIEW_PANEL_WORDS.TITLE,
-  lead: (count) =>
-    count === 0 ? LEAD : `${LEAD} ${REVIEW_PANEL_WORDS.pending(count)} will be published.`,
+  lead: REVIEW_PANEL_WORDS.lead,
   body: REVIEW_PANEL_WORDS.BODY,
   placeholder: "Leave a summary comment (optional)",
   send: "Submit review",

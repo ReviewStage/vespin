@@ -48,7 +48,14 @@ import { pullRequestMarkState, REVIEW_WORDS } from "@repo/features/pull-request-
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
+import {
+  BUTTON_LOOK,
+  BUTTON_SIZE,
+  Button,
+  FieldChip,
+  type FieldMenu,
+  LabelChip,
+} from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { menuActContent } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -118,6 +125,8 @@ type PullRequestHeadProps = {
   readonly title: string;
   /** What a tap on the title does, opening its edit, and what VoiceOver hears it does ("Edit title"); none where it can't be edited now, as while another change is out. */
   readonly titleEdit?: { readonly heard: string; readonly onPress: () => void } | undefined;
+  /** The press beside the title that opens the member's review, as the panel's phone stands Review beside its title: its words and what it opens; none where no review may be given now. */
+  readonly review?: { readonly label: string; readonly onPress: () => void } | undefined;
   readonly number: number;
   readonly state: PullRequestState;
   /** Whether GitHub's merge queue holds it, which its mark says in the merge's glyph. */
@@ -361,7 +370,8 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, which a tap opens to edit where
- * it may be edited, then where it stands as a chip, its state's glyph in
+ * it may be edited, and Review beside it where a review may be given, as
+ * the panel's phone stands it, then where it stands as a chip, its state's glyph in
  * GitHub's color and its word, which opens the system's menu of what may
  * change there where it is handed one, as the panel's pill does, then who
  * opened it and
@@ -377,6 +387,7 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
 export function PullRequestHead({
   title,
   titleEdit,
+  review,
   number,
   state,
   queued,
@@ -415,25 +426,36 @@ export function PullRequestHead({
         }),
       ]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
-          // Note that the title opens its edit on a tap, as Notes and Reminders edit a title where it stands, heard as a button with what it does, since nothing marks it to the eye.
-          ...(titleEdit === undefined
-            ? []
-            : [
-                onTapGesture(titleEdit.onPress),
-                accessibilityAddTraits(["isButton"]),
-                accessibilityHint(titleEdit.heard),
-              ]),
-        ]}
-      >
-        <Text>{title}</Text>
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED), monospacedDigit()]}>
-          {` #${number}`}
+      <HStack alignment="firstTextBaseline" spacing={SPACE.ROW}>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+            foregroundStyle(colors.TEXT),
+            frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+            // Note that the title opens its edit on a tap, as Notes and Reminders edit a title where it stands, heard as a button with what it does, since nothing marks it to the eye.
+            ...(titleEdit === undefined
+              ? []
+              : [
+                  onTapGesture(titleEdit.onPress),
+                  accessibilityAddTraits(["isButton"]),
+                  accessibilityHint(titleEdit.heard),
+                ]),
+          ]}
+        >
+          <Text>{title}</Text>
+          <Text modifiers={[foregroundStyle(colors.TEXT_MUTED), monospacedDigit()]}>
+            {` #${number}`}
+          </Text>
         </Text>
-      </Text>
+        {review === undefined ? null : (
+          <Button
+            label={review.label}
+            look={BUTTON_LOOK.BORDERED}
+            size={BUTTON_SIZE.SMALL}
+            onPress={review.onPress}
+          />
+        )}
+      </HStack>
       <HStack spacing={SPACE.TIGHT + 2}>
         <FieldChip
           label={stateLabel}
