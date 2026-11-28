@@ -206,6 +206,8 @@ const styles = StyleSheet.create({
   pending: { alignItems: "center", justifyContent: "center" },
   pictureChip: { paddingLeft: 2, borderWidth: StyleSheet.hairlineWidth },
   measured: { alignSelf: "stretch" },
+  summary: { flexDirection: "row", alignItems: "center", gap: SPACE.TIGHT },
+  summaryWords: { flexShrink: 1 },
 });
 
 /** What VoiceOver hears of each chip by the name the app found for it, by chip, for the blocks the chips were read from. */
@@ -1443,6 +1445,56 @@ function PictureBlock({
   );
 }
 
+/** What VoiceOver hears of a folded section's state, as a disclosure's. */
+const DETAILS_HEARD = { HINT: "Shows or hides what it folds" } as const;
+
+/**
+ * A folded section of GitHub's words (`<details>`), as GitHub's page draws
+ * one: its summary after a chevron, folded as it lands, and a press on it
+ * opening what it folds under it, or folding it again. Its blocks are drawn
+ * only while open, so a long log a bot folded costs nothing until read.
+ */
+function DetailsView({
+  block,
+  drawing,
+}: {
+  readonly block: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.DETAILS }>;
+  readonly drawing: Drawing;
+}) {
+  const { colors, fontScale } = drawing;
+  const [open, setOpen] = useState(false);
+  const chevron = ROLE_SIZE.TIME * fontScale;
+  const summary = block.summary.map((run) => ("text" in run ? run.text : "")).join("");
+
+  return (
+    <View>
+      <Press
+        onPress={() => setOpen(!open)}
+        accessibilityRole="button"
+        accessibilityLabel={heardLine(block.summary) ?? summary}
+        accessibilityState={{ expanded: open }}
+        accessibilityHint={DETAILS_HEARD.HINT}
+        style={styles.summary}
+      >
+        <SymbolView
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
+          size={chevron}
+          tintColor={colors.TEXT_MUTED}
+          accessibilityElementsHidden
+        />
+        <View style={styles.summaryWords}>
+          <Line runs={block.summary} drawing={drawing} style={{ fontWeight: "600" }} />
+        </View>
+      </Press>
+      {open ? (
+        <View style={{ marginTop: PROSE_SIZE * NESTED_GAP * fontScale }}>
+          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function BlockView({
   block,
   drawing,
@@ -1512,6 +1564,8 @@ function BlockView({
       );
     case MARKDOWN_BLOCK.PICTURE:
       return <PictureBlock source={block.source} alt={block.alt} drawing={drawing} />;
+    case MARKDOWN_BLOCK.DETAILS:
+      return <DetailsView block={block} drawing={drawing} />;
   }
 }
 
@@ -1566,8 +1620,8 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
-  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
-  readonly hidesHtml?: boolean | undefined;
+  /** Whether the words are GitHub's, whose raw HTML is read as GitHub's page draws it (a picture, a table, a folded section), every other tag unseen; it is drawn as written where none is given. */
+  readonly githubWords?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
@@ -1665,7 +1719,7 @@ export function Markdown({
   repository = null,
   onOpenLink,
   typed,
-  hidesHtml,
+  githubWords,
   pictureSource = namedSource,
   onRetryPicture,
   videoAt = noVideo,
@@ -1699,11 +1753,11 @@ export function Markdown({
         now: Date.now(),
         zone: readerZone(),
         typed,
-        hidesHtml,
+        githubWords,
         diagrams,
         pictures: wordPictures,
       }),
-    [words, repository, typed, hidesHtml, diagrams, wordPictures],
+    [words, repository, typed, githubWords, diagrams, wordPictures],
   );
 
   // The names the words' chips found as they drew, by chip, for the blocks they were read from, so a line's label and actions say what each chip shows; the words read again start none.

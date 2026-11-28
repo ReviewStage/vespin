@@ -82,7 +82,7 @@ function EntryWords({
     return (
       <UnderHead>
         <RNHostView matchContents={{ vertical: true }}>
-          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} hidesHtml />
+          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} githubWords />
         </RNHostView>
       </UnderHead>
     );

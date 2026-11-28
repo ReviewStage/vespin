@@ -5,6 +5,7 @@ import {
   LINK_TARGET,
   MARKDOWN_BLOCK,
   MARKDOWN_RUN,
+  type MarkdownBlock,
   markdownBlocks,
   markdownGithubPages,
   markdownReplyButtons,
@@ -164,14 +165,96 @@ describe("markdownBlocks", () => {
     ]);
   });
 
-  it("hides raw HTML where the words are drawn as GitHub's page draws a pull request body", () => {
-    const body =
-      "<!-- What changed and why? -->\n\nAdds a row.\n\n<details><summary>Log</summary></details>";
+  // A bot's table, a folded log, and a screenshot pasted on GitHub are raw HTML in a comment's Markdown, which the app hid in a row and printed as tags on a thread's screen.
+  it("reads GitHub's raw HTML as GitHub's page draws it, every other tag and comment unseen", () => {
+    const body = [
+      "<!-- What changed and why? -->",
+      "",
+      '<p align="center"><img src="https://example.com/shot.png" alt="Shot"></p>',
+      "",
+      '<table><tr><th>Name</th><th>Status</th></tr><tr><td><b>web</b></td><td><a href="https://example.com/preview">Visit</a></td></tr></table>',
+      "",
+      "<details>",
+      "<summary>Coverage &amp; lint</summary>",
+      "",
+      "All files are **covered**.",
+      "",
+      "</details>",
+      "",
+      "Done<br>now <blink>really</blink>.",
+    ].join("\n");
 
-    expect(markdownBlocks(body, { ...READING, hidesHtml: true })).toEqual([
-      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("Adds a row.")] },
+    expect(markdownBlocks(body, { ...READING, githubWords: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PICTURE, source: "https://example.com/shot.png", alt: "Shot" },
+      {
+        kind: MARKDOWN_BLOCK.TABLE,
+        align: [COLUMN_ALIGN.START, COLUMN_ALIGN.START],
+        rows: [
+          [[words("Name")], [words("Status")]],
+          [
+            [{ ...words("web"), strong: true }],
+            [
+              {
+                kind: MARKDOWN_RUN.LINK,
+                target: { kind: LINK_TARGET.WEB, href: "https://example.com/preview" },
+                runs: [words("Visit")],
+              },
+            ],
+          ],
+        ],
+      },
+      {
+        kind: MARKDOWN_BLOCK.DETAILS,
+        summary: [words("Coverage & lint")],
+        blocks: [
+          {
+            kind: MARKDOWN_BLOCK.PARAGRAPH,
+            runs: [words("All files are "), { ...words("covered"), strong: true }, words(".")],
+          },
+        ],
+      },
+      {
+        kind: MARKDOWN_BLOCK.PARAGRAPH,
+        runs: [
+          words("Done"),
+          { kind: MARKDOWN_RUN.BREAK },
+          words("now "),
+          words("really"),
+          words("."),
+        ],
+      },
     ]);
-    expect(markdownShows("<!-- What changed and why? -->\n", { hidesHtml: true })).toBe(false);
+    expect(markdownShows("<!-- What changed and why? -->\n", { githubWords: true })).toBe(false);
+  });
+
+  it.each([
+    ['<a href="javascript:alert(1)">x</a>'],
+    ['<a href="data:text/html,<p>hi</p>">x</a>'],
+    ['<img src="data:image/png;base64,AAAA" alt="x">'],
+    ['<img src="javascript:alert(1)" alt="x">'],
+  ])("draws only the words of a link or picture GitHub's HTML names off the web: %s", (html) => {
+    expect(markdownBlocks(`<p>${html}</p>`, { ...READING, githubWords: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("x")] },
+    ]);
+  });
+
+  // A comment of tags opened and never closed read each one to the words' end and nested a block per tag, past the stack's depth.
+  it("reads 100 kB of GitHub's tags left open in one pass, nesting no deeper than a few", () => {
+    const blocks = markdownBlocks(`${"<details>".repeat(11_000)}end`, {
+      ...READING,
+      githubWords: true,
+    });
+
+    const detailsDepth = (within: readonly MarkdownBlock[]): number => {
+      const [first] = within;
+
+      return first?.kind === MARKDOWN_BLOCK.DETAILS ? 1 + detailsDepth(first.blocks) : 0;
+    };
+
+    const depth = detailsDepth(blocks);
+
+    expect(depth).toBeLessThanOrEqual(8);
+    expect(JSON.stringify(blocks)).toContain('"end"');
   });
 
   it("draws a table as rows as wide as its header, each column aligned as written", () => {

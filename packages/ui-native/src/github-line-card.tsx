@@ -94,7 +94,13 @@ function FoldBody({
   return (
     <View style={[styles.body, { borderTopColor: colors.CHIP_EDGE }]}>
       {fold.said === "" ? null : (
-        <Markdown words={fold.said} repository={repository} onOpenLink={onOpenLink} width={words} />
+        <Markdown
+          words={fold.said}
+          repository={repository}
+          onOpenLink={onOpenLink}
+          width={words}
+          githubWords
+        />
       )}
       {fold.comments.map((comment, at) => (
         // Note that two comments may share a file and a line, so each is keyed by its place.
@@ -133,6 +139,7 @@ function FoldBody({
               repository={repository}
               onOpenLink={onOpenLink}
               width={words}
+              githubWords
             />
           )}
         </View>

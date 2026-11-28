@@ -215,6 +215,7 @@ export function PullRequestThreadScreen() {
               title={lines === undefined ? thread.path : `${thread.path} ${lines}`}
               messages={threadMessagesOf(thread, writes)}
               repository={key.repository}
+              githubWords
               onOpenLink={openLink}
               standing={thread.resolved ? THREAD_STATE_WORDS.RESOLVED : undefined}
             />
