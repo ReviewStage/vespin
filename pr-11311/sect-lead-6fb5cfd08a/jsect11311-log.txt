@@ -1,0 +1,26 @@
+pinned to 9fbfa4b3c9
+== bundle PJjsect11311 base 9fbfa4b3c9
+  built 9fbfa4b3c9 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+before/tasks: fails 0 shots 36 
+  before/tasks shots: agent-archived.png new-sub-task.png task-agent-archive-ask.png task-agent-preview.png task-agent-swipe-archived.png task-agent-swipe-resting.png task-agent-swipe.png task-agents-archived.png task-assignee-menu.png task-comment-reply.png task-comment-thread.png task-comments.png task-delete-ask.png task-description.png task-more-menu-copy.png task-more-menu.png task-overview.png task-page-menu.png task-page.png task-priority-menu.png task-status-menu.png task-status-set.png task-sub-task-add.png tasks-copy-link.png tasks-delete-ask.png tasks-list.png tasks-mark-done-ask.png tasks-marked-done.png tasks-menu.png tasks-rename.png tasks-row-menu.png tasks-row-read.png tasks-row-unread.png tasks-search.png tasks-swipe-leading.png tasks-wide.png 
+before/automations: fails 0 shots 12 
+  before/automations shots: automation-page-more.png automation-page-runs.png automation-page-where.png automation-page.png automation-run-agent.png automations-by-name.png automations-delete-ask.png automations-list.png automations-menu.png automations-order.png automations-runs-failed.png automations-runs.png 
+before/sections: fails 0 shots 3 
+  before/sections shots: sections-1-top.png sections-2-mid.png sections-3-lower.png 
+== bundle PJsect11311a base 6fb5cfd08a
+  built 6fb5cfd08a base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== after bundle 6fb5cfd08a over Vmain-current.app
+after/tasks: fails 0 shots 36 
+  after/tasks shots: agent-archived.png new-sub-task.png task-agent-archive-ask.png task-agent-preview.png task-agent-swipe-archived.png task-agent-swipe-resting.png task-agent-swipe.png task-agents-archived.png task-assignee-menu.png task-comment-reply.png task-comment-thread.png task-comments.png task-delete-ask.png task-description.png task-more-menu-copy.png task-more-menu.png task-overview.png task-page-menu.png task-page.png task-priority-menu.png task-status-menu.png task-status-set.png task-sub-task-add.png tasks-copy-link.png tasks-delete-ask.png tasks-list.png tasks-mark-done-ask.png tasks-marked-done.png tasks-menu.png tasks-rename.png tasks-row-menu.png tasks-row-read.png tasks-row-unread.png tasks-search.png tasks-swipe-leading.png tasks-wide.png 
+after/automations: fails 0 shots 12 
+  after/automations shots: automation-page-more.png automation-page-runs.png automation-page-where.png automation-page.png automation-run-agent.png automations-by-name.png automations-delete-ask.png automations-list.png automations-menu.png automations-order.png automations-runs-failed.png automations-runs.png 
+after/sections: fails 0 shots 3 
+  after/sections shots: sections-1-top.png sections-2-mid.png sections-3-lower.png 
