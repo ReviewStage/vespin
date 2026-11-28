@@ -252,6 +252,36 @@ it.effect(
 );
 
 it.effect(
+  "a fixture run's thread marked read leaves a Manager's thread standing in the Inbox",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+        const groups = yield* inboxGroupsOver(bridge);
+
+        const opened = groups
+          .flatMap(({ items }) => items)
+          .find(({ title }) => title === STAGED_THREAD);
+
+        expect(opened).toBeDefined();
+
+        // Note that opening a thread marks it read, which the run lays over the document it staged.
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId: opened?.id ?? "", unread: false }),
+        );
+        yield* settledVersion(bridge);
+
+        const titles = (yield* inboxGroupsOver(bridge)).flatMap(({ items }) =>
+          items.map(({ title }) => title),
+        );
+
+        expect(titles).toContain(MANAGER_THREAD);
+      }),
+    ),
+);
+
+it.effect(
   "a fixture run moves its agent's queued messages as a reorder asks, and settles once it has",
   () =>
     Effect.scoped(
