@@ -107,7 +107,7 @@ import { MINUTE, STORY_NOW, still, useTimeline, useTyping } from "./landing-stor
  * typed and started from Home, its agent working through its calls and
  * asking a question in the Inbox, the answer sent there, and the agent
  * finishing and opening its pull request, the app back on Home as it
- * opened. Its lists move as the app's do (`landing-motion.tsx`).
+ * opened.
  */
 
 /** The surface the app draws at: the Mac app's own, dark. */

@@ -22,7 +22,7 @@ import { automationTriggerText } from "@repo/features/automation-list-model";
 import { readerZone } from "@repo/features/date-mention";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { entityOfDestination } from "@repo/features/entity-kind";
-import { inboxRowOf } from "@repo/features/inbox-digest";
+import { type InboxRow, inboxRowsOf } from "@repo/features/inbox-digest";
 import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
   LINK_DESTINATION,
@@ -277,11 +277,16 @@ export function useMentionOffer(
   // Note that where the account's database keeps the Inbox, its threads are read from there, every one, only while an `@` is typed.
   const keptRows = useInboxRows(reading && told?.stored === true ? INBOX_WHOLE : undefined);
 
+  // Note that each thread is read as its row, the digest its Inbox row draws its mark from: as kept where the account's database keeps the Inbox, and taken from its whole item otherwise.
   const heldThreads = useMemo(
-    () =>
+    (): Readonly<Record<string, readonly InboxRow[]>> | undefined =>
       told?.stored === true
         ? Object.fromEntries(inboxHoldingsOfRows(keptRows ?? [], told).read)
-        : held?.threads,
+        : held?.threads === undefined
+          ? undefined
+          : Object.fromEntries(
+              Object.entries(held.threads).map(([holder, items]) => [holder, inboxRowsOf(items)]),
+            ),
     [told, keptRows, held],
   );
   // Note that the task's repository's paths are read once and held while the app runs, as the panel holds them, since a repository's files rarely move while a word is typed.
@@ -362,7 +367,7 @@ export function useMentionOffer(
       .map(({ item, holder, own }): ThreadCandidate => {
         const row = threadCandidate(item, holder, step);
         // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
-        const look = INBOX_LINE_LOOK[inboxLineKind(inboxRowOf(item))];
+        const look = INBOX_LINE_LOOK[inboxLineKind(item)];
 
         if (look !== undefined) {
           marks.set(row.target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });

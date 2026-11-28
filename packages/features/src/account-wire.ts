@@ -11,8 +11,10 @@ import { Schema as EffectSchema } from "effect";
  * the way by its owner: the settings readers on the service and in the
  * host's preferences client, `modelChoiceSchema` for the default
  * (`models-wire.ts`), `chaptersModelFrom` for the chapters model
- * (`chapters-model-choice.ts`). A write carries any of the seventeen parts and is read the
- * same way, a part the service does not take refused there.
+ * (`chapters-model-choice.ts`). A write carries any of its parts and is read the
+ * same way, a part the service does not take refused there. Note that a
+ * build before a part never names it, and one before a part the service
+ * answers passes over it, so a part is added without a wire step.
  */
 
 /** The parts a snapshot and a write carry alike, each read the rest of the way by its owner. */
@@ -34,6 +36,17 @@ const OWN_PART_FIELDS = {
   githubWakesOff: EffectSchema.optionalKey(EffectSchema.Unknown),
   newAgentServersOff: EffectSchema.optionalKey(EffectSchema.Unknown),
   inbox: EffectSchema.optionalKey(EffectSchema.Unknown),
+  lineNumbers: EffectSchema.optionalKey(EffectSchema.Unknown),
+  wordWrap: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffLayout: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffIndicators: EffectSchema.optionalKey(EffectSchema.Unknown),
+  inlineDiff: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffBackgrounds: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffDarkTheme: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffLightTheme: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffFont: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffLigatures: EffectSchema.optionalKey(EffectSchema.Unknown),
+  diffMinimizeComments: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
 };
@@ -53,7 +66,7 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
 
 export type AccountPreferencesAnswerWire = typeof accountPreferencesAnswerSchema.Type;
 
-/** A write (PUT): any of the snapshot's seventeen parts, each read by its owner on the service. */
+/** A write (PUT): any of the snapshot's parts, each read by its owner on the service. */
 export const accountPreferencesWriteSchema = EffectSchema.Struct({
   preferences: EffectSchema.optionalKey(EffectSchema.Unknown),
   ...OWN_PART_FIELDS,

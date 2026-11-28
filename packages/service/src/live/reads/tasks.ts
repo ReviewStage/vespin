@@ -25,6 +25,7 @@ import { agentBootTable } from "@repo/database/schemas/agent-boot";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { member, user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
+import { inboxItem } from "@repo/database/schemas/inbox";
 import { task } from "@repo/database/schemas/task";
 import { taskBlock } from "@repo/database/schemas/task-block";
 import { workspaceSandboxSize } from "@repo/database/schemas/workspace-sandbox-size";
@@ -119,7 +120,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * status, which turns on it, is the reader's to read, and so is the order.
  *
  * A reader past a sync id is read the same statements narrowed to the rows
- * what moved could move (`taskListDeltaStatements`): a plan whose own row,
+ * what moved could move (`tasksRead`'s `delta`): a plan whose own row,
  * pin, read mark, or block moved, that a moved plan blocks, or that names a
  * moved member, and an agent whose own row or pin moved, whose turn or
  * conversation moved, whose plan moved, that names a moved member or Mac,
@@ -481,6 +482,27 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
 }
 
 /**
+ * The tasks and agents that hold the inbox items `items` selects (a select
+ * of `inbox_item.id`), as the task list answers them and on its rule of who
+ * reads them, so a holder the account does not reach reads no row: each
+ * item's task with every agent of it, as a task's rows are read by its id,
+ * and the agent of each item on no task alone, only where `taskless`.
+ */
+export function inboxHoldersStatements(userId: string, items: SQL, taskless: boolean) {
+  const held = (column: typeof inboxItem.taskId | typeof inboxItem.agentId) =>
+    sql`(select ${column} from ${inboxItem} where ${inboxItem.id} in (${items}))`;
+
+  return {
+    tasks: tasksStatement(userId, sql`${task.id} in ${held(inboxItem.taskId)}`),
+    agents: agentsStatement(
+      userId,
+      sql`(${agentTable.taskId} in ${held(inboxItem.taskId)} or ${agentTable.id} in ${held(inboxItem.agentId)})`,
+      taskless,
+    ),
+  };
+}
+
+/**
  * The vCPUs the agent's sandbox opens with: its workspace's size, or the
  * default where the workspace chose none. Note that a change of the size wakes the list on
  * the workspace's topic (`movedAgents`), and reaches the agent's sandbox at
@@ -620,7 +642,7 @@ function movedAgents(moved: SyncMoved): SQL {
 const TASKS_A_PAGE = 80;
 
 /** Every table the task list's statements read, which a write to wakes them. */
-const TASK_LIST_TABLES = [
+export const TASK_LIST_TABLES = [
   taskSync,
   taskBlockSync,
   taskFollowerSync,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { inboxRowOf } from "./inbox-digest.js";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -10,6 +11,7 @@ import {
 } from "./inbox-wire.js";
 import {
   INBOX_SENDING,
+  inboxRowSendingDrawn,
   inboxSendingDrawn,
   inboxSendingFile,
   inboxSendingFiles,
@@ -198,5 +200,28 @@ describe("inboxSendingDrawn", () => {
         READER,
       ),
     ).toBe(reopened);
+  });
+});
+
+describe("inboxRowSendingDrawn", () => {
+  it("never draws a reply the service took again once newer messages pushed it past the row's tail, and draws one still out at the foot", () => {
+    const reply = { kind: INBOX_SENDING.REPLY, key: "key-sent", text: "On it", at: 2_000 };
+
+    // Note that the row carries only its six newest messages, every one the agent's and newer than the reply.
+    const row = inboxRowOf({
+      ...ITEM,
+      unread: true,
+      thread: [1, 2, 3, 4, 5, 6].map((place) => ({
+        id: `agent-${place}`,
+        author: INBOX_MESSAGE_AUTHOR.AGENT,
+        text: `Step ${place}`,
+        createdAt: 2_000 + place * 100,
+      })),
+    });
+
+    expect(inboxRowSendingDrawn(row, [reply], new Set(["key-sent"]), READER)).toBe(row);
+
+    const drawn = inboxRowSendingDrawn(row, [reply], new Set(), READER);
+    expect(drawn.digest.tail.at(-1)?.text).toBe("On it");
   });
 });

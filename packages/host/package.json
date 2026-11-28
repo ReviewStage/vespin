@@ -39,6 +39,7 @@
     "./task-code-worker": "./src/task-code-worker.js",
     "./mirror-match-remote": "./src/mirror-match-remote.js",
     "./mirror-match-worker": "./src/mirror-match-worker.js",
+    "./process-asking": "./src/process-asking.js",
     "./follow-stream": "./src/follow-stream.js",
     "./local-database": "./src/local-database.js",
     "./local-queues": "./src/local-queues.js",

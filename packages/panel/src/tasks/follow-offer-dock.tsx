@@ -5,13 +5,19 @@
  * same card: the person's face, "Add Charles Lin as a follower?", Not now,
  * and Add. Whom it offers is `follow-offer.ts`'s to say. Add asks the service to add
  * them (their machines off), and the row goes once the task's followers
- * name them; Not now is kept for that person on that task in this window's
- * own storage, so it never asks about them there again.
+ * name them; Not now is kept for that person on that task on the account,
+ * one of its view choices (`VIEW_CHOICE_KEY.FOLLOW_OFFERS_DECLINED`), so no
+ * device asks about them there again, the newest tasks' alone.
  */
 
 import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
 import { FOLLOWING_WORDS, followerRefusedNote } from "@repo/features/task-followers-model";
 import type { FollowerCallFailure } from "@repo/features/tasks-view";
+import {
+  VIEW_CHOICE_KEY,
+  VIEW_CHOICE_LIST_BOUNDS,
+  type ViewChoiceValue,
+} from "@repo/features/view-choice-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUTTON_SIZE,
@@ -31,7 +37,9 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { showToast } from "../toast.js";
-import { keptKey, useKept } from "../use-kept.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { type FollowOfferInput, followOffer } from "./follow-offer.js";
 
@@ -49,16 +57,50 @@ const storedDeclined = Schema.fromJsonString(
   Schema.Record(Schema.String, Schema.Array(Schema.String)),
 );
 
-const KEPT = { DECLINED: keptKey("app.followOffersDeclined", storedDeclined) } as const;
+/** Where an earlier build kept the people turned down in this window's storage, moved up to the account once. */
+const KEPT_DECLINED = keptKey("app.followOffersDeclined", storedDeclined);
+
+/** The people turned down, by task, newest task first, as the account keeps them. */
+type Declined = ViewChoiceValue<typeof VIEW_CHOICE_KEY.FOLLOW_OFFERS_DECLINED>;
+
+/** The newest `most` of `items`, newest last as they are kept here. */
+function newest<A>(items: readonly A[], most: number): A[] {
+  return items.slice(Math.max(0, items.length - most));
+}
 
 /** The act Add asks, as a failure it raises names it. */
 const ADD_ACT = { surface: FAILURE_SURFACE.ACT, act: ACT_KIND.TASKS_ADD_FOLLOWER } as const;
 
-/** No one turned down anywhere, one record for every draw. */
-const NONE_DECLINED: Readonly<Record<string, readonly string[]>> = {};
-
 /** No one turned down on a task, one list for every draw. */
 const NO_ONE: readonly string[] = [];
+
+/** No one turned down anywhere, one list for every draw. */
+const NONE_DECLINED: Declined = [];
+
+/** The people an earlier build kept turned down, by task, as the account keeps them, the bound's worth of them. */
+function movedDeclined(kept: Readonly<Record<string, readonly string[]>>): Declined {
+  return Object.entries(kept)
+    .slice(0, VIEW_CHOICE_LIST_BOUNDS.DECLINED_TASKS)
+    .map(([taskId, userIds]) => ({
+      taskId,
+      userIds: newest(userIds, VIEW_CHOICE_LIST_BOUNDS.DECLINED_PEOPLE),
+    }));
+}
+
+/** `declined` with `userId` turned down on `taskId`: the task first, the person its newest, and the oldest past each bound let go. */
+function declinedWith(declined: Declined, taskId: string, userId: string): Declined {
+  const was = declined.find((each) => each.taskId === taskId)?.userIds ?? NO_ONE;
+
+  const userIds = newest(
+    [...was.filter((each) => each !== userId), userId],
+    VIEW_CHOICE_LIST_BOUNDS.DECLINED_PEOPLE,
+  );
+
+  return [{ taskId, userIds }, ...declined.filter((each) => each.taskId !== taskId)].slice(
+    0,
+    VIEW_CHOICE_LIST_BOUNDS.DECLINED_TASKS,
+  );
+}
 
 /** An add the service answered without taking, said in a FAILED toast as a refused press is. */
 function addRefused(
@@ -90,7 +132,16 @@ export function FollowOfferDock({
 }: Pick<FollowOfferInput, "messages" | "pending" | "readerId"> & { taskId: string }): ReactNode {
   const task = useListedTask(taskId);
   const { members, former } = useMemberDirectory();
-  const [declined, , changeDeclined] = useKept(KEPT.DECLINED, NONE_DECLINED);
+  const [left, forgetLeft] = useKeptLeaving(KEPT_DECLINED);
+
+  const { value: declined, change: changeDeclined } = useAccountChoice(
+    VIEW_CHOICE_KEY.FOLLOW_OFFERS_DECLINED,
+    null,
+    NONE_DECLINED,
+    useAppStateSlice(selectFixtureStaged) === true,
+    [left === undefined ? undefined : movedDeclined(left), forgetLeft],
+  );
+
   const [adding, setAdding] = useState<string | undefined>(undefined);
 
   const offered = followOffer({
@@ -99,7 +150,7 @@ export function FollowOfferDock({
     readerId,
     followers: task?.followers,
     members,
-    declined: declined[taskId] ?? NO_ONE,
+    declined: declined.find((each) => each.taskId === taskId)?.userIds ?? NO_ONE,
   });
 
   // Note that only a member is ever offered (`followOffer`), so the name is theirs as the directory reads it.
@@ -108,11 +159,7 @@ export function FollowOfferDock({
   if (offered === undefined || member === undefined) return null;
   const actor = personActor(member, members, readerId, former);
 
-  const decline = () =>
-    changeDeclined((kept) => ({
-      ...kept,
-      [taskId]: [...(kept[taskId] ?? NO_ONE).filter((each) => each !== offered), offered],
-    }));
+  const decline = () => changeDeclined((held) => declinedWith(held, taskId, offered));
 
   // Note that the row goes once the task's followers name them, so the press is only busy until the service answers.
   const add = async () => {

@@ -2,8 +2,8 @@
  * automations.ts -- a workspace's automations and runs, and one automation's runs, bound: their one statement each, the tables they read, the topic that wakes them, and who they admit.
  *
  * Each is the same rows and rule of who may read them as its held read
- * (`automations-app.ts`'s list and runs, through `listAutomations` and
- * `listAutomationRuns`): every automation of the workspace the account may
+ * (`automations-procedures.ts`'s list and runs, through `listAutomations`
+ * and `listAutomationRuns`): every automation of the workspace the account may
  * read, each with its newest run, the newest runs of those automations,
  * and an automation's newest runs, each run with the agent it started and
  * what that agent's status is read from (`agent-standing.ts`), in one
@@ -13,12 +13,16 @@
  * turns on it, is the reader's, and so is the order (`ordered: false`), as
  * the statements never wrote one.
  *
- * Each is woken on the workspace's topic by an automation made, changed,
- * or deleted, a run fired, started, or settled, the run's agent renamed or
- * its turn queued, started, or settled, and a membership of the workspace
- * moved, all of which name it. An automation's runs name no topic of their
- * automation, so its read serves the workspace the automation stands in,
- * read once as it is asked. Note that a line awaiting the agent's next turn
+ * Each is woken on the workspace's automations' topic by an automation
+ * made, changed, or deleted, a run fired, started, or settled, and a
+ * membership of the workspace moved, all of which name it, rather than on
+ * the workspace's own topic, which every task, agent, turn, and sandbox
+ * write of the workspace names too. A run's agent renamed, or its turn
+ * queued, started, or settled, names its agent's workspace alone, so that
+ * shows at the hold's end, or with the run's own next write. An
+ * automation's runs name no topic of their automation, so its read serves
+ * the workspace the automation stands in, read once as it is asked. Note
+ * that a line awaiting the agent's next turn
  * is written on its conversation's topic alone (`messagesSync`), because
  * every streamed step rewrites a journal and waking the workspace on each
  * would re-run every workspace-keyed read for nothing: the mark that line
@@ -127,7 +131,7 @@ function runAgentColumns(userId: string, latest: ReturnType<typeof latestTurnOf>
 
 export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const lastRun = queryBuilder
       .select({
@@ -207,7 +211,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
  */
 export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUNS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const readable = and(automationReadableBy(userId), eq(automation.organizationId, workspaceId));
 
@@ -260,7 +264,7 @@ export const automationWorkspaceRunsRead = bindLiveRead(AUTOMATION_WORKSPACE_RUN
 
 export const automationRunsRead = bindLiveRead(AUTOMATION_RUNS_READ, {
   reads: AUTOMATION_READS,
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_AUTOMATIONS, workspaceId]],
   statements: ({ userId, id }) => {
     const newest = queryBuilder
       .select({ id: automationRun.id })

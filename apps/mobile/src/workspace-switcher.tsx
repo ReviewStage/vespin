@@ -1,7 +1,11 @@
 // workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, the chosen workspace's Manage under its name, then the account opening Settings.
 
 import { LIVE_READ } from "@repo/features/live-wire";
-import { workspaceSharedWords } from "@repo/features/workspace-tile";
+import {
+  waitingInOthers,
+  workspaceSharedWords,
+  workspaceSwitcherLine,
+} from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
@@ -16,6 +20,8 @@ import { useRouter } from "expo-router";
 import { type ComponentProps, useMemo } from "react";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
+import { useInboxWaitingIn } from "./inbox/inbox-groups.js";
+import { useInboxShown } from "./inbox/inbox-shown.js";
 import { type MenuPictures, menuAddress, useMenuPictures } from "./menu-photos.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 
@@ -37,13 +43,15 @@ export function selectPhotos(
  * (`workspace-tile.tsx`, `workspace-switcher.tsx`): its photo where the host
  * holds the one at the version the list names, else its owner's picture
  * where it has no photo, else its letter; and who shares it, the account's
- * first workspace said as its own while no one else is in it.
+ * first workspace said as its own while no one else is in it, then how many
+ * threads wait on the reader there where `waiting` counts any.
  */
 export function switcherWorkspace(
   workspace: Workspace,
   first: boolean,
   photos: AppStateSnapshot[typeof LIVE_READ.WORKSPACE_PHOTOS] | undefined,
   pictures?: MenuPictures,
+  waiting = 0,
 ): SwitcherWorkspace {
   const held = photos?.[workspace.id]?.rows;
 
@@ -62,7 +70,7 @@ export function switcherWorkspace(
   return {
     id: workspace.id,
     name: workspace.name,
-    line: workspaceSharedWords(workspace.memberCount, first),
+    line: workspaceSwitcherLine(workspaceSharedWords(workspace.memberCount, first), waiting),
     photo: missed ? undefined : photo,
     picture: missed ? undefined : picture,
     menuPhoto,
@@ -84,7 +92,11 @@ function menuPictureAddress(photo: string | undefined, picture: string | undefin
  * settings opens Settings on the chosen workspace's page. A landscape iPad's
  * sidebar draws it without the account, which its foot holds instead. Each
  * workspace's photo and the account's are kept as files for the menu to
- * draw. None before the account's workspaces are read.
+ * draw. Each other workspace says how many threads wait on the reader there,
+ * and the button is marked while any does (`waitingInOthers`), since the
+ * app's badge counts every workspace's threads and the Inbox the chosen
+ * one's alone; none while the member keeps no Inbox. None before the
+ * account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const router = useRouter();
@@ -98,6 +110,9 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const { chosen, choose } = useChosenWorkspace(workspaces);
+  const ids = useMemo(() => workspaces.map((workspace) => workspace.id), [workspaces]);
+  const totals = useInboxWaitingIn(ids);
+  const shown = useInboxShown();
   const signedIn = account !== undefined;
   const accountName = account?.name;
   const accountPicture = account?.picture;
@@ -125,11 +140,22 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     if (chosen === undefined) return undefined;
     const first = workspaces[0]?.id;
 
+    // Note that nothing waits anywhere while the member keeps no Inbox, since no Inbox stands to open it in.
+    const totalOf = new Map(ids.map((id, at) => [id, shown ? (totals[at] ?? 0) : 0]));
+    const waiting = waitingInOthers(ids, chosen.id, (id) => totalOf.get(id) ?? 0);
+
     return {
-      workspaces: workspaces.map((workspace) =>
-        switcherWorkspace(workspace, workspace.id === first, photos, pictures),
+      workspaces: workspaces.map((workspace, at) =>
+        switcherWorkspace(
+          workspace,
+          workspace.id === first,
+          photos,
+          pictures,
+          waiting.counts[at] ?? 0,
+        ),
       ),
       chosen: switcherWorkspace(chosen, chosen.id === first, photos, pictures),
+      waitingElsewhere: waiting.elsewhere,
       onChoose: choose,
       account: signedIn
         ? {
@@ -144,6 +170,9 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     };
   }, [
     workspaces,
+    ids,
+    totals,
+    shown,
     photos,
     chosen,
     choose,

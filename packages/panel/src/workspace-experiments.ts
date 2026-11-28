@@ -2,7 +2,7 @@
  * workspace-experiments.ts -- whether a workspace has one of its experiments on, as its owners and admins chose it for everyone in it.
  *
  * Task descriptions and Memory are each workspace's choice, carried
- * on its entry in the account's workspaces (`workspacesLive`), so a switch an
+ * on its entry in the account's workspaces (`workspacesRead`), so a switch an
  * admin flips reaches every member's window as the list moves. A surface
  * about one task reads that task's workspace; one about no task, ⌘K, a
  * chord, or a Settings page, reads the workspace the window lists or Settings

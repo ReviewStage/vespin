@@ -1481,6 +1481,11 @@ function bareLinksIn(text: string): readonly MentionLink[] {
   return writtenLinksIn(text, false);
 }
 
+/** Every link written bare into the words (`bareLinksIn`), in the order they stand. */
+export function bareAddressesIn(text: string): readonly MentionLink[] {
+  return [...bareLinksIn(text)].sort((first, second) => first.start - second.start);
+}
+
 /**
  * Every link written into the words, in order, outside code, as markdown
  * draws one: an inline link whatever its label, an `@` mention's among

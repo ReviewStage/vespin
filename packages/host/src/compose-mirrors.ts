@@ -922,9 +922,7 @@ export function composeMirrors(
           const attempt = yield* FiberMap.get(fibers, agentId);
 
           if (Option.isSome(attempt)) {
-            yield* Effect.ignore(
-              Effect.timeoutOption(Fiber.await(attempt.value), LEFTOVERS.STEP_WAIT),
-            );
+            yield* Effect.timeoutOption(Fiber.await(attempt.value), LEFTOVERS.STEP_WAIT);
           }
         }
       }),

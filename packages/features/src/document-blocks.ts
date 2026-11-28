@@ -33,8 +33,6 @@ export const BLOCK_KIND = {
   LOCKED: "locked",
 } as const;
 
-export type BlockKind = (typeof BLOCK_KIND)[keyof typeof BLOCK_KIND];
-
 /** What a locked block is, which its card names. */
 export const LOCKED_KIND = {
   TABLE: "table",

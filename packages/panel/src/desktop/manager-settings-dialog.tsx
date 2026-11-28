@@ -66,7 +66,6 @@ import {
   Spinner,
 } from "@repo/ui";
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
-import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -90,7 +89,7 @@ import { selectAccount, selectWorkspaces, useAppStateSlice } from "../use-app-st
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { ManagerPeopleSection } from "./manager-people-section.js";
 import { useAutomations } from "./use-automations.js";
 
@@ -218,9 +217,8 @@ function IdentityRow({
     <SettingsRow
       lead={SETTINGS_ROW_LEAD.FACE}
       leading={
-        <ManagerFaceWell
+        <RecentManagerFaceWell
           face={agent.face}
-          recent={RECENT_MANAGER_FACES}
           open={picking}
           onOpenChange={setPicking}
           onChange={pick}

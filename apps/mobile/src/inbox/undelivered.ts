@@ -93,7 +93,7 @@ export function undeliveredLine(key: string): UndeliveredReply | undefined {
 }
 
 /** Lets go of every line a read of `items` shows went after all (`undeliveredSettled`). */
-export function settleUndelivered(items: readonly InboxItem[]): void {
+export function settleUndelivered(items: readonly Pick<InboxItem, "id" | "thread">[]): void {
   const lines = held.read();
 
   if (lines.length === 0) return;

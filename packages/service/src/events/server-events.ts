@@ -823,7 +823,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           yield* post([surveyResponseItem(response, crypto.randomUUID(), now, deployment)]);
-        }).pipe(Effect.ignore),
+        }),
       nameWorkspace: (userId: string, workspaceId: string) =>
         Effect.gen(function* () {
           if (idKey === undefined) return;

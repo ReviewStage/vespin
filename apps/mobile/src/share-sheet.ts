@@ -1,5 +1,5 @@
 /**
- * share-sheet.ts -- the app's half of the share extension (`share-extension/`): the snapshot of workspaces and repositories its sheet offers, kept current in the App Group, and the draft it kept, opened as New task once the app comes forward.
+ * share-sheet.ts -- the app's half of the share extension (`share-extension/`): the snapshot of workspaces, repositories, and where a share may go that its sheet offers, kept current in the App Group, and the draft it kept, opened as New task once the app comes forward.
  *
  * The extension runs with no host, so it reads what New task would offer,
  * and where its Start is sent, from the snapshot the app writes
@@ -14,6 +14,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { CLIENT_PLATFORM } from "@repo/features/client-identity";
+import { shareDestinationsOf } from "@repo/features/ios-share-destinations";
 import {
   SHARE_DRAFT_PICTURE_FILES,
   type ShareDraftPictureFile,
@@ -25,7 +26,7 @@ import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/hos
 import { WINDOW_READ } from "@repo/host/read-window";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AppState } from "react-native";
 import {
   APP_GROUP_FILE,
@@ -36,8 +37,9 @@ import {
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
-import { APP_VERSION, useTaskListCollections } from "./host/host-provider.js";
+import { APP_VERSION, useListedAgents, useTaskListCollections } from "./host/host-provider.js";
 import { useWindow } from "./host/use-window.js";
+import { useChosenInbox } from "./inbox/use-inbox.js";
 import { useSplashReleased } from "./splash.js";
 
 /** Where the share sheet's Start goes, named as this build. */
@@ -48,11 +50,13 @@ const SHARE_SERVICE = {
 
 /**
  * The snapshot's JSON for the account signed in, read off the document as it
- * changes; none while none is. Note that its tasks are read only once the
- * launch's first screen stands, in no order and as their repositories and
- * starts alone (`newestRepositories`), since a read of every task sorted held
- * the launch's first frame at an account's size, and the snapshot written at
- * the last launch stands until then.
+ * changes; none while none is. Note that its tasks and agents are read only
+ * once the launch's first screen stands, in no order and as the fields the
+ * snapshot names alone (`newestRepositories`, `shareDestinationsOf`), since
+ * a read of every task sorted held the launch's first frame at an account's
+ * size, and the snapshot written at the last launch stands until then. Where
+ * a share may go is read for the workspace the phone works in, from the
+ * lists the Tasks tab and the Inbox read (`useListedAgents`, `useChosenInbox`).
  */
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -64,14 +68,28 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
     drawn
       ? q.from({ task: collections.tasks }).select(({ task }) => ({
           id: task.id,
+          workspaceId: task.workspaceId,
+          name: task.name,
+          status: task.status,
           repository: task.repository,
           createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
         }))
       : undefined,
   );
 
   // Note that no snapshot is written until the tasks have been read, so the share sheet never offers an empty list of repositories.
   const tasks = read.status === WINDOW_READ.ROWS ? read.rows : undefined;
+  const agents = useListedAgents(drawn);
+  const { groups: inbox } = useChosenInbox();
+
+  const destinations = useMemo(
+    () =>
+      chosenId === undefined || tasks === undefined
+        ? undefined
+        : shareDestinationsOf({ workspaceId: chosenId, agents, tasks, inbox }),
+    [chosenId, agents, tasks, inbox],
+  );
 
   const select = useCallback(
     (state: AppStateSnapshot) =>
@@ -88,9 +106,10 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
                   ({ fullName }) => fullName,
                 ),
               SHARE_SERVICE,
+              destinations,
             ),
           ),
-    [accountId, chosenId, tasks],
+    [accountId, chosenId, tasks, destinations],
   );
 
   return useQuery({ ...appStateQuery, select }).data;

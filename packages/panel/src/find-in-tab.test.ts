@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { runAppCommand } from "./app-commands.js";
 import { FindScope } from "./find-in-tab.js";
+import { withQueryClient } from "./testing/copy-feedback.js";
 import { holdMotion, releaseMotion } from "./testing/motion-held.js";
 
 /**
@@ -48,10 +49,12 @@ function opened(): HTMLButtonElement {
   roots.push(root);
   act(() =>
     root.render(
-      createElement(
-        FindScope,
-        { active: true, subject: { agent: "agent-1" } },
-        createElement("p", null, "The invite funnel"),
+      withQueryClient(
+        createElement(
+          FindScope,
+          { active: true, subject: { agent: "agent-1" } },
+          createElement("p", null, "The invite funnel"),
+        ),
       ),
     ),
   );

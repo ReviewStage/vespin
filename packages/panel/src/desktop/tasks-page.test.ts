@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import type { ViewChoiceWriteParams } from "@repo/features/agent-view";
 import { inPinOrder } from "@repo/features/pin-order";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
 import { applySectionWrite } from "@repo/features/task-section-writes";
@@ -15,6 +16,7 @@ import {
 } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import {
   WORKSPACE_ROLE,
   type Workspace,
@@ -43,6 +45,7 @@ import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { handInbox, tasksControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksPage } from "./tasks-page.js";
@@ -54,10 +57,10 @@ import { TasksPage } from "./tasks-page.js";
  * press opens the task; the switch beside the title shows the Board; the
  * Filter narrows the tasks and its chips lift it; View options groups them,
  * shows the settled, and draws a row's properties; and the view, the
- * filter, and the display are kept on this Mac. Every row draws a cell for
+ * filter, and the display are kept on the account. Every row draws a cell for
  * each property the view draws, so the columns line up down the page; a
  * row's chips send the priority and status picked, and a right-click drops
- * the task's own menu; a group's head folds it, kept on this Mac; and a row
+ * the task's own menu; a group's head folds it, kept on the account; and a row
  * dragged onto another group is sent its status, pinned, or kept in its
  * section, leaving Pinned or its section where it came from one.
  */
@@ -107,6 +110,16 @@ let moved: PinMove[] = [];
 /** Whether main draws the section writes sent, as the tab draws a write at once. */
 let drawsWrites = false;
 
+/** Each view choice the page wrote, as the test's host keeps them, oldest first. */
+let chose: readonly ViewChoiceWriteParams[] = [];
+
+/** The values the page wrote under `key`, each with its workspace. */
+function chosen(key: string): [string | null, unknown][] {
+  return chose
+    .filter((write) => write.key === key)
+    .map((write) => [write.workspaceId, write.value]);
+}
+
 beforeEach(() => {
   opened = [];
   sent = [];
@@ -148,6 +161,7 @@ beforeEach(() => {
   // Main's read of the account's inbox holds what waits on Acme's tasks.
   handInbox({ waiting: WAITING, tasks: HOLDINGS });
   handMembers(() => ({ rows: { members: MEMBERS } }));
+  chose = keepViewChoices();
 });
 
 afterEach(() => {
@@ -241,11 +255,12 @@ const HOLDINGS: readonly AppInboxTaskHolding[] = [
   { taskId: "t-40", items: 1, toDo: 1, updatedAt: 1 },
 ];
 
-/** The Tasks page over Acme's tasks, or `tasks`, read by Dean, once the members have answered. */
+/** The Tasks page over Acme's tasks, or `tasks`, read by Dean, once the members have answered; a fixture run's where `staged`. */
 async function mountPage(
   tasks: readonly TaskSummary[] = TASKS,
   room: ShellRoom = SHELL_ROOM.WIDE,
   overrides: NonNullable<Parameters<typeof tasksControl>[0]> = {},
+  staged = false,
 ): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
@@ -273,7 +288,7 @@ async function mountPage(
           createElement(
             Fragment,
             null,
-            overListedTasks(control, createElement(TasksPage, { tasks: control, room })),
+            overListedTasks(control, createElement(TasksPage, { tasks: control, room, staged })),
             createElement(ToastHost),
           ),
         ),
@@ -428,7 +443,7 @@ function closeMenus(): void {
   }
 }
 
-test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, read from the service a page at a time, kept on this Mac", async () => {
+test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, read from the service a page at a time, kept on the account", async () => {
   // Each page of settled tasks the page asks the host for, by its workspace.
   const paged: string[] = [];
 
@@ -489,7 +504,7 @@ test("a Status filter naming Canceled reads the settled a page at a time until a
   assert.deepEqual(paged, [undefined, "t-35"], "no Canceled task drawn, so the next page is read");
 });
 
-test("the Filter narrows the List to the values chosen, several in one visit, a chip says so and its × lifts it, and it is kept on this Mac", async () => {
+test("the Filter narrows the List to the values chosen, several in one visit, a chip says so and its × lifts it, and it is kept on the account", async () => {
   const page = await mountPage();
   openOptions(page, "Filter");
   choose("Priority", "High", "Urgent");
@@ -521,35 +536,49 @@ test("the Filter narrows the List to the values chosen, several in one visit, a 
   assert.equal(again.querySelector("[data-dot='true']"), null);
 });
 
-test("a filter chosen here keeps another workspace's filter that another tab kept meanwhile", async () => {
-  const page = await mountPage();
-  const elsewhere = { "workspace-beta": { priority: [TASK_PRIORITY.LOW] } };
-  window.localStorage.setItem("app.tasksFilter", JSON.stringify(elsewhere));
+test("Followed by, offered though no one else shares the workspace, narrows the List to the tasks the reader follows, its chip naming them You", async () => {
+  const followed = {
+    ...task(39, "Rate limit search", TASK_STATUS.TODO, TASK_PRIORITY.HIGH),
+    followers: [{ userId: DEAN, assignee: false, machines: false }],
+  };
+
+  const page = await mountPage([followed, ...TASKS.filter((each) => each.number !== 39)]);
   openOptions(page, "Filter");
-  choose("Priority", "High");
+  choose("Followed by", "Dean Stratakos");
   closeMenus();
 
+  assert.deepEqual(groups(page), [["Todo", ["ACME-39"]]]);
+  assert.match(page.textContent ?? "", /Followed by: You/);
+});
+
+test("each workspace's filter this Mac kept moves up to the account as the page lists it, and leaves the Mac", async () => {
+  window.localStorage.setItem(
+    "app.tasksFilter",
+    JSON.stringify({
+      [ACME.id]: { priority: [TASK_PRIORITY.URGENT] },
+      [BETA.id]: { priority: [TASK_PRIORITY.LOW] },
+    }),
+  );
+  const page = await mountPage();
+
+  assert.deepEqual(groups(page), [["Todo", ["ACME-40"]]]);
+  assert.deepEqual(chosen(VIEW_CHOICE_KEY.TASKS_FILTER), [
+    [ACME.id, { priority: [TASK_PRIORITY.URGENT] }],
+  ]);
   assert.deepEqual(JSON.parse(window.localStorage.getItem("app.tasksFilter") ?? "{}"), {
-    ...elsewhere,
-    [ACME.id]: { priority: [TASK_PRIORITY.HIGH] },
+    [BETA.id]: { priority: [TASK_PRIORITY.LOW] },
   });
 });
 
-test("with storage refusing every write, each workspace's filter still stands while the page does", async () => {
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("quota");
-  });
-  const page = await mountPage();
+test("a fixture run's view, filter, display, and folds keep nothing", async () => {
+  const page = await mountPage(TASKS, SHELL_ROOM.WIDE, {}, true);
   openOptions(page, "Filter");
   choose("Priority", "Urgent");
   closeMenus();
-  listWorkspace(BETA);
-  openOptions(page, "Filter");
-  choose("Priority", "Low");
-  closeMenus();
-  listWorkspace(ACME);
+  act(() => buttonNamed(page, "Columns").click());
 
-  assert.deepEqual(groups(page), [["Todo", ["ACME-40"]]]);
+  assert.ok(page.querySelector("[data-task-column]"), "the Board is shown");
+  assert.deepEqual(chose, []);
 });
 
 test("grouped by priority, the pins not leading, the List runs from the most pressing, and a property turned off leaves every row", async () => {
@@ -583,7 +612,7 @@ test("the title is the bar's heading with the List | Columns switch after it, an
   assert.ok(actions?.querySelector('button[aria-label="View options"]'), "View options end it");
 });
 
-test("the switch beside the title shows Columns, kept on this Mac", async () => {
+test("the switch beside the title shows Columns, kept on the account", async () => {
   const page = await mountPage();
   act(() => buttonNamed(page, "Columns").click());
   assert.equal(page.querySelector(".tasks-list"), null);
@@ -596,9 +625,11 @@ test("the switch beside the title shows Columns, kept on this Mac", async () => 
   assert.ok((await mountPage()).querySelector("[data-task-column]"), "the Board is shown again");
 });
 
-test("a board choice kept before the rename still opens Columns, named so in the switch", async () => {
+test("a board choice this Mac kept before the rename moves up to the account and opens Columns, named so in the switch", async () => {
   window.localStorage.setItem("app.tasksPageView", JSON.stringify("board"));
   const page = await mountPage();
+  assert.deepEqual(chosen(VIEW_CHOICE_KEY.TASKS_PAGE_VIEW), [[null, "board"]]);
+  assert.equal(window.localStorage.getItem("app.tasksPageView"), null, "the Mac lets it go");
 
   assert.ok(page.querySelector("[data-task-column]"), "the saved choice opens the columns");
   assert.equal(
@@ -841,7 +872,7 @@ test("a row wears the icon of the pull request its agents opened", async () => {
   );
 });
 
-test("a group's head folds it, its count still standing, and the fold is kept on this Mac", async () => {
+test("a group's head folds it, its count still standing, and the fold is kept on the account", async () => {
   const page = await mountPage();
 
   const fold = () => {

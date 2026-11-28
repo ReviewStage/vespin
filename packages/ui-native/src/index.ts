@@ -14,6 +14,8 @@ export {
   type AskAct,
   AskActs,
   AskNote,
+  type AskResolve,
+  ResolvableAsk,
   StepList,
 } from "./ask-card.js";
 
@@ -77,6 +79,8 @@ export {
   type ChipMarksHeld,
   chipMarkOf,
 } from "./chip-mark-model.js";
+
+export { ChipNamesProvider, type UseChipNames } from "./chip-names.js";
 
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
@@ -164,6 +168,7 @@ export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 export {
   GLYPH,
   type Glyph,
+  glyphIcon,
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
@@ -470,6 +475,8 @@ export {
   priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
+
+export { SteppedBack } from "./stepped-back.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 

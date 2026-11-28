@@ -8,7 +8,10 @@
 # detail column in either orientation, until the element shows. Note too
 # that each swipe's points are written out whole, because Maestro reads a
 # swipe's percentages as numbers when it loads the flow, before any `${}`
-# in them is filled in.
+# in them is filled in. A scroll at the middle waits up to 40 seconds rather
+# than Maestro's 20, because a loaded runner's iPhone Duo took 8 seconds a
+# swipe, reading the screen and waiting for it to stand still between them,
+# and ran out its time two swipes in (run 46074454724).
 appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
@@ -21,6 +24,7 @@ env:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: UP
+          timeout: 40000
 - runFlow:
     when:
       true: ${BESIDE != 'true' && DIRECTION != 'UP'}
@@ -28,6 +32,7 @@ env:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: DOWN
+          timeout: 40000
 - runFlow:
     when:
       true: ${BESIDE == 'true' && DIRECTION == 'UP'}

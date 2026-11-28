@@ -80,7 +80,6 @@ const IOS_ROUTE = {
   PAGE: "/tasks/page",
   /** A page under its agent's route, as an older link names it. */
   AGENT_PAGE: "page",
-  COMMENTS: "/tasks/comments",
   PULL_REQUEST: "pull",
   /** A pull request by its workspace, its repository, and its number, under Tasks. */
   REPOSITORY_PULL_REQUEST: "/tasks/pull",
@@ -88,6 +87,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_FILES: "files",
   /** The checks run on a pull request's head, under its own route. */
   PULL_REQUEST_CHECKS: "checks",
+  /** A pull request's chapters, under its own route. */
+  PULL_REQUEST_CHAPTERS: "chapters",
   /** One review thread of a pull request, by GitHub's id for it, under its own route. */
   PULL_REQUEST_THREAD: "thread",
   /** A new comment on a pull request, under its own route. */
@@ -302,6 +303,15 @@ export function iosPullRequestChecksRoute(pullRequest: {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHECKS}`;
 }
 
+/** The app's route for a pull request's chapters, by its workspace, its repository, and its number, where they are read in order. */
+export function iosPullRequestChaptersRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHAPTERS}`;
+}
+
 /** The app's route for one review thread of a pull request, by GitHub's id for it, where its comments are read and replied to. */
 export function iosPullRequestThreadRoute(
   pullRequest: {
@@ -407,8 +417,8 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
  * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
- * thread of a Manager's chat, a pull request it opened, or a comment's thread on a task's description or a
- * new comment, each ending in its reply field. A list, a task, and a page the
+ * thread of a Manager's chat, or a pull request it opened, each ending in
+ * its reply field. A list, a task, and a page the
  * agent showed keep the bar.
  */
 export function iosRouteHidesTabs(pathname: string): boolean {
@@ -416,8 +426,6 @@ export function iosRouteHidesTabs(pathname: string): boolean {
   const route = `/${tab ?? ""}`;
 
   if (route === IOS_ROUTE.INBOX) return first !== undefined;
-
-  if (`${route}/${first ?? ""}` === IOS_ROUTE.COMMENTS) return second !== undefined;
 
   if (`${route}/${first ?? ""}` === IOS_ROUTE.REPOSITORY_PULL_REQUEST) return second !== undefined;
 

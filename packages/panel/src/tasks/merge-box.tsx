@@ -28,6 +28,11 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
+  VIEW_CHOICE_KEY,
+  VIEW_CHOICE_LIST_BOUNDS,
+  type ViewChoiceValue,
+} from "@repo/features/view-choice-wire";
+import {
   BUTTON_VARIANT,
   Button,
   type ButtonVariant,
@@ -54,7 +59,9 @@ import { CircleXIcon, GitMergeIcon, TriangleAlertIcon, UserRoundIcon } from "luc
 import { type ReactNode, useState } from "react";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
-import { keptKey, useKept } from "../use-kept.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 import type { PullRequestWrites } from "./pull-request-writes.js";
 
 /**
@@ -101,9 +108,10 @@ import type { PullRequestWrites } from "./pull-request-writes.js";
  *   take none: a press that only asks to be sure needs nothing more of the
  *   member, and in a narrow header an ellipsis reads as words cut off.
  *
- * The method is kept per repository across launches, in this window's own
- * storage as the sidebar's folds are (`folded-groups.ts`); the first the
- * repository allows stands until one is chosen. A merge and auto-merge name
+ * The method is kept per repository on the account, one of its view
+ * choices (`VIEW_CHOICE_KEY.MERGE_METHODS`, `../view-choices.ts`), the
+ * newest repositories' alone, so it follows the member to every device; the
+ * first the repository allows stands until one is chosen. A merge and auto-merge name
  * the head the overview read, so GitHub refuses either against a head
  * pushed since. While a change is out the press stands busy, and where
  * GitHub refuses it the tab's write note says why, in GitHub's words.
@@ -113,22 +121,50 @@ const storedMethods = Schema.fromJsonString(
   Schema.Record(Schema.String, Schema.Literals(Object.values(MERGE_METHOD))),
 );
 
-/** Where the method chosen is kept, by repository. */
-const KEPT = { METHODS: keptKey("app.pullRequestMergeMethods", storedMethods) } as const;
+/** Where an earlier build kept the method chosen in this window's storage, by repository, moved up to the account once. */
+const KEPT_METHODS = keptKey("app.pullRequestMergeMethods", storedMethods);
 
-/** The method chosen for the repository, kept across launches: the one last chosen where the repository still allows it, else the first it allows. */
+/** The methods chosen, newest first, as the account keeps them. */
+type ChosenMethods = ViewChoiceValue<typeof VIEW_CHOICE_KEY.MERGE_METHODS>;
+
+/** None chosen in any repository. */
+const NONE_CHOSEN: ChosenMethods = [];
+
+/** The methods an earlier build kept by repository, as the account keeps them, the bound's worth of them. */
+function movedMethods(kept: Readonly<Record<string, MergeMethod>>): ChosenMethods {
+  return Object.entries(kept)
+    .map(([repository, method]) => ({ repository, method }))
+    .slice(0, VIEW_CHOICE_LIST_BOUNDS.MERGE_REPOSITORIES);
+}
+
+/** The method chosen for the repository, kept on the account: the one last chosen where the repository still allows it, else the first it allows. */
 function useMergeMethod(
   repository: string | null,
   allowed: readonly MergeMethod[],
 ): readonly [MergeMethod | undefined, (method: MergeMethod) => void] {
-  const [kept, , change] = useKept(KEPT.METHODS, {});
-  const chosen = repository === null ? undefined : kept[repository];
+  const [left, forgetLeft] = useKeptLeaving(KEPT_METHODS);
+
+  const { value: methods, change } = useAccountChoice(
+    VIEW_CHOICE_KEY.MERGE_METHODS,
+    null,
+    NONE_CHOSEN,
+    useAppStateSlice(selectFixtureStaged) === true,
+    [left === undefined ? undefined : movedMethods(left), forgetLeft],
+  );
+
+  const chosen = methods.find((each) => each.repository === repository)?.method;
   const method = chosen !== undefined && allowed.includes(chosen) ? chosen : allowed[0];
 
   const choose = (next: MergeMethod) => {
     if (repository === null) return;
-    // Note that the record is read again before it is written, so another window's method for another repository is kept.
-    change((held) => ({ ...held, [repository]: next }));
+
+    // Note that the repository moves to the front, and the oldest fall off past the bound, so the choice stays a view's worth.
+    change((held) =>
+      [
+        { repository, method: next },
+        ...held.filter((each) => each.repository !== repository),
+      ].slice(0, VIEW_CHOICE_LIST_BOUNDS.MERGE_REPOSITORIES),
+    );
   };
 
   return [method, choose];

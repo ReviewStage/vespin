@@ -29,7 +29,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import type { TaskListRows } from "../task-list-collections.js";
 import { providerOf } from "./agent-model.js";
-import { fileLook } from "./file-ref.js";
+import { fileLook } from "./file-look.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
 import { type RunTabLook, runActionGlyph } from "./run-action-shells.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";

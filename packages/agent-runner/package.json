@@ -27,7 +27,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@cursor/sdk": "1.5.0",
+    "@cursor/sdk": "1.5.2",
     "@effect/vitest": "catalog:",
     "@sentry/cli": "2.58.6",
     "@types/node": "catalog:",

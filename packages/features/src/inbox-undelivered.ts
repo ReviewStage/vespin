@@ -152,7 +152,7 @@ export function threadHoldsKey(thread: readonly InboxMessage[] | undefined, key:
  */
 export function undeliveredSettled(
   all: readonly UndeliveredReply[],
-  items: readonly InboxItem[],
+  items: readonly Pick<InboxItem, "id" | "thread">[],
 ): ReadonlySet<string> {
   const byId = new Map(items.map((item) => [item.id, item]));
 

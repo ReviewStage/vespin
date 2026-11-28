@@ -83,8 +83,8 @@ const styles = StyleSheet.create({
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
   // A row with no bar stands in from the screen's edges as far as a bar does.
-  // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
-  above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
+  // What stands over a bar in a glass of its own, apart from it, across the bar's column, insetting its own content as far as the bar stands in, so a row that scrolls sideways is never cut at the bar's edge.
+  above: { marginBottom: SPACE.TIGHT * 2 },
   // The bar stands in from the screen's edges, its glass drawn by its SwiftUI.
   bar: { marginHorizontal: BAR_MARGIN },
 });
@@ -269,7 +269,7 @@ export function GlassBar({
   readonly children: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
   readonly foot?: ReactNode;
-  /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
+  /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box, across the bar's whole column, its content inset as far as the bar stands in (`BAR_MARGIN`); nothing where none is given. */
   readonly above?: ReactNode;
   /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
   readonly field?: boolean;

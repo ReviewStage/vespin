@@ -9,25 +9,21 @@
  * what that process runs), and this module is the asking side: one match
  * in flight at a time, answered under its id, and a process that died or
  * stalled replaced by the next match's own, the match it held failed for
- * the mirror's next connection to try again. Nothing here names Electron or
- * Node: the process is a seam (`SpawnMirrorMatchProcess`), so the desktop
- * forks it with Electron's `utilityProcess` and a test with Node's own.
+ * the mirror's next connection to try again. The process is a seam
+ * (`process-asking.ts`), so the desktop forks it with Electron's
+ * `utilityProcess` and a test with Node's own.
  */
 
-import type { WireBoundaryInput } from "@repo/wire";
-import {
-  type Cause,
-  Data,
-  Duration,
-  Effect,
-  Exit,
-  Option,
-  Queue,
-  Schema,
-  Scope,
-  Semaphore,
-} from "effect";
+import { Data, Duration, Effect, Exit, Option, Schema, Scope, Semaphore } from "effect";
 import type { ManifestFile } from "./mirror-disk.js";
+import {
+  type AskedProcess,
+  type AskedProcessListeners,
+  answerFor,
+  type SpawnAskedProcess,
+  type StandingProcess,
+  spawnInto,
+} from "./process-asking.js";
 
 /** How long one match may take in the process before it fails and the process is replaced: a cold checkout's whole read. */
 const MATCH_DEADLINE = Duration.minutes(2);
@@ -61,73 +57,19 @@ export type MatchMirror = (
 ) => Effect.Effect<readonly string[], MirrorMatchFailed>;
 
 /** A process that matches, as the asking side holds it: a message sent to it, and its end. */
-export interface MirrorMatchProcess {
-  readonly send: (message: typeof mirrorMatchRequestSchema.Encoded) => void;
-  readonly kill: () => void;
-}
+export type MirrorMatchProcess = AskedProcess<typeof mirrorMatchRequestSchema.Encoded>;
 
 /** What the process's spawner hands what it hears: each message, and the process's exit. */
-export interface MirrorMatchProcessListeners {
-  readonly onMessage: (message: WireBoundaryInput) => void;
-  readonly onExit: () => void;
-}
+export type MirrorMatchProcessListeners = AskedProcessListeners;
 
 /** Starts a process that matches, wired to `listeners`; a throw is a process that could not be started. */
-export type SpawnMirrorMatchProcess = (
-  listeners: MirrorMatchProcessListeners,
-) => MirrorMatchProcess;
+export type SpawnMirrorMatchProcess = SpawnAskedProcess<typeof mirrorMatchRequestSchema.Encoded>;
 
-/** One process standing: what it was spawned as, what it answered, and the scope that ends it. */
-interface Spawned {
-  readonly child: MirrorMatchProcess;
-  readonly answers: Queue.Queue<WireBoundaryInput, Cause.Done>;
-  readonly scope: Scope.Closeable;
-  readonly exited: () => boolean;
-}
+type Spawned = StandingProcess<typeof mirrorMatchRequestSchema.Encoded>;
 
 /** The paths the process answered for `id`; none where it failed the match, ended first, or answered what it should not. */
-function answerFor(
-  answers: Queue.Queue<WireBoundaryInput, Cause.Done>,
-  id: number,
-): Effect.Effect<readonly string[] | undefined> {
-  return Effect.matchEffect(Queue.take(answers), {
-    onFailure: () => Effect.succeed(undefined),
-    onSuccess: (message) => {
-      const answer = Schema.decodeUnknownOption(mirrorMatchAnswerSchema)(message);
-
-      if (Option.isNone(answer)) return Effect.succeed(undefined);
-
-      // Note that an answer for an earlier id is one a stalled match gave too late, and is passed over.
-      return answer.value.id === id ? Effect.succeed(answer.value.asked) : answerFor(answers, id);
-    },
-  });
-}
-
-/** Spawns a process into a scope of its own under `parent`, so its scope's close, or the parent's, kills it. */
-function spawnInto(parent: Scope.Scope, spawn: SpawnMirrorMatchProcess): Effect.Effect<Spawned> {
-  return Effect.gen(function* () {
-    const scope = yield* Scope.fork(parent);
-    const answers = yield* Queue.unbounded<WireBoundaryInput, Cause.Done>();
-    let exited = false;
-
-    const child = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        spawn({
-          onMessage: (message) => {
-            Queue.offerUnsafe(answers, message);
-          },
-          onExit: () => {
-            exited = true;
-            Queue.endUnsafe(answers);
-          },
-        }),
-      ),
-      (spawned) => Effect.sync(() => spawned.kill()),
-    ).pipe(Scope.provide(scope));
-
-    return { child, answers, scope, exited: () => exited };
-  });
-}
+const askedFor = (spawned: Spawned, id: number) =>
+  Effect.map(answerFor(spawned.answers, id, mirrorMatchAnswerSchema), (answer) => answer?.asked);
 
 /**
  * Matching through a process `spawn` starts the first time a mirror is
@@ -171,7 +113,7 @@ export function mirrorMatchInProcess(
         );
 
         const asked = Exit.isSuccess(sent)
-          ? yield* Effect.timeoutOption(answerFor(spawned.answers, id), MATCH_DEADLINE)
+          ? yield* Effect.timeoutOption(askedFor(spawned, id), MATCH_DEADLINE)
           : Option.none();
 
         if (Option.isSome(asked) && asked.value !== undefined) return asked.value;

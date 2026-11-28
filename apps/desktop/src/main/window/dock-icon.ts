@@ -5,9 +5,10 @@ import { app, BrowserWindow, type NativeImage, nativeImage, nativeTheme } from "
 
 /**
  * The Dock tile per theme: the copper tile for a light desktop, the night
- * one for a dark. The bundle's `.icns` is cut from the dark tile
- * and cannot follow the theme, and an unpackaged run has only Electron's stock
- * icon, so the running app draws the Dock image itself from these.
+ * one for a dark. Before macOS 26 the bundle's `.icns` is one image that
+ * cannot follow the theme, and an unpackaged run has only Electron's stock
+ * icon, so the running app draws the Dock image itself from these. From 26 a
+ * packaged build never calls here: the system draws the bundle's own icon.
  */
 const DOCK_ICON_FILES = {
   LIGHT: "icon-light.png",

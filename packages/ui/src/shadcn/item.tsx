@@ -25,7 +25,7 @@ import { cn } from "../cn.js";
  *   section's card's, never the row's own.
  * - None of shadcn's corner, border, `text-sm`, transition, focus ring, or
  *   `[a]:hover` utilities, since a row takes no focus and no press of its
- *   own; the window draws the one focus ring (`shadcn-focus.test.ts`).
+ *   own; the window draws the one focus ring.
  * - `ItemMedia` is centered beside the words whether or not they are
  *   described, with none of shadcn's `icon` and `image` variants: the
  *   mark's box is `@repo/ui`'s `SettingsRowMark`.

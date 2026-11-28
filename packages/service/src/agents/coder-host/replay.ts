@@ -65,6 +65,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { attachmentBytes } from "../../storage/attachment-bytes.js";
+import { cutText } from "../text-cut.js";
 import {
   type FittedSteps,
   fitReplay,
@@ -234,17 +235,6 @@ const CARRIED_ON_MAC_WORDS =
 /** A text cut to the bound on one line, ending in an ellipsis where it was cut. */
 function cutLine(text: string, maximumChars: number): string {
   return cutText(text.replace(/\s+/gu, " ").trim(), maximumChars);
-}
-
-/** A text cut to the bound as it stands, never inside a surrogate pair, ending in an ellipsis where it was cut. */
-export function cutText(text: string, maximumChars: number): string {
-  if (text.length <= maximumChars) return text;
-  const end = maximumChars - 1;
-  const code = text.charCodeAt(end - 1);
-  // Note that a high surrogate left alone would be no character a store keeps.
-  const safe = code >= 0xd800 && code <= 0xdbff ? end - 1 : end;
-
-  return `${text.slice(0, safe)}…`;
 }
 
 /** The files a patch names in its own headers, in order. */

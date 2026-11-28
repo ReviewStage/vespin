@@ -186,6 +186,8 @@ export class ModelCatalog extends Context.Service<
   ModelCatalog,
   {
     readonly read: Effect.Effect<readonly OfferedModel[], ModelCatalogUnavailable>;
+    /** The catalog this instance already holds, or none; never fetches and never waits, for a caller that only names models by it. */
+    readonly held: Effect.Effect<readonly OfferedModel[]>;
   }
 >()("ModelCatalog") {}
 
@@ -563,13 +565,18 @@ export const modelCatalogLayer: Layer.Layer<ModelCatalog, never, HttpClient.Http
         return standing.offered;
       });
 
-      return { read };
+      const heldOffered = Effect.map(Ref.get(held), (standing) => standing?.offered ?? []);
+
+      return { read, held: heldOffered };
     }),
   );
 
 /** A catalog of exactly these models, for a test or a caller that already holds one. */
 export function modelCatalogOf(models: readonly OfferedModel[]): Layer.Layer<ModelCatalog> {
-  return Layer.succeed(ModelCatalog, { read: Effect.succeed(models) });
+  return Layer.succeed(ModelCatalog, {
+    read: Effect.succeed(models),
+    held: Effect.succeed(models),
+  });
 }
 
 // ------------------------------------------------------------- the checks

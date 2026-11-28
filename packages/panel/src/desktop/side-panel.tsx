@@ -19,6 +19,7 @@ import {
 } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
+import type { PlainLinkNames } from "@repo/features/place-chip-model";
 import { cardTitle } from "@repo/features/plain-words";
 import type { TaskPullRequestLine } from "@repo/features/task-wire";
 import type { TaskNames } from "@repo/features/tasks-model";
@@ -191,6 +192,7 @@ import {
   useTaskAgents,
 } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import { OnLeavingHere, PullRequestsOnGitHub } from "../tasks/use-open-link.js";
 import {
   type ChangesKindTab,
@@ -236,13 +238,12 @@ import {
   type TabLook,
   type TabPin,
   type TabViews,
-  type TranscriptCopier,
-  useTranscriptCopier,
   type WorkerStandings,
 } from "./strip-tabs.js";
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { type CardSubject, tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { type TranscriptCopier, useTranscriptCopier } from "./transcript-copier.js";
 
 /** A phone's Activity, as the panel's strip is handed it: where it lists the tabs, how a row's press leaves the list, none where the panel lists none (a task's), and where the tab shown is handed on. */
 interface StripActivity {
@@ -1978,6 +1979,7 @@ function drawnSubagent(
   tab: SubagentStripTab,
   status: AgentStatus,
   held: HeldTranscripts,
+  links: PlainLinkNames | undefined,
 ): DrawnSubagent | undefined {
   const { delegation, subagent } = tab;
 
@@ -1991,7 +1993,7 @@ function drawnSubagent(
   return {
     tab,
     delegation,
-    label: title ?? cardTitle(delegation.task),
+    label: title ?? cardTitle(delegation.task, links),
     untitled: title === undefined,
     state: agentGlyphState(status),
     stateWords: agentStateWords(status),
@@ -2004,11 +2006,12 @@ function drawnSubagents(
   standings: WorkerStandings,
   held: HeldTranscripts,
   drawn: Pick<DrawnTabs, "agents" | "subagents">,
+  links: PlainLinkNames,
 ): readonly DrawnSubagent[] {
   return tabs.flatMap((tab): DrawnSubagent[] => {
     if (!drawsSubagent(tab, drawn)) return [];
     const status = standings.get(tab.subagent) ?? AGENT_STATUS.RUNNING;
-    const subagent = drawnSubagent(tab, status, held);
+    const subagent = drawnSubagent(tab, status, held, links);
 
     return subagent === undefined ? [] : [subagent];
   });
@@ -2135,8 +2138,10 @@ export function taskCards(input: {
   pages: PagePlace | undefined;
   /** The description's task, which an agent's description card names as its sender. */
   task?: BriefTask | undefined;
+  /** What the window holds to say a place of ours a worker's title spells bare by its chip's name (`usePlainLinkNames`); none keeps it as written. */
+  links?: PlainLinkNames | undefined;
 }): TaskCards {
-  const { held, chosen, pages, task } = input;
+  const { held, chosen, pages, task, links } = input;
   const { models } = input.agents;
   // Note that the agents are read as each card or tile is drawn, so the cards stand the same value across a step of a turn.
   const agentsAt = () => agentsNow(input.agents);
@@ -2210,7 +2215,9 @@ export function taskCards(input: {
         task,
         standsOn: pages,
         worker: ({ callId, task: job, status }) =>
-          card(drawnSubagent(subagentTab(callId, { agent: agentId, task: job }), status, held)),
+          card(
+            drawnSubagent(subagentTab(callId, { agent: agentId, task: job }), status, held, links),
+          ),
       };
 
       byAgent.set(agentId, cards);
@@ -2859,10 +2866,15 @@ export function SidePanel({
   // The subagents with a tab open, in the strip's order: a delegated worker's tab stands while its agent's does.
   const { held: drawnTranscripts, standings } = views;
 
-  const subagents = drawnSubagents(panel.subagents, standings, drawnTranscripts, {
-    agents: openAgents,
-    subagents: NO_SUBAGENTS,
-  });
+  const links = usePlainLinkNames();
+
+  const subagents = drawnSubagents(
+    panel.subagents,
+    standings,
+    drawnTranscripts,
+    { agents: openAgents, subagents: NO_SUBAGENTS },
+    links,
+  );
 
   // A worker's tab hangs the cards its agent's rows hang, each read as its tab reads its own, the tab chosen here or the agent's followed in the column.
   const chosenTab = panel.tab;
@@ -2877,8 +2889,9 @@ export function SidePanel({
           (chosenTab !== undefined && sameTab(chosen, chosenTab)) ||
           (shownAgent !== undefined && sameTab(chosen, agentTab(shownAgent))),
         pages: pagePlace,
+        links,
       }),
-    [agents, drawnTranscripts, chosenTab, shownAgent, pagePlace],
+    [agents, drawnTranscripts, chosenTab, shownAgent, pagePlace, links],
   );
 
   // The file tabs of files opened on the task, in the strip's order.

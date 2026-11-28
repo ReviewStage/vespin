@@ -83,6 +83,7 @@ import {
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import {
@@ -288,6 +289,12 @@ export interface ChatThreadMark {
   readonly words: string;
 }
 
+/** The card a line stands folded in: its title, and whether the reader opened it. */
+export interface SaidCard {
+  readonly title: string;
+  readonly open: boolean;
+}
+
 export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: number } & (
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
@@ -318,6 +325,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
+      /** The card an automation's prompt stands folded in, as the panel's Prompt card stands: titled by its first line, its words drawn only while open; none for every other line. */
+      readonly card?: SaidCard | undefined;
       /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
       readonly by: string | undefined;
       /** When it was sent; none where the row kept no time. */
@@ -809,11 +818,12 @@ function saidItem(
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried, folded in its card until the reader opens it. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   origin: TranscriptOrigin,
+  toggles: TranscriptToggles,
 ): TranscriptItem {
   const words = origin.prompt ?? messageWords(line);
 
@@ -833,6 +843,8 @@ function originItem(
     joinsBelow: false,
     from: origin.from,
     body: origin.body,
+    // Note that the prompt stands closed under its first line, as the panel's Prompt card does, since it is there to be read rather than in the way of the agent's own words, and a prompt runs long.
+    card: { title: cardTitle(words), open: foldTurned(toggles, base.place) },
   };
 }
 
@@ -1386,7 +1398,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, origin)
+          ? originItem(message, base, origin, reading.toggles)
           : saidItem(message, base, reading),
       ];
     }

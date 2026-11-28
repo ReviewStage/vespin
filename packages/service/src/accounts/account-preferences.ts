@@ -30,6 +30,7 @@ import { failureKind } from "@repo/runtime/effect";
 import {
   accountPreferencesFromWire,
   accountPreferencesParts,
+  DIFF_DISPLAY_FIELDS,
   EXPERIMENT,
   experimentChoicesFrom,
   experimentOn,
@@ -244,6 +245,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.githubWakesOff === undefined &&
     body.newAgentServersOff === undefined &&
     body.inbox === undefined &&
+    DIFF_DISPLAY_FIELDS.every((field) => body[field] === undefined) &&
     body.agent === undefined &&
     body.chaptersModel === undefined &&
     body.experiments === undefined
@@ -399,6 +401,15 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 
     if (inbox === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.inbox = inbox;
+  }
+
+  // Each of the diff display's choices is read by its own setting's guard, as every own part is.
+  for (const field of DIFF_DISPLAY_FIELDS) {
+    if (body[field] === undefined) continue;
+    const chosen = ownPreferenceFromWire(field, body[field]);
+
+    if (chosen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    Object.assign(write, { [field]: chosen });
   }
 
   if (body.agent !== undefined) {

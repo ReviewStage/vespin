@@ -6,15 +6,13 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
-import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import { controlsAgent } from "../agents/agent-reach.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { connectPty } from "../agents/sandbox-pty.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
+import { relayReachedAgent } from "../agents/terminal/sandbox-reach.js";
 import type { TunnelDependencies } from "./relay.js";
 
 /** What the tunnel's dependencies answer over: the agents' image among it, which a sandbox is made again from. */
@@ -37,23 +35,13 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
     );
 
     return {
+      // Note that a tunnel reaches an agent by its Terminal's rule.
       reach: (userId, agentId) =>
         run(
-          Effect.gen(function* () {
-            const found = yield* readVisibleAgent(userId, agentId);
-
-            if (Option.isNone(found) || found.value.archivedAt !== null) return Option.none();
-            const agent = found.value;
-
-            // Note that a tunnel into an agent on its starter's own GitHub token is its starter's alone, as its Terminal is.
-            if (!controlsAgent(userId, agent)) return Option.none();
-
-            // An agent with no repository opens no sandbox for a tunnel to reach.
-            if (!hasRepository(agent)) return Option.none();
-            const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
-
-            return Option.some({ sessionId: session?.sessionId });
-          }),
+          Effect.map(
+            relayReachedAgent(userId, agentId),
+            Option.map(({ sessionId }) => ({ sessionId })),
+          ),
         ),
       open: (sessionId) => sandbox.open(sessionId),
       connect: (shell) => connectPty(sandboxes, shell),

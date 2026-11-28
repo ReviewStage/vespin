@@ -54,6 +54,7 @@
  * with the rest.
  */
 
+import { namedPlainLinks } from "@repo/features/place-chip-model";
 import {
   createToastManager,
   type MarkProvider,
@@ -70,6 +71,7 @@ import {
 import { useEffect, useRef } from "react";
 import { copyThroughShell } from "./copy-feedback.js";
 import { failureOfConnection, reportShownFailure, type ShownFailure } from "./failure-report.js";
+import { usePlainLinkNames } from "./tasks/use-link-standing.js";
 
 /** What a failure toast's copy button copies, as "Copy details" names it. */
 const DETAILS_WHAT = "details";
@@ -369,9 +371,16 @@ export function withdrawToast(subject: string): void {
 /** One toast the manager keeps: the ui card, its notice's words, and its action, copy, and ×. */
 function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.Element | null {
   const notice = toast.data?.notice;
+  const links = usePlainLinkNames();
 
   if (notice === undefined) return null;
   const { action, details } = notice;
+
+  // Note that a pill named by a title says a place of ours the title spells bare by its chip's name, as the title's row does.
+  const chip =
+    notice.chip === undefined
+      ? undefined
+      : { ...notice.chip, label: namedPlainLinks(notice.chip.label, links) };
 
   const copy: ToastCopy | undefined =
     details === undefined
@@ -385,7 +394,7 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
       glyph={notice.glyph}
       mark={notice.mark}
       words={notice.words}
-      chip={notice.chip}
+      chip={chip}
       afterChip={notice.afterChip}
       detail={notice.detail}
       replayUnmasked={notice.replayUnmasked}

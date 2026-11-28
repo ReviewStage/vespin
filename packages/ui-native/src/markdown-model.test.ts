@@ -129,7 +129,10 @@ describe("markdownBlocks", () => {
 
     expect(paragraph).toMatchObject({
       runs: [
-        { kind: MARKDOWN_RUN.CHIP, chip: { name: "Automation run", heard: "Automation run" } },
+        {
+          kind: MARKDOWN_RUN.CHIP,
+          chip: { name: "Automation run", heard: "Automation run", bare: true },
+        },
       ],
     });
   });

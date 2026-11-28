@@ -22,8 +22,9 @@
  * a release that changes either stops the bump for a person to decide. A
  * pin's parts are read alike: its platform package moves with the release,
  * a dependency moves to the release its new manifest names exactly, or stays
- * where it still meets the range named, and a release that names a range its
- * part no longer meets, or a dependency no part pins, stops the bump. Each
+ * where it still meets the range named, or is dropped where no new manifest
+ * names it, and a release that names a range its part no longer meets, or a
+ * dependency no part pins, stops the bump. Each
  * bump it makes is printed to stdout as one line of JSON
  * (`{"tool","from","to"}`, and Claude's `claude` beside it); everything else
  * goes to stderr.
@@ -322,46 +323,61 @@ function requiredOf(manifest) {
 }
 
 /**
- * The release each of a pin's parts is at the new release: its platform
- * package at the release itself, and every dependency at the one the new
- * manifests name, read from the release's own manifest and then each part's
- * in order, so a dependency's own dependency is found. Fails where a
- * manifest names a dependency no part pins, or a range its part no longer
- * meets and names no exact release, or where any manifest's range is not met
- * by the release chosen for that part.
+ * The release one of a pin's parts is at, read off the new manifests read so
+ * far: its platform package at the release itself, a dependency at the
+ * release a manifest names exactly, or where it stands while it still meets
+ * the range named; undefined where no manifest names it yet.
+ */
+function partRelease(label, each, name, to, manifests) {
+  // Note that the platform package's address names `HOST_CLI_VERSION`, so the version edit moves it, never a write of its file.
+  if (each.name === `${name}-darwin-arm64`) return { ...each, version: to, withRelease: true };
+  const named = manifests.flatMap(requiredOf).find(([dependency]) => dependency === each.name);
+
+  if (named === undefined) return undefined;
+  const [, range] = named;
+  const current = each.file.slice(each.file.lastIndexOf("-") + 1, -".tgz".length);
+  const version = stable(range) ? range : meets(current, range) ? current : undefined;
+
+  if (version === undefined) {
+    throw new Error(`${label}: ${each.name}@${current} no longer meets ${range}`);
+  }
+
+  return { ...each, version, withRelease: false };
+}
+
+/**
+ * The release each of a pin's parts is at the new release, read from the
+ * release's own manifest and then each chosen part's, until a pass chooses
+ * none more, so a dependency's own dependency is found whatever the parts'
+ * order. A part no new manifest names is dropped, as a release that stops
+ * depending on it (one that bundles it instead) leaves it unread on the Mac.
+ * Fails where a manifest names a range its part no longer meets and names no
+ * exact release, or names a dependency no part pins, or where any
+ * manifest's range is not met by the release chosen for that part.
  */
 async function partReleases(label, pin, name, to) {
   const manifests = [await registryJson(`${name}/${to}`)];
   const parts = pin.PARTS.map((part) => ({ part, ...partOf(part.ARCHIVE) }));
-  const releases = [];
+  const chosen = new Map();
 
-  for (const each of parts) {
-    // Note that the platform package's address names `HOST_CLI_VERSION`, so the version edit moves it, never a write of its file.
-    if (each.name === `${name}-darwin-arm64`) {
-      releases.push({ ...each, version: to, withRelease: true });
-      continue;
+  for (let found = true; found; ) {
+    found = false;
+
+    for (const each of parts.filter((part) => !chosen.has(part.name))) {
+      const release = partRelease(label, each, name, to, manifests);
+
+      if (release === undefined) continue;
+      chosen.set(each.name, release);
+      found = true;
+
+      if (!release.withRelease)
+        manifests.push(await registryJson(`${each.name}/${release.version}`));
     }
-
-    const named = manifests.flatMap(requiredOf).find(([dependency]) => dependency === each.name);
-
-    if (named === undefined) throw new Error(`${label}: no new manifest names ${each.name}`);
-    const [, range] = named;
-    const current = each.file.slice(each.file.lastIndexOf("-") + 1, -".tgz".length);
-    const version = stable(range) ? range : meets(current, range) ? current : undefined;
-
-    if (version === undefined) {
-      throw new Error(`${label}: ${each.name}@${current} no longer meets ${range}`);
-    }
-
-    releases.push({ ...each, version, withRelease: false });
-    manifests.push(await registryJson(`${each.name}/${version}`));
   }
 
   // Note that every range any new manifest names is held to the release chosen for it, so two parts that disagree stop the bump, as does a dependency no part keeps, which would be missing on the Mac.
-  const chosen = new Map(releases.map((each) => [each.name, each.version]));
-
   for (const [dependency, range] of manifests.flatMap(requiredOf)) {
-    const version = chosen.get(dependency);
+    const version = chosen.get(dependency)?.version;
 
     if (version === undefined) throw new Error(`${label}: nothing pins ${dependency}@${range}`);
 
@@ -370,18 +386,25 @@ async function partReleases(label, pin, name, to) {
     }
   }
 
-  return releases;
+  return parts.map((each) => chosen.get(each.name) ?? { ...each, dropped: true });
 }
 
 /**
  * Each of a pin's parts at its new release, fetched and held to npm's
- * integrity, and unpacked where the kept build keeps it under `root`.
+ * integrity, and unpacked where the kept build keeps it under `root`, or
+ * marked dropped where the release no longer names it.
  */
 async function readParts(label, pin, name, to, root, scratch) {
   if (pin.PARTS === undefined) return [];
   const reads = [];
 
   for (const [index, each] of (await partReleases(label, pin, name, to)).entries()) {
+    if (each.dropped) {
+      say(`  ${label}.PARTS: drops ${each.name}, which the release no longer names`);
+      reads.push({ part: each.part, name: each.name, from: each.file, dropped: true });
+      continue;
+    }
+
     const file = each.file.replace(/-\d+\.\d+\.\d+\.tgz$/u, `-${each.version}.tgz`);
     const archive = `${REGISTRY}/${each.name}/-/${file}`;
     say(`  ${label}.PARTS: ${archive}`);
@@ -422,7 +445,12 @@ async function readHostPin([label, pin, name, suffix], from, to) {
     const root = path.join(scratch, pin.ROOT);
     const parts = await readParts(label, pin, name, to, root, scratch);
     const pinned = Object.keys(pin.FILES ?? {}).sort();
-    const members = [...pin.MEMBERS, ...(pin.PARTS ?? []).map((part) => part.INTO)];
+
+    const members = [
+      ...pin.MEMBERS,
+      ...parts.filter((read) => !read.dropped).map((read) => read.part.INTO),
+    ];
+
     const kept = pinnedExecutables(root, members, pinned);
 
     // Note that a pin may digest a file that runs without being executable, an SDK's entry or a native module, which need only stand.
@@ -468,9 +496,23 @@ function replaceOnce(text, from, to, where) {
   return text.replace(from, () => to);
 }
 
-/** `pins.ts` with a part's archive, size, and digest moved to what its new release reads: a dependency's file name where it moved. */
+/** `pins.ts` with one dropped part's object taken out of its pin's `PARTS`, found by its archive, which names it alone. */
+function dropPart(text, archive) {
+  const escaped = archive.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  // Note that a dependency's object holds no braces of its own, so its text runs from the brace before its archive to the first after.
+  const object = new RegExp(`\\n[ \\t]*\\{\\s*ARCHIVE: ${escaped},[^{}]*\\},`, "gu");
+  const count = text.match(object)?.length ?? 0;
+
+  if (count !== 1) throw new Error(`pins.ts holds ${archive}'s part ${count} times, not once`);
+
+  return text.replace(object, "");
+}
+
+/** `pins.ts` with a part's archive, size, and digest moved to what its new release reads: a dependency's file name where it moved, and a dropped part taken out. */
 function writePart(text, read) {
   const archive = `npmArchive("${read.name}", "${read.from}")`;
+
+  if (read.dropped) return dropPart(text, archive);
 
   const named =
     read.file === read.from

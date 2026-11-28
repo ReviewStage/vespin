@@ -39,7 +39,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { missingWords } from "@repo/features/inbox-ask-words";
-import { type InboxFields, inboxRowOf } from "@repo/features/inbox-digest";
+import { type InboxFields, type InboxRow, inboxRowOf } from "@repo/features/inbox-digest";
 import {
   EMPTY_INBOX_DRAFT,
   fieldValueOf,
@@ -91,6 +91,7 @@ import {
   type InboxHeldFile,
   type InboxReader,
   type InboxSending,
+  inboxRowSendingDrawn,
   inboxSendingDrawn,
   inboxSendingFile,
   inboxSendingFiles,
@@ -143,7 +144,12 @@ interface ThreadHeld {
   readonly startOut?: string | undefined;
   /** The reply Edit took back into the box, by what it sends, which a send of the same goes under again, so a reply that landed unheard is taken once. */
   readonly edited?: { readonly key: string; readonly words: string } | undefined;
+  /** The keys of the replies the service took, which a list row stops drawing once newer messages pass them (`inboxRowSendingDrawn`), while their bytes stay in `sending` for the thread's files. */
+  readonly taken?: ReadonlySet<string>;
 }
+
+/** No reply the service took yet. */
+const NONE_TAKEN: ReadonlySet<string> = new Set();
 
 /** A thread the app holds nothing of. */
 const NOTHING_HELD: ThreadHeld = { draft: EMPTY_INBOX_DRAFT, sending: new Map(), note: undefined };
@@ -266,7 +272,7 @@ function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
  * its retry is refused, so the thread reads open again rather than stand
  * closed by a send the app no longer has out.
  */
-function letGoCarriedCloses(items: readonly InboxItem[]): void {
+function letGoCarriedCloses(items: readonly Pick<InboxItem, "id" | "status">[]): void {
   const carried = items.filter(
     (item) =>
       item.status !== INBOX_STATUS.OPEN &&
@@ -314,6 +320,51 @@ function useReader(): InboxReader | undefined {
         : undefined,
     [account],
   );
+}
+
+/**
+ * The groups with the reader's sends still out drawn on their rows, as
+ * `useSendsDrawn` draws them on whole items: each send drawn over the thread
+ * the row's digest carries (`inboxRowDrawn`), so a reply stands as the
+ * thread's latest words and a close settles it, at once. A send is taken as
+ * landed once a row's latest messages hold one under its key, since a
+ * reply lands as the thread's latest message, and a reply the service took
+ * is drawn no more once newer messages pass it (`inboxRowSendingDrawn`).
+ */
+export function useSendsDrawnOnRows<Group extends { readonly items: readonly InboxRow[] }>(
+  groups: readonly Group[],
+): readonly Group[] {
+  const store = useHeldValue(threads);
+  const reader = useReader();
+  useEffect(() => {
+    const items = groups.flatMap((group) => group.items);
+    letGoCarriedCloses(items);
+    settleUndelivered(items.map((row) => ({ id: row.id, thread: row.digest.tail })));
+  }, [groups]);
+
+  return useMemo(() => {
+    if (store.size === 0) return groups;
+
+    return groups.map((group) => {
+      if (!group.items.some((item) => (store.get(item.id)?.sending.size ?? 0) > 0)) return group;
+
+      return {
+        ...group,
+        items: group.items.map((row) => {
+          const held = store.get(row.id);
+
+          return held === undefined || held.sending.size === 0
+            ? row
+            : inboxRowSendingDrawn(
+                row,
+                [...held.sending.values()],
+                held.taken ?? NONE_TAKEN,
+                reader,
+              );
+        }),
+      };
+    });
+  }, [groups, store, reader]);
 }
 
 /**
@@ -505,7 +556,11 @@ const starting = new Set<string>();
  * to send.
  */
 export function useThreadAnswer(
-  listed: { readonly holder: InboxAnyHolder; readonly item: InboxItem },
+  listed: {
+    readonly holder: InboxAnyHolder;
+    readonly item: InboxItem;
+    readonly reading?: true;
+  },
   readerId: string | undefined,
   onStarted?: (itemId: string) => void,
 ): ThreadAnswer {
@@ -517,6 +572,8 @@ export function useThreadAnswer(
   const store = useHeldValue(threads);
   const { draft, note, asNew = false, nodding } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
+  // Note that a thread whose kept messages are still being read stands with none, so nothing that answers among them goes until they load.
+  const reading = listed.reading === true;
 
   const onDraft = useCallback(
     (next: InboxDraft | ((now: InboxDraft) => InboxDraft)) =>
@@ -610,12 +667,18 @@ export function useThreadAnswer(
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
         inPlace: (words) => undelivered(line, words, heard),
         went: BUZZ.SUCCESS,
-        done: () => dropUndelivered(key),
+        done: () => {
+          dropUndelivered(key);
+          // Note that the reply stays in `sending`, whose bytes the thread's files read, but its row stops drawing it once newer messages pass it.
+          hold(itemId, (was) => ({ ...was, taken: new Set(was.taken).add(key) }));
+        },
       },
     );
   };
 
   const send = (pressed?: InboxDraft) => {
+    // Note that a send pressed before the thread's messages load holds the box as it stands, since its ask, and what an answer to it must fill, stand among them.
+    if (reading) return false;
     const sending = pressed ?? draft;
     const unreadable = unreadableNumber(thread, sending);
 
@@ -728,8 +791,8 @@ export function useThreadAnswer(
   );
 
   useEffect(() => {
-    // Note that nothing is settled until the reader is known, so a teammate's notice is never acknowledged.
-    if (readerId === undefined) return;
+    // Note that nothing is settled until the reader is known and the thread's messages are read, so neither a teammate's notice nor one whose open ask has not loaded is acknowledged.
+    if (readerId === undefined || reading) return;
     const was = noddedOn.current;
 
     if (was !== undefined && was.id === itemId && was.revision === item.revision) return;
@@ -737,7 +800,7 @@ export function useThreadAnswer(
 
     // Note that a notice opened while its box holds a draft is left waiting until it is opened again, so a box emptied of its draft never settles it under the reader's hands.
     if (settlesOnOpen && empty) nod(true);
-  }, [itemId, item.revision, readerId, settlesOnOpen]);
+  }, [itemId, item.revision, readerId, reading, settlesOnOpen]);
 
   const setAsNew = useCallback(
     (on: boolean) => hold(itemId, (was) => ({ ...was, asNew: on, note: undefined })),
@@ -895,15 +958,15 @@ export function useThreadAnswer(
     }));
   };
 
-  // A notification's action held for this thread, taken once and sent as though pressed here.
+  // A notification's action held for this thread, taken once and sent as though pressed here, once its messages are read, since the ask it answers stands among them.
   const pressed = store.get(itemId)?.pressed;
   useEffect(() => {
-    if (pressed === undefined) return;
+    if (pressed === undefined || reading) return;
     hold(itemId, ({ pressed: _taken, ...was }) => was);
     const sending = pressedDraft(thread, pressed);
 
     if (sending !== undefined) send(sending);
-  }, [pressed]);
+  }, [pressed, reading]);
 
   return {
     draft,

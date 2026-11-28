@@ -359,7 +359,7 @@ function relationsEachOnce(request: {
  * and the account's first workspace where none is; the document starts
  * empty, and `planning` false is a task started without its planning phase,
  * whose window opens no call on it. A name left out, or nothing but whitespace, starts the plan as
- * `UNTITLED_DESCRIPTION_NAME` until it is renamed. An `agent` starts a coding
+ * `UNTITLED_TASK_NAME` until it is renamed. An `agent` starts a coding
  * agent on the task in the same request, as the agent's own Start would
  * (`taskAgentStartSchema`): it implies `planning: false`, so naming both is
  * refused, and the service refuses it without a repository, as it refuses

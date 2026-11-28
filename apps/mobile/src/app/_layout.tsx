@@ -6,6 +6,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   type BrandColors,
   ChipMarkProvider,
+  ChipNamesProvider,
   FailureNoticeProvider,
   KeepingProvider,
   RowPickContext,
@@ -30,6 +31,7 @@ import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { holdSplash } from "../splash.js";
 import { keepSplitHost, SidebarStandsContext, useSplitSidebar } from "../split-columns.js";
 import { useChipMarks } from "../tasks/chip-marks.js";
+import { useChipNames } from "../tasks/chip-names.js";
 import { VoiceCallProvider } from "../voice-call.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -130,9 +132,11 @@ function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
       <ChipMarkProvider markOf={useChipMarks()}>
-        <RowPickContext value={notePick}>
-          <AppFrame />
-        </RowPickContext>
+        <ChipNamesProvider useNames={useChipNames}>
+          <RowPickContext value={notePick}>
+            <AppFrame />
+          </RowPickContext>
+        </ChipNamesProvider>
       </ChipMarkProvider>
     </KeepingProvider>
   );

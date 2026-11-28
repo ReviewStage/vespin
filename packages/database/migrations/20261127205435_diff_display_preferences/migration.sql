@@ -1,0 +1,48 @@
+DROP TRIGGER IF EXISTS "app_sync_update" ON "account_preference";
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "app_sync_write" ON "account_preference";
+--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "line_numbers" boolean;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "word_wrap" boolean;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_layout" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_indicators" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "inline_diff" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_backgrounds" boolean;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_dark_theme" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_light_theme" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_font" text;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_ligatures" boolean;--> statement-breakpoint
+ALTER TABLE "account_preference" ADD COLUMN "diff_minimize_comments" boolean;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "app_sync_account_preference"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
+DECLARE
+	sync_topics jsonb := '[]';
+	sync_topic jsonb;
+	sync_batch text := '';
+	sync_txid text := pg_current_xact_id()::text;
+BEGIN
+	IF TG_OP <> 'INSERT' THEN
+		sync_topics := sync_topics || jsonb_build_array(jsonb_build_array('account', OLD."user_id"::text));
+	END IF;
+	IF TG_OP <> 'DELETE' THEN
+		sync_topics := sync_topics || jsonb_build_array(jsonb_build_array('account', NEW."user_id"::text));
+	END IF;
+	FOR sync_topic IN
+		SELECT DISTINCT "value" FROM jsonb_array_elements(sync_topics) WHERE "value" ->> 1 IS NOT NULL ORDER BY "value"
+	LOOP
+		IF sync_batch <> '' AND octet_length('{"t":[' || sync_batch || ',' || sync_topic::text || '],"x":"' || sync_txid || '"}') >= 8000 THEN
+			PERFORM pg_notify('app_sync', '{"t":[' || sync_batch || '],"x":"' || sync_txid || '"}');
+			sync_batch := '';
+		END IF;
+		sync_batch := CASE WHEN sync_batch = '' THEN sync_topic::text ELSE sync_batch || ',' || sync_topic::text END;
+	END LOOP;
+	IF sync_batch <> '' THEN
+		PERFORM pg_notify('app_sync', '{"t":[' || sync_batch || '],"x":"' || sync_txid || '"}');
+	END IF;
+	RETURN NULL;
+END
+$app_sync$;
+--> statement-breakpoint
+CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "account_preference" FOR EACH ROW EXECUTE FUNCTION "app_sync_account_preference"();
+--> statement-breakpoint
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "account_preference" FOR EACH ROW WHEN (OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."link_open" IS DISTINCT FROM NEW."link_open" OR OLD."pull_request_open" IS DISTINCT FROM NEW."pull_request_open" OR OLD."agent_enter" IS DISTINCT FROM NEW."agent_enter" OR OLD."commit_author" IS DISTINCT FROM NEW."commit_author" OR OLD."agent_permission_mode" IS DISTINCT FROM NEW."agent_permission_mode" OR OLD."setup_finished" IS DISTINCT FROM NEW."setup_finished" OR OLD."setup_place" IS DISTINCT FROM NEW."setup_place" OR OLD."sound_when" IS DISTINCT FROM NEW."sound_when" OR OLD."completion_sound" IS DISTINCT FROM NEW."completion_sound" OR OLD."ask_sound" IS DISTINCT FROM NEW."ask_sound" OR OLD."voice" IS DISTINCT FROM NEW."voice" OR OLD."turn_notifications" IS DISTINCT FROM NEW."turn_notifications" OR OLD."onboarding_survey" IS DISTINCT FROM NEW."onboarding_survey" OR OLD."intros_seen" IS DISTINCT FROM NEW."intros_seen" OR OLD."github_wakes_off" IS DISTINCT FROM NEW."github_wakes_off" OR OLD."new_agent_servers_off" IS DISTINCT FROM NEW."new_agent_servers_off" OR OLD."inbox" IS DISTINCT FROM NEW."inbox" OR OLD."line_numbers" IS DISTINCT FROM NEW."line_numbers" OR OLD."word_wrap" IS DISTINCT FROM NEW."word_wrap" OR OLD."diff_layout" IS DISTINCT FROM NEW."diff_layout" OR OLD."diff_indicators" IS DISTINCT FROM NEW."diff_indicators" OR OLD."inline_diff" IS DISTINCT FROM NEW."inline_diff" OR OLD."diff_backgrounds" IS DISTINCT FROM NEW."diff_backgrounds" OR OLD."diff_dark_theme" IS DISTINCT FROM NEW."diff_dark_theme" OR OLD."diff_light_theme" IS DISTINCT FROM NEW."diff_light_theme" OR OLD."diff_font" IS DISTINCT FROM NEW."diff_font" OR OLD."diff_ligatures" IS DISTINCT FROM NEW."diff_ligatures" OR OLD."diff_minimize_comments" IS DISTINCT FROM NEW."diff_minimize_comments" OR OLD."agent_model" IS DISTINCT FROM NEW."agent_model" OR OLD."agent_effort" IS DISTINCT FROM NEW."agent_effort" OR OLD."agent_context_window" IS DISTINCT FROM NEW."agent_context_window" OR OLD."chapters_model" IS DISTINCT FROM NEW."chapters_model" OR OLD."experiments" IS DISTINCT FROM NEW."experiments" OR OLD."slack_notifications" IS DISTINCT FROM NEW."slack_notifications" OR OLD."created_at" IS DISTINCT FROM NEW."created_at") EXECUTE FUNCTION "app_sync_account_preference"();

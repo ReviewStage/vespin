@@ -34,7 +34,9 @@
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
- * Until then the page stands in an agent tab's own shape saying Reading; an
+ * Until then the page stands in a Manager's own shape saying Reading, its
+ * head, its views' row, and its chat's last messages over its box, since a
+ * Manager is the agent on no task the window opens; an
  * agent the service does not hold for the reader, deleted or of a workspace
  * they are not in, is not found; and a read that did not land says so with
  * Retry. Its step is never one Back or Forward goes to
@@ -72,12 +74,15 @@ import {
   Fill,
   IconButton,
   type InlineEditHandle,
+  MoreButton,
   moreLabel,
   NO_BACK_KEY,
   NOT_FOUND_THING,
   NotFound,
   PaneBar,
   SideSplit,
+  SKELETON_KIND,
+  Skeleton,
   Toolbar,
   type ToolbarTitleEdit,
   Tooltip,
@@ -85,7 +90,6 @@ import {
   useSideSplit,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import {
   agentTab,
   pageTab,
@@ -128,7 +132,7 @@ import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, FACE_IN, useAgentActions } from "./agent-actions.js";
 import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
-import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
+import { RecentManagerFaceWell } from "./manager-face-recent.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
@@ -213,6 +217,12 @@ const MANAGER_VIEWS_LABEL = "Manager views";
 
 /** What a Manager's Settings button is named and hinted by. */
 const SETTINGS = "Settings";
+
+/** How a Manager's head stands while it is read: its face as wide as a row's face, as its head draws it (`ManagerGlyph`), and its name's block. */
+const MANAGER_SKELETON = {
+  FACE: "var(--spacing-manager-face-row)",
+  NAME: "144px",
+} as const;
 
 /** Where the agent of the page's address stands: on a task, on none, nowhere the reader may open, not read yet, or not read at all. */
 type AgentFound =
@@ -424,9 +434,8 @@ function OwnAgentHead({
   // Note that while the name is edited, a Manager's face before it is the well its Change face picks it in, its picker open from the start there.
   const lead =
     editing && face !== undefined ? (
-      <ManagerFaceWell
+      <RecentManagerFaceWell
         face={agent.face}
-        recent={RECENT_MANAGER_FACES}
         open={face.picking}
         onOpenChange={(open, pressedAway) => {
           face.onPicking(open);
@@ -885,6 +894,64 @@ function OwnAgentPage({
   );
 }
 
+/** Takes no press: the views a Manager's page stands while it is read are held. */
+function holdView(): void {}
+
+/**
+ * A Manager's page while its agent is read, which `back`, a phone's way
+ * back, leads out of: its head with blocks where its face and its name
+ * stand, its Settings and its ⋯ held where they land, and under it its
+ * views' row, held on Messages, which the page opens on, then its chat's
+ * skeleton over its box (`AgentTabSkeleton`'s `chat`); a phone's head names
+ * it by a block between its way back and its ⋯, with no row of views, as a
+ * phone's Manager stands on its chat alone. Note that it stands in a
+ * Manager's shape before the agent says it is one, because a Manager is
+ * the agent on no task the window opens: every agent the window starts
+ * stands on a task.
+ */
+function ManagerPageSkeleton({ back }: { back: React.ReactNode | undefined }): React.JSX.Element {
+  const name = <Skeleton width={MANAGER_SKELETON.NAME} />;
+  const more = <MoreButton thing={AGENT_THING} disabled />;
+
+  return (
+    <>
+      {back === undefined ? (
+        <>
+          <Toolbar
+            lead={<Skeleton kind={SKELETON_KIND.CIRCLE} width={MANAGER_SKELETON.FACE} />}
+            title={name}
+            actions={
+              <>
+                <IconButton icon={<GLYPH.SETTINGS />} label={SETTINGS} disabled />
+                {more}
+              </>
+            }
+          />
+          <PaneBar
+            middle={
+              <ChoiceBar
+                label={MANAGER_VIEWS_LABEL}
+                items={managerViews(0)}
+                value={MANAGER_VIEW.MESSAGES}
+                look={CHOICE_BAR_LOOK.FILL}
+                disabled
+                onChange={holdView}
+              />
+            }
+          />
+        </>
+      ) : (
+        <PhoneHead place={PHONE_PLACE} start={back} title={name} end={more} />
+      )}
+      <Fill className="desktop-task-column">
+        <Fill as={FILL_ELEMENT.SECTION} className="desktop-agent">
+          <AgentTabSkeleton label={readingWords("the agent")} chat />
+        </Fill>
+      </Fill>
+    </>
+  );
+}
+
 /** The page the agent of the address stands on: its own where it is on no task, else what stands while it is read, or the words saying why it is not opened. */
 export function AgentRoutePage({
   tasks,
@@ -922,27 +989,32 @@ export function AgentRoutePage({
       <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} staged={staged} />
     );
 
-  // In the page's own frame, so its row and sheet stand where the task's agent tab will.
+  // In the page's own frame, so its head, its views, and its chat stand where the Manager's page will.
   return (
     <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
-      <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label="Agent">
-        {back === undefined ? (
-          <Toolbar />
-        ) : (
-          <PhoneHead place={PHONE_PLACE} start={back} title={null} end={null} />
-        )}
+      <Fill
+        as={FILL_ELEMENT.SECTION}
+        className="agent-page"
+        aria-label="Agent"
+        data-chat={"failed" in found ? undefined : ""}
+      >
         {"failed" in found ? (
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.AGENTS_READ)}
-            onRetry={found.onRetry}
-            placement={ERROR_STATE_PLACEMENT.CENTERED}
-          >
-            {NOT_READ}
-          </ErrorState>
+          <>
+            {back === undefined ? (
+              <Toolbar />
+            ) : (
+              <PhoneHead place={PHONE_PLACE} start={back} title={null} end={null} />
+            )}
+            <ErrorState
+              failure={unreadShown(FAILURE_SURFACE.AGENTS_READ)}
+              onRetry={found.onRetry}
+              placement={ERROR_STATE_PLACEMENT.CENTERED}
+            >
+              {NOT_READ}
+            </ErrorState>
+          </>
         ) : (
-          <Fill className="desktop-task-column">
-            <AgentTabSkeleton label={readingWords("the agent")} />
-          </Fill>
+          <ManagerPageSkeleton back={back} />
         )}
       </Fill>
     </div>

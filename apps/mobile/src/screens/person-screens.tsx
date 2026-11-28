@@ -61,7 +61,7 @@ import {
   useTaskListRows,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
-import { useInboxRowGroupsIn } from "../inbox/inbox-groups.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -256,7 +256,7 @@ function PersonPage({
 
   // Every open Inbox thread of the workspace waiting on them, on the reader's own page only once it waits on them now, as the panel's page lists them.
   const inboxShown = useInboxShown();
-  const groups = useInboxRowGroupsIn(workspaceId);
+  const groups = useInboxGroupsIn(workspaceId);
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,

@@ -4,12 +4,11 @@ import {
   Divider,
   HStack,
   Image,
-  Picker,
+  RNHostView,
   Spacer,
   Button as SwiftUIButton,
   TextField,
   type TextFieldRef,
-  Toggle,
   Toolbar,
   ToolbarItem,
   useNativeState,
@@ -17,33 +16,39 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
   keyboardType,
-  labelsHidden,
+  lineLimit,
   padding,
-  pickerStyle,
   strokeBorder,
-  tag,
   textFieldStyle,
-  tint,
-  toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
+import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { fieldValueWords } from "@repo/features/inbox-wire";
+import { linkLabels } from "@repo/features/mention-link";
+import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
+import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
+import { PickedCheck } from "./settings-form.js";
+import { useSteppedBack } from "./stepped-back.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn: a hairline, as the decide card's is. */
@@ -180,65 +185,173 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
   );
 }
 
+/** What settles an open ask without answering it, as the panel's × beside its question: its words, heard on the ×, and its press. */
+export type AskResolve = {
+  readonly label: string;
+  readonly onPress: () => void;
+};
+
 /**
- * One step: its checkbox, the accent's once ticked, and its Markdown words,
- * the whole row pressed to tick it or let it go, as the panel's checkbox and
- * the decide card's square marks are. Note that it is not the system's
- * switch, which takes a press on its knob alone, never on the step's words.
+ * An open ask's card with the × that resolves it without an answer at its
+ * top end, as the panel's question stands its × (`DraftQuestion`): the
+ * system's close mark in the muted ink, a full press's size, heard by its
+ * act's words. The card alone where nothing resolves it.
+ */
+export function ResolvableAsk({
+  resolve,
+  children,
+}: {
+  readonly resolve: AskResolve | undefined;
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+
+  if (resolve === undefined) return children;
+
+  return (
+    <HStack alignment="top" spacing={0}>
+      {children}
+      <SwiftUIButton
+        onPress={resolve.onPress}
+        modifiers={[buttonStyle("plain"), accessibilityLabel(resolve.label)]}
+      >
+        <Image
+          {...glyphImage(GLYPH.CLOSE)}
+          size={MARK_SIZE.GLYPH}
+          color={colors.TEXT_MUTED}
+          modifiers={[
+            // Note that the mark is drawn small, as the panel's compact ×, while its press stands as large as Apple asks of a target.
+            frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE, alignment: "top" }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        />
+      </SwiftUIButton>
+    </HStack>
+  );
+}
+
+/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
+export function RecommendedTag() {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
+        foregroundStyle(colors.TEXT_MUTED),
+        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
+        lineLimit(1),
+        fixedSize(),
+        padding({ horizontal: 5, vertical: 1 }),
+        strokeBorder({
+          content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: RADIUS.TAG,
+          style: { lineWidth: 1 },
+        }),
+      ]}
+    >
+      {RECOMMENDED}
+    </Text>
+  );
+}
+
+/** A checkbox's mark, the accent's once ticked, as a step's, a yes or no's, and a held yes or no's lead their row. */
+function TickMark({ ticked }: { readonly ticked: boolean }) {
+  const colors = useColors();
+
+  return (
+    <Image
+      {...glyphImage(ticked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX)}
+      size={MARK_SIZE.LEAD}
+      color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
+    />
+  );
+}
+
+/**
+ * One step: its checkbox, the accent's once ticked, and its words drawn as
+ * the thread's Markdown draws them, so a link of ours, bare or a mention,
+ * stands as its chip (`@repo/features/mention-link`'s `linkChipOf`), as the
+ * panel's step draws it. A press on the box or on the words ticks the step
+ * or lets it go, as the panel's checkbox and the decide card's square marks
+ * take one, but a chip's press opens its link and ticks nothing, as the
+ * panel's link in a step does. Note that the words stand in a React Native
+ * host beside the box, never inside a SwiftUI button, which would take the
+ * chip's press for its own; and that the box is the step's one element
+ * VoiceOver toggles, heard by its words, while the words' lines offer each
+ * chip they hold as their own actions.
  */
 function StepRow({
   step,
   ticked,
   onPress,
+  repository,
+  onOpenLink,
 }: {
   readonly step: string;
   readonly ticked: boolean;
-  readonly onPress: () => void;
+  /** Ticks the step or lets it go; none for an ask no longer waiting, whose step stands as the answer left it. */
+  readonly onPress: (() => void) | undefined;
+  readonly repository: string | null | undefined;
+  readonly onOpenLink: (address: string) => void;
 }) {
-  const colors = useColors();
+  const heard = linkLabels(step);
+  const stepped = useSteppedBack();
+  const heardAs = accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard);
 
   return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[buttonStyle("plain"), accessibilityLabel(ticked ? `${step}, ${TICKED}` : step)]}
+    <HStack
+      spacing={SPACE.ROW}
+      alignment="top"
+      modifiers={[
+        padding(ROW_PADDING),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+      ]}
     >
-      <HStack
-        spacing={SPACE.ROW}
-        alignment="top"
-        modifiers={[
-          padding(ROW_PADDING),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        ]}
-      >
-        <Image
-          {...glyphImage(ticked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX)}
-          size={MARK_SIZE.LEAD}
-          color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
-        />
-        <Text
-          markdownEnabled
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}
-        >
-          {step}
-        </Text>
-        <Spacer />
-      </HStack>
-    </SwiftUIButton>
+      {onPress === undefined ? (
+        <HStack modifiers={[SwiftModifiers.accessibilityElement("combine"), heardAs]}>
+          <TickMark ticked={ticked} />
+        </HStack>
+      ) : (
+        <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("plain"), heardAs]}>
+          <TickMark ticked={ticked} />
+        </SwiftUIButton>
+      )}
+      <RNHostView matchContents={{ vertical: true }}>
+        <Pressable accessible={false} onPress={onPress}>
+          <Markdown
+            words={step}
+            look={stepped ? MARKDOWN_LOOK.STEPPED_BACK : MARKDOWN_LOOK.MESSAGE}
+            repository={repository}
+            onOpenLink={onOpenLink}
+          />
+        </Pressable>
+      </RNHostView>
+    </HStack>
   );
 }
 
-/** A do ask's steps as a card of checkbox rows, by their place from the first at 0, with its acts under it. */
+/** A do ask's steps as a card of checkbox rows, by their place from the first at 0, with its acts under it; with no `onToggle`, standing as an answer left it, ticked as it ticked them, taking no press. */
 export function StepList({
   steps,
   ticked,
   onToggle,
-  acts,
+  acts = [],
+  repository,
+  onOpenLink,
 }: {
   readonly steps: readonly string[];
   readonly ticked: readonly number[];
-  /** Called with a step's place once its toggle is pressed. */
-  readonly onToggle: (index: number) => void;
-  readonly acts: readonly AskAct[];
+  /** Called with a step's place once its toggle is pressed; none for an ask no longer waiting. */
+  readonly onToggle?: ((index: number) => void) | undefined;
+  /** The acts under the card; none for an ask no longer waiting. */
+  readonly acts?: readonly AskAct[] | undefined;
+  /** The thread's repository, `owner/name`, whose GitHub pages are its files' chips. */
+  readonly repository: string | null | undefined;
+  /** Opens a link or a chip pressed in a step's words, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
 }) {
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
@@ -249,12 +362,14 @@ export function StepList({
               key={step}
               step={step}
               ticked={ticked.includes(index)}
-              onPress={() => onToggle(index)}
+              onPress={onToggle === undefined ? undefined : () => onToggle(index)}
+              repository={repository}
+              onOpenLink={onOpenLink}
             />
           ))}
         </Card>
       )}
-      <AskActs acts={acts} />
+      {acts.length === 0 ? null : <AskActs acts={acts} />}
     </VStack>
   );
 }
@@ -340,52 +455,99 @@ function TypedFieldRow({
 }
 
 /**
- * A select: its label over the system's menu picker at the leading edge, as
- * a text field stands under its name in the same card, so a long value such
- * as "Every member (recommended)" has the row's width rather than squeezing
- * its label into a column beside it; it reads "None" until an option is
- * picked, as Settings' pickers do, the recommended option said as such.
+ * One of a select's options, a row under its label: its words, the
+ * recommended one tagged as a decide's option is, and the copper check at
+ * its end once picked; a press on the one picked lets it go, as the panel's
+ * pill is taken back, since a field left empty is sent without it.
  */
-function SelectRow({
-  field,
-  recommendedWord,
-  onChange,
+function SelectOptionRow({
+  option,
+  recommended,
+  picked,
+  onPress,
 }: {
-  readonly field: AnswerField;
-  readonly recommendedWord: string;
-  readonly onChange: (value: string) => void;
+  readonly option: string;
+  readonly recommended: boolean;
+  readonly picked: boolean;
+  readonly onPress: () => void;
 }) {
   const colors = useColors();
 
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
-      <FieldWords
-        label={field.label}
-        optional={!field.required}
-        textStyle={TYPE_ROLE.ROW_LINE}
-        ink={colors.TEXT_MUTED}
-      />
-      <Picker<string>
-        label={field.label}
-        selection={Predicate.isString(field.value) ? field.value : ""}
-        onSelectionChange={onChange}
-        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("plain"),
+        accessibilityLabel(recommended ? `${option}, ${RECOMMENDED}` : option),
+        ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
+      ]}
+    >
+      <HStack
+        spacing={SPACE.TIGHT + 2}
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
       >
-        <Text modifiers={[tag("")]}>{SELECTION_WORDS.NONE}</Text>
-        {(field.options ?? []).map((option) => (
-          <Text key={option} modifiers={[tag(option)]}>
-            {option === field.recommended ? `${option} (${recommendedWord})` : option}
-          </Text>
-        ))}
-      </Picker>
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
+          {option}
+        </Text>
+        {recommended ? <RecommendedTag /> : null}
+        <Spacer />
+        {picked ? <PickedCheck /> : null}
+      </HStack>
+    </SwiftUIButton>
+  );
+}
+
+/**
+ * A select: its label, then each of its options as a row of the card, as
+ * the panel's form stands every option as a pill under the label, so the
+ * one the agent recommends is seen tagged before any is picked rather than
+ * hidden behind a menu reading "None"; nothing stands picked until the
+ * reader picks, as the panel's form starts.
+ */
+function SelectRows({
+  field,
+  onChange,
+}: {
+  readonly field: AnswerField;
+  readonly onChange: (value: string) => void;
+}) {
+  const colors = useColors();
+  const picked = Predicate.isString(field.value) ? field.value : "";
+
+  return (
+    <VStack alignment="leading" spacing={0}>
+      <VStack alignment="leading" modifiers={[padding({ ...ROW_PADDING, bottom: 0 })]}>
+        <FieldWords
+          label={field.label}
+          optional={!field.required}
+          textStyle={TYPE_ROLE.ROW_LINE}
+          ink={colors.TEXT_MUTED}
+        />
+      </VStack>
+      {(field.options ?? []).map((option, index) => (
+        <Fragment key={option}>
+          {index === 0 ? null : <CardDivider inset={CARD_WORDS_INSET.BARE} />}
+          <SelectOptionRow
+            option={option}
+            recommended={option === field.recommended}
+            picked={option === picked}
+            onPress={() => onChange(option === picked ? "" : option)}
+          />
+        </Fragment>
+      ))}
     </VStack>
   );
 }
 
 /**
- * A boolean: the system's switch with its label, as Settings' rows stand,
- * the system laying out the words and the switch at the row's end and
- * hearing them as one control.
+ * A yes or no: its checkbox beside its name, "Optional" after it where it
+ * may be left empty, as the panel's form draws one, the whole row pressed to
+ * tick it or let it go, as the panel's checkbox is pressed by its words too.
+ * Note that it is not the system's switch, which takes a press on its knob
+ * alone, and which the panel's form draws nowhere.
  */
 function BooleanRow({
   field,
@@ -395,39 +557,136 @@ function BooleanRow({
   readonly onChange: (value: boolean) => void;
 }) {
   const colors = useColors();
+  const ticked = field.value === true;
+  const optional = !field.required;
+  const heard = optional ? `${field.label}, ${FIELD_WORDS.OPTIONAL}` : field.label;
 
   return (
-    <Toggle
-      isOn={field.value === true}
-      onIsOnChange={onChange}
-      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ROW_PADDING)]}
+    <SwiftUIButton
+      onPress={() => onChange(!ticked)}
+      modifiers={[buttonStyle("plain"), accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard)]}
+    >
+      <HStack
+        spacing={SPACE.ROW}
+        alignment="top"
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        <TickMark ticked={ticked} />
+        <FieldWords
+          label={field.label}
+          optional={optional}
+          textStyle={TYPE_ROLE.ROW_TITLE}
+          ink={colors.TEXT}
+        />
+        <Spacer />
+      </HStack>
+    </SwiftUIButton>
+  );
+}
+
+/**
+ * A field as an answer filled it, taking nothing, as the panel's held form
+ * stands: a yes or no as its checkbox, ticked where it was, beside its
+ * name; any other field its name, muted, over what was put in it, which
+ * stays empty where the answer left it so.
+ */
+function HeldFieldRow({ field }: { readonly field: AnswerField }) {
+  const colors = useColors();
+  const ink = useSteppedBack() ? colors.TEXT_MUTED : colors.TEXT;
+
+  if (field.kind === ANSWER_FIELD.BOOLEAN) {
+    const ticked = field.value === true;
+
+    return (
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.accessibilityElement("combine"),
+          accessibilityLabel(field.label),
+          // Note that the answer is heard as its value, yes or no, so a no is said rather than left silent; a yes or no the answer left empty says nothing.
+          ...(Predicate.isBoolean(field.value)
+            ? [accessibilityValue(fieldValueWords(field.value))]
+            : []),
+        ]}
+      >
+        <TickMark ticked={ticked} />
+        <FieldWords
+          label={field.label}
+          optional={!field.required}
+          textStyle={TYPE_ROLE.ROW_TITLE}
+          ink={ink}
+        />
+        <Spacer />
+      </HStack>
+    );
+  }
+
+  const words = Predicate.isString(field.value) ? field.value : "";
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding(ROW_PADDING),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        SwiftModifiers.accessibilityElement("combine"),
+      ]}
     >
       <FieldWords
         label={field.label}
-        optional={!field.required}
-        textStyle={TYPE_ROLE.ROW_TITLE}
-        ink={colors.TEXT}
+        optional={false}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        ink={colors.TEXT_MUTED}
       />
-    </Toggle>
+      {words === "" ? null : (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(ink)]}>
+          {words}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
 /**
  * An answer ask's fields as a card of the system's form controls, a row
- * each: a text or number field under its label, a select's menu picker, a
- * boolean's toggle. Note that it is a card in the thread's scroll rather
+ * each: a text or number field under its label, a select's options as rows
+ * under its label, the recommended one tagged, and a yes or no's checkbox. Note that it is a card in the thread's scroll rather
  * than a SwiftUI `Form`, because a `Form` scrolls on its own and the thread
- * it stands in already does; its rows are the controls a `Form` holds.
+ * it stands in already does; its rows are the controls a `Form` holds. With
+ * no `onChange`, the card stands as an answer filled it (`HeldFieldRow`).
  */
 export function AnswerFields({
   fields,
-  recommendedWord,
   onChange,
 }: {
   readonly fields: readonly AnswerField[];
-  /** What a select's recommended option is called after it: the panel's "recommended". */
-  readonly recommendedWord: string;
-  /** Called with a field's label and what it now holds. */
+  /** Called with a field's label and what it now holds; none for an ask no longer waiting. */
+  readonly onChange?: ((label: string, value: string | boolean) => void) | undefined;
+}) {
+  if (onChange === undefined) {
+    return (
+      <Card inset={CARD_WORDS_INSET.BARE}>
+        {fields.map((field) => (
+          <HeldFieldRow key={field.label} field={field} />
+        ))}
+      </Card>
+    );
+  }
+
+  return <OpenFields fields={fields} onChange={onChange} />;
+}
+
+/** An open answer ask's fields, as `AnswerFields` draws them while the ask waits. */
+function OpenFields({
+  fields,
+  onChange,
+}: {
+  readonly fields: readonly AnswerField[];
   readonly onChange: (label: string, value: string | boolean) => void;
 }) {
   const focused = useRef<TextFieldRef | null>(null);
@@ -448,14 +707,7 @@ export function AnswerFields({
         }
 
         if (field.kind === ANSWER_FIELD.SELECT) {
-          return (
-            <SelectRow
-              key={field.label}
-              field={field}
-              recommendedWord={recommendedWord}
-              onChange={change}
-            />
-          );
+          return <SelectRows key={field.label} field={field} onChange={change} />;
         }
 
         return (

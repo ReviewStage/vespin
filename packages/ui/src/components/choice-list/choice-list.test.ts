@@ -11,6 +11,7 @@ import {
   type ChoiceLook,
   type ChoiceOption,
   type ChoiceSelect,
+  type WordsDrawer,
 } from "./choice-list.js";
 
 /**
@@ -20,7 +21,8 @@ import {
  * arrows moving along it; a numbered list wears each row's key; a read-only
  * list keeps its pick checked and takes no press, key, or Tab, its words
  * selecting under a drag;
- * a settled list names what was picked and takes no press; and Enter
+ * a settled list names what was picked and takes no press; a chip in a
+ * row's words opens what it names and picks nothing; and Enter
  * presses a row and a card's own field keeps its caret, where Base UI's
  * radio and group would not.
  */
@@ -77,6 +79,7 @@ function Held({
   look,
   numbered,
   readOnly = false,
+  words,
 }: {
   select?: ChoiceSelect;
   options?: readonly ChoiceOption<Retry>[];
@@ -86,6 +89,7 @@ function Held({
   start?: readonly Retry[];
   look?: ChoiceLook;
   numbered?: boolean;
+  words?: WordsDrawer;
 }): React.JSX.Element {
   const [value, setValue] = useState<readonly Retry[]>(start);
   const [heard, setHeard] = useState<string[]>([]);
@@ -103,6 +107,7 @@ function Held({
       readOnly,
       look,
       numbered,
+      words,
       onChange: (next: readonly Retry[]) => {
         setValue(next);
         setHeard((all) => [...all, next.join("+") || "none"]);
@@ -256,6 +261,26 @@ test("a numbered list wears each row's number after its badge and names it as th
     rows(plain).map((each) => each.getAttribute("aria-keyshortcuts")),
     [null, null, null],
   );
+});
+
+test("a press on a chip in a row's words opens what it names and picks nothing, while a press beside it picks the row", () => {
+  const opened: string[] = [];
+
+  // A chip as the panel's Markdown draws one in running words: a span in a button's role, which hands its press on.
+  const chip = (written: string) =>
+    createElement(
+      "span",
+      { role: "button", tabIndex: 0, onClick: () => opened.push(written) },
+      written,
+    );
+
+  const page = render(createElement(Held, { words: chip }));
+  const never = row(page, "Never retry");
+  act(() => never.querySelector<HTMLElement>('[role="button"]')?.click());
+  assert.deepEqual(opened, ["Never retry"]);
+  assert.equal(heard(page), "");
+  act(() => never.click());
+  assert.equal(heard(page), "never");
 });
 
 test("an unavailable list changes nothing, by press or by key", () => {

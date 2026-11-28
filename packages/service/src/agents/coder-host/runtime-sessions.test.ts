@@ -38,7 +38,7 @@ import {
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { DEVICE_CAPABILITY, DEVICE_SETUP } from "@repo/features/device-agent-wire";
-import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelProvider, NO_EFFORT } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -62,7 +62,8 @@ import {
   type HostedRefusal,
   localAgentRefused,
 } from "../../http/http-effect.js";
-import { type ModelChoiceRefused, modelCatalogOf } from "../../providers/model-catalog.js";
+import { CursorModelCatalog, cursorModelsOf } from "../../providers/cursor-models.js";
+import { ModelChoiceRefused, modelCatalogOf } from "../../providers/model-catalog.js";
 import { QUEUE_ACKNOWLEDGED } from "../../queues/queue-consumer.js";
 import {
   connectWorkspaceGitHub,
@@ -102,7 +103,7 @@ import {
   TURN_HANDOVER,
   type TurnHandover,
 } from "./runtime-sessions.js";
-import { accountModelChoices, startAgent } from "./start.js";
+import { acceptedAgentChoice, accountModelChoices, startAgent } from "./start.js";
 import { STEER_OUTCOME, steerAgent } from "./steer.js";
 import { stoppedTurn } from "./stop.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
@@ -2557,6 +2558,50 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             assert.deepEqual(heard(agentSessions), []);
             assert.ok(heard(codex).length > 0, "Codex runs it");
           }
+        }),
+    );
+
+    it.effect(
+      "an account with Cursor agents on has Cursor's list read for a choice on a Cursor model alone, and is offered it in the choices a refusal lists",
+      () =>
+        Effect.gen(function* () {
+          const { owner } = yield* openStarter(false);
+          yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.CURSOR]: true } });
+          let reads = 0;
+
+          const cursor = {
+            forAccount: () => {
+              reads += 1;
+
+              return Effect.succeed(cursorModelsOf([{ id: "default", displayName: "Auto" }]));
+            },
+          };
+
+          const accepted = (model: string) =>
+            Effect.result(acceptedAgentChoice(owner, { model, effort: "high" })).pipe(
+              Effect.provide(PLAN_CATALOG),
+              Effect.provideService(CursorModelCatalog, cursor),
+            );
+
+          assert.ok(Result.isSuccess(yield* accepted("anthropic/claude-opus-5.5")));
+          assert.equal(reads, 0);
+
+          const refused = yield* accepted("openai/no-such-model");
+          assert.ok(Result.isFailure(refused));
+          assert.ok(refused.failure instanceof ModelChoiceRefused);
+          assert.ok(refused.failure.offered.some((model) => model.id === "cursor/auto"));
+
+          reads = 0;
+
+          const onCursor = yield* Effect.result(
+            acceptedAgentChoice(owner, { model: "cursor/auto", effort: NO_EFFORT }).pipe(
+              Effect.provide(PLAN_CATALOG),
+              Effect.provideService(CursorModelCatalog, cursor),
+            ),
+          );
+
+          assert.ok(Result.isSuccess(onCursor));
+          assert.equal(reads, 1);
         }),
     );
   },

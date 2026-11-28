@@ -1,7 +1,7 @@
 /**
  * transcript-window.ts -- the newest messages of a coding agent's transcript as Neon Realtime delivers them, one row a message, and each row as the tab draws it.
  *
- * The service's live statement (`transcript-live.ts`'s `window`) answers
+ * The service's live statement (`agent-transcript.ts`'s `window`) answers
  * the newest `TRANSCRIPT_WINDOW` messages by sequence, each row the message
  * as stored and beside it, joined in rather than read after, what the
  * service's page carries for it (`transcript.ts`'s `transcriptMessageOf`):

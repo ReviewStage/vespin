@@ -2,6 +2,7 @@
 
 import { INLINE_SPAN, readInline } from "./composer-markdown.js";
 import { linkLabels } from "./mention-link.js";
+import { namedPlainLinks, type PlainLinkNames } from "./place-chip-model.js";
 
 /** The marks a markdown line opens on: a heading's, a quote's, or a list item's, which a description's or a task's first line may carry. */
 const LINE_MARKS = /^(?:#{1,6}|>|[-*+]|\d+[.)])\s+/u;
@@ -21,12 +22,18 @@ const FENCE_LINE = /^\s*(?:```|~~~)/u;
  * How a description, a worker's task, or a thought is named on its card, its line,
  * and its tab: its first line of words, as plain words, since the line is
  * drawn as text and the markdown is the opened card's. A fence's line is
- * passed over, since its language tag is no words of the text's.
+ * passed over, since its language tag is no words of the text's. Where
+ * `links` is handed, each place of ours it spells bare is said by its
+ * chip's name, as a row's preview says one.
  */
-export function cardTitle(text: string): string {
+export function cardTitle(text: string, links?: PlainLinkNames): string {
   const first = text.split("\n").find((line) => line.trim().length > 0 && !FENCE_LINE.test(line));
 
-  return first === undefined ? "" : plainLine(first);
+  if (first === undefined) return "";
+  const said = plainLine(first);
+
+  // A place of ours spelled bare is said by its chip's name where the reader hands the names it holds (`namedPlainLinks`), and as written where it hands none, as a copy keeps it.
+  return links === undefined ? said : namedPlainLinks(said, links);
 }
 
 function plainLine(line: string): string {

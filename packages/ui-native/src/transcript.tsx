@@ -49,6 +49,7 @@ import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
+  CardMenu,
   CopyWordsMenu,
   type HeldAct,
   HeldLeadProvider,
@@ -80,6 +81,7 @@ import {
   type ChatSender,
   type OriginPart,
   RULE_LOOK,
+  type SaidCard,
   type SaidFile,
   type SaidPicture,
   SHOWN_MEDIA,
@@ -191,6 +193,21 @@ const styles = StyleSheet.create({
   // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
+  // Note that a prompt's card spans the row, as the panel's Prompt card spans the message's measure.
+  promptCard: {
+    alignSelf: "stretch",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.CARD,
+    overflow: "hidden",
+  },
+  promptHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.ROW - 2,
+    paddingHorizontal: SPACE.EDGE - 4,
+    paddingVertical: SPACE.ROW,
+  },
+  promptWords: { gap: SPACE.ROW, paddingHorizontal: SPACE.EDGE - 4, paddingBottom: SPACE.ROW },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
@@ -708,6 +725,9 @@ function CallRow({
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
 
+/** What an automation's prompt's card is called, as the panel's Prompt card names it. */
+const PROMPT_CARD = { LABEL: "Prompt", JOIN: " · " } as const;
+
 /** What a part of a sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
 const OPEN_WORD = "Open";
 const OPEN_ACTION = "open-";
@@ -833,6 +853,94 @@ function OriginBody({ body }: { readonly body: string }) {
         </Text>
       </Press>
       {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
+    </View>
+  );
+}
+
+/**
+ * An automation's prompt as the panel's Prompt card stands: closed under
+ * its label and its first line, the chevron iOS opens a row by at its
+ * lead, and once a press opens it, the prompt's words and the webhook's
+ * body under a head that names the label alone, since the words then say
+ * their own first line. Note that the words stand in the card itself, never
+ * inside its long press menu's host, which holds the head alone, so a prompt
+ * however long is laid out as the transcript's own rows are.
+ */
+function PromptCard({
+  item,
+  card,
+  drawing,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+  readonly card: SaidCard;
+  readonly drawing: RowDrawing;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
+  const { open } = card;
+
+  return (
+    <View
+      style={[
+        styles.promptCard,
+        { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+      ]}
+    >
+      <CardMenu
+        words={item.words}
+        link={drawing.messageLink?.(item.place.row)}
+        width={rowWidth(drawing.column)}
+      >
+        <Press
+          onPress={() => drawing.onToggle(item)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={`${PROMPT_CARD.LABEL}, ${card.title}`}
+          style={styles.promptHead}
+        >
+          <SymbolView
+            name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
+            size={chevron}
+            tintColor={colors.TEXT_MUTED}
+            style={{ width: glyph, height: glyph }}
+            accessibilityElementsHidden
+          />
+          <SymbolView
+            name={glyphSymbol(GLYPH.AUTOMATION)}
+            size={glyph}
+            tintColor={colors.TEXT_MUTED}
+            accessibilityElementsHidden
+          />
+          <Text
+            numberOfLines={large ? undefined : 1}
+            style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          >
+            {PROMPT_CARD.LABEL}
+            {open || card.title === "" ? null : (
+              <>
+                {PROMPT_CARD.JOIN}
+                <Text style={{ color: colors.TEXT, fontWeight: "500" }}>{card.title}</Text>
+              </>
+            )}
+          </Text>
+        </Press>
+      </CardMenu>
+      {open ? (
+        <View style={styles.promptWords}>
+          <Markdown
+            words={item.words}
+            typed
+            repository={drawing.repository}
+            onOpenLink={drawing.onOpenLink}
+            width={rowWidth(drawing.column) - (SPACE.EDGE - 4) * 2}
+            wordPictures={item.wordPictures}
+            wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+          />
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1138,9 +1246,11 @@ function TranscriptRow({
               onRetry={sentFileRetry(drawing, item.place.row, file)}
             />
           ))}
-          {/* Note that a line of files alone draws no empty bubble under them. */}
-          {item.words.trim() === "" &&
-          (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
+          {/* Note that a line of files alone draws no empty bubble under them, and an automation's prompt stands in its card rather than a bubble. */}
+          {item.card !== undefined ? (
+            <PromptCard item={item} card={item.card} drawing={drawing} />
+          ) : item.words.trim() === "" &&
+            (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
             <MessageMenu
               words={item.words}
               at={item.at}
@@ -1170,7 +1280,9 @@ function TranscriptRow({
               </View>
             </MessageMenu>
           )}
-          {item.body === undefined ? null : <OriginBody body={item.body} />}
+          {item.body === undefined || item.card !== undefined ? null : (
+            <OriginBody body={item.body} />
+          )}
           <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
         </View>
       );
@@ -1634,11 +1746,16 @@ const REVEAL_POSITION = 0.35;
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
- * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
- * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
- * while one that lands as they read back holds their place; a line the reader
- * sends brings it into view wherever they stood, just over the composer's
- * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
+ * opens at its newest row (`startRenderingFromBottom`), while a row that
+ * lands as the reader reads back holds their place. It keeps to its newest
+ * row as `@repo/ui/end-anchor` keeps a log on the panel: it opens anchored
+ * there, only the reader's own drag, a row they open, or a reveal lets go,
+ * and while anchored every change of its content's size or its own (a row
+ * landing or growing as its words stream, a picture drawn late, the list
+ * resized) takes it back to its end, which FlashList's own autoscroll does
+ * only as rows land; a line the reader sends brings it into view wherever
+ * they stood, just over the composer's stack, as Messages' does; a reader
+ * scrolled back is offered Jump to latest.
  * Only the rows near the screen are drawn, however long the transcript runs.
  */
 export function AgentTranscript({
@@ -1667,10 +1784,8 @@ export function AgentTranscript({
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlashListRef<TranscriptItem>>(null);
-  // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
-  const anchored = useRef(true);
-  // Whether the list keeps its end in view each time its content grows, since the reader sent a line and has neither scrolled nor opened a row since.
-  const following = useRef(false);
+  // Whether the list keeps to its newest row; it opens there, unless it opens at a row a reveal asked for, so its content settling never takes it off that row.
+  const anchored = useRef(reveal === undefined);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
@@ -1718,7 +1833,7 @@ export function AgentTranscript({
     column,
     placeCall,
     onToggle: (item) => {
-      following.current = false;
+      anchored.current = false;
       drawing.onToggle(item);
     },
   };
@@ -1743,21 +1858,20 @@ export function AgentTranscript({
   // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
-  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and holds it there as the line's row is measured, takes its Not delivered mark, and the composer's stack changes under it, which FlashList's own autoscroll leaves behind the stack: it scrolls once as the row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms.
+  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and anchors it there.
   useOwnSend(items, () => {
     anchored.current = true;
-    following.current = true;
     list.current?.scrollToEnd({ animated: !reduceMotion });
   });
 
+  // Note that every change of the content's size takes an anchored list back to its end, since FlashList's own autoscroll scrolls once as a row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms: a row growing as its words stream, a picture drawn late, or a Not delivered mark would otherwise leave the end behind the composer.
   const onContentSize = useCallback(() => {
-    if (following.current && anchored.current) list.current?.scrollToEnd({ animated: false });
+    if (anchored.current) list.current?.scrollToEnd({ animated: false });
   }, []);
 
   // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
-    following.current = false;
   }, []);
 
   // The older pages as they stand now, which the scroll reads without being made anew for each.
@@ -1844,11 +1958,10 @@ export function AgentTranscript({
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
       onLayout={(event) => {
-        const next = event.nativeEvent.layout.width;
+        setWidth(event.nativeEvent.layout.width);
 
-        // Note that a new width under a reader at the newest row keeps the end in view as the rows reflow taller, as an iPad's page column narrows once the split view stands its sidebar and list beside it, which left a page just opened above its end.
-        if (next !== width && anchored.current) following.current = true;
-        setWidth(next);
+        // Note that the list resized under a reader at its end keeps the end in view, as an iPad's page column narrows once the split view stands its sidebar and list beside it and its rows reflow taller, which left a page just opened above its end.
+        if (anchored.current) list.current?.scrollToEnd({ animated: false });
       }}
     >
       {measured ? (

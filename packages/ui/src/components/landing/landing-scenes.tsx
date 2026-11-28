@@ -48,7 +48,7 @@ import { ComposerFrame } from "../composer-frame/composer-frame.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
 import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
-import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
+import { INLINE_REF_LOOK, InlineRef, type InlineRefLook } from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
 import {
@@ -153,7 +153,7 @@ function AgentPill({
   fit,
 }: {
   name: string;
-  look?: (typeof INLINE_REF_LOOK)[keyof typeof INLINE_REF_LOOK];
+  look?: InlineRefLook;
   fit?: InlineRefFit | undefined;
 }): React.JSX.Element {
   return (
@@ -816,7 +816,7 @@ function PersonPill({
   look = INLINE_REF_LOOK.PILL,
 }: {
   person: LandingPerson;
-  look?: (typeof INLINE_REF_LOOK)[keyof typeof INLINE_REF_LOOK];
+  look?: InlineRefLook;
 }): React.JSX.Element {
   return (
     <InlineRef
@@ -1375,7 +1375,7 @@ const START = {
 } as const;
 
 /**
- * The bot's reactions on the member's message (`STATUS_EMOJI`): 👀 while
+ * The bot's reactions on the member's message: 👀 while
  * the agent works, and ✅ once its pull request merges.
  */
 const STATUS_REACTION = { WORKING: "👀", MERGED: "✅" } as const;

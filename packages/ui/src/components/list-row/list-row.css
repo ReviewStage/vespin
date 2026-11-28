@@ -332,6 +332,20 @@
     padding-inline-end: 0;
   }
 
+  /* Metadata standing beside the press (`metaPresses`) stands at the
+     press's own insets, its end inset given up beside acts or a ⋯ as the
+     press's is, so its columns stand where they would inside the press. */
+  .ui-list-row[data-end-apart="true"] > .ui-list-row-end {
+    padding-block: var(--ui-list-row-inset-block);
+    padding-inline-end: var(--ui-list-row-inset-inline);
+  }
+
+  .ui-list-row[data-end-apart="true"]:not([data-actions="hover"])[data-acts="true"]
+    > .ui-list-row-end,
+  .ui-list-row[data-end-apart="true"][data-more="true"] > .ui-list-row-end {
+    padding-inline-end: 0;
+  }
+
   /* A row's words stand in a column, which a dense row lays in a line and
      a mail-style row hands to the press's tracks. */
   .ui-list-row-text {

@@ -41,7 +41,7 @@ import { Component, type ReactNode } from "react";
 import { ProductMark } from "../../marks/product-mark.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
-import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text, type TextElement } from "../text/text.js";
 
 /** What a place whose drawing failed says where its caller names nothing more fitting. */
 const SHOWN_FAILED = "This page could not be shown.";
@@ -77,7 +77,7 @@ const ROOM = {
 const HEADING_ELEMENT = {
   [RELOAD_ROOM.WINDOW]: TEXT_ELEMENT.H1,
   [RELOAD_ROOM.REGION]: TEXT_ELEMENT.H2,
-} as const satisfies Record<ReloadRoom, (typeof TEXT_ELEMENT)[keyof typeof TEXT_ELEMENT]>;
+} as const satisfies Record<ReloadRoom, TextElement>;
 
 /**
  * What a place whose drawing failed stands in its stead: the faint mark

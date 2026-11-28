@@ -7,12 +7,14 @@ import {
   productElapsedSeconds,
   productLoadCount,
   productLoadMilliseconds,
+  productResumeCounted,
   productSessionCountBucket,
 } from "@repo/features/analytics";
 import Constants from "expo-constants";
 import { useEffect } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
+import { launchLoadWindowEnd } from "./launch-load.js";
 import { launchDelivered } from "./launch-phases.js";
 
 /** How long after a return its load is counted over: past the catch-up a return reads, which held every touch for seconds on a busy account. */
@@ -39,8 +41,10 @@ interface Returning {
  * return (`longtask`, each a stretch of 50 ms or more with no chance to
  * yield), their time in all and the longest, the documents the host
  * delivered to the screens meanwhile (`launchDelivered`), and how long the
- * app was away. Note that the time away is read on the wall clock, since
- * the performance clock may stand still while iOS suspends the app.
+ * app was away. A return from a trip away that began inside the launch's
+ * own load window counts nothing, since `launch:load` already holds it.
+ * Note that the time away is read on the wall clock, since the performance
+ * clock may stand still while iOS suspends the app.
  */
 export function useResumeLoadCount(): void {
   const count = useHostCount();
@@ -94,7 +98,10 @@ export function useResumeLoadCount(): void {
     const change = AppState.addEventListener("change", (next: AppStateStatus) => {
       if (next === "background") {
         finish(PRODUCT_LOAD_WINDOW.CUT_SHORT);
-        wentAwayAt = Date.now();
+        // Note that a trip away that began inside the launch's own load window is the launch's, so its return is never counted as a resume.
+        wentAwayAt = productResumeCounted(performance.now(), launchLoadWindowEnd())
+          ? Date.now()
+          : undefined;
 
         return;
       }
