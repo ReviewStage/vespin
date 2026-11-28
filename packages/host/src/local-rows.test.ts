@@ -110,6 +110,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const root = yield* temporaryDirectoryScoped();
+
       // Note that the rows come to some 1.5 MB of JSON, several slices' worth, as a busy account's Inbox is many.
       const kept = Array.from({ length: 150 }, (_, at) => ({
         id: `p${at}`,

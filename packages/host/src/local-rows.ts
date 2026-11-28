@@ -243,9 +243,11 @@ const loadedFrom = Effect.fnUntraced(function* (
   const stored = yield* Effect.try(() => storedOf(connection, name));
 
   if (stored === undefined) return undefined;
+
   const rowOf = yield* Effect.try(() =>
     connection.prepare("SELECT row FROM row WHERE kind = ? AND key = ?"),
   );
+
   const rows: unknown[] = [];
   let at = 0;
 
