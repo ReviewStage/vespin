@@ -630,13 +630,18 @@ function Runs({
 function markedLook(
   marked: string | undefined,
   drawing: Drawing,
+  struck = false,
 ): { readonly style?: TextStyle; readonly onPress?: () => void } {
   const { openMarked, colors } = drawing;
 
   if (marked === undefined || openMarked === undefined) return {};
 
+  // Note that struck words keep their strike under the underline, so a comment never changes what the words say.
   return {
-    style: { textDecorationLine: "underline", textDecorationColor: colors.ATTENTION },
+    style: {
+      textDecorationLine: struck ? "underline line-through" : "underline",
+      textDecorationColor: colors.ATTENTION,
+    },
     onPress: () => openMarked(marked),
   };
 }
@@ -646,7 +651,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
 
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS: {
-      const look = markedLook(run.marked, drawing);
+      const look = markedLook(run.marked, drawing, run.struck);
 
       return (
         <Text style={[wordStyle(run), look.style]} onPress={look.onPress}>
