@@ -25,7 +25,6 @@ import {
   type NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -66,6 +65,7 @@ import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import { PictureSet } from "./picture-set.js";
 import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
@@ -73,7 +73,7 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -658,7 +658,11 @@ function CallRow({
             >
               <Text
                 numberOfLines={lines}
-                style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_BODY, fontWeight: "500" }}
+                style={{
+                  fontSize: ROLE_SIZE.TIME,
+                  color: colors.TEXT_BODY,
+                  fontWeight: "500",
+                }}
               >
                 {chip}
               </Text>
@@ -670,7 +674,7 @@ function CallRow({
               style={{
                 flexShrink: 1,
                 fontSize: line.code ? ROLE_SIZE.TIME : ROLE_SIZE.ROW_LINE,
-                fontFamily: line.code ? MONOSPACE_FONT : undefined,
+                fontFamily: line.code ? MONOSPACE_FONT : TEXT_FONT,
                 color: line.code ? colors.TEXT_BODY : colors.TEXT_MUTED,
               }}
             >
@@ -681,7 +685,10 @@ function CallRow({
         {item.runOn === undefined ? null : (
           <Text
             numberOfLines={lines}
-            style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+            style={{
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
           >
             {item.runOn}
           </Text>
@@ -816,7 +823,11 @@ function SenderName({
     <SenderPress name={name} address={address} onOpenLink={onOpenLink}>
       <Text
         accessibilityRole="header"
-        style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
+        style={{
+          fontSize: ROLE_SIZE.ROW_LINE,
+          fontWeight: "600",
+          color: colors.TEXT,
+        }}
       >
         {name}
       </Text>
@@ -848,7 +859,13 @@ function OriginBody({ body }: { readonly body: string }) {
           style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
-        <Text style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT_MUTED,
+          }}
+        >
           {WEBHOOK_BODY.LABEL}
         </Text>
       </Press>
@@ -915,7 +932,11 @@ function PromptCard({
           />
           <Text
             numberOfLines={large ? undefined : 1}
-            style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+            style={{
+              flex: 1,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
           >
             {PROMPT_CARD.LABEL}
             {open || card.title === "" ? null : (
@@ -987,7 +1008,11 @@ function FoldRow({
         />
         <Text
           numberOfLines={large ? undefined : 1}
-          style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          style={{
+            flex: 1,
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT_MUTED,
+          }}
         >
           {item.summary}
         </Text>
@@ -1441,7 +1466,12 @@ function TranscriptRow({
                 onRetry={retryOf(drawing, shown.id)}
               />
               {shown.caption === "" ? null : (
-                <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+                <Text
+                  style={{
+                    fontSize: ROLE_SIZE.ROW_LINE,
+                    color: colors.TEXT_MUTED,
+                  }}
+                >
                   {shown.caption}
                 </Text>
               )}
@@ -1473,11 +1503,20 @@ function TranscriptRow({
             <View style={{ flex: 1, gap: 2 }}>
               <Text
                 numberOfLines={large ? undefined : 2}
-                style={{ fontSize: ROLE_SIZE.ROW_TITLE, fontWeight: "500", color: colors.TEXT }}
+                style={{
+                  fontSize: ROLE_SIZE.ROW_TITLE,
+                  fontWeight: "500",
+                  color: colors.TEXT,
+                }}
               >
                 {item.title}
               </Text>
-              <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+              <Text
+                style={{
+                  fontSize: ROLE_SIZE.ROW_LINE,
+                  color: colors.TEXT_MUTED,
+                }}
+              >
                 {PAGE_WORD}
               </Text>
             </View>

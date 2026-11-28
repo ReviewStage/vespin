@@ -1,11 +1,12 @@
 // choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, sound clip, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
 
 import { SymbolView } from "expo-symbols";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";

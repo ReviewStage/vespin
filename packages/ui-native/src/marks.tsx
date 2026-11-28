@@ -15,7 +15,6 @@ import {
   accessibilityLabel,
   animation,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   gaugeStyle,
@@ -44,6 +43,7 @@ import { identityLetter } from "@repo/features/workspace-tile";
 import { memo, useState, useSyncExternalStore } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { managerFaceAsset } from "./manager-face-look.js";

@@ -24,7 +24,6 @@ import {
   ScrollView,
   type ScrollViewInstance,
   StyleSheet,
-  Text,
   type TextLayoutEvent,
   type TextStyle,
   useWindowDimensions,
@@ -68,6 +67,7 @@ import {
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import {
   LoaderImage,
   PICTURE_FIT,
@@ -431,7 +431,12 @@ function MentionChip({
           )}
           <Text
             numberOfLines={1}
-            style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+            style={{
+              flexShrink: 1,
+              fontSize: size,
+              color: colors.TEXT,
+              fontWeight: "500",
+            }}
           >
             {name}
           </Text>
@@ -561,7 +566,12 @@ function SuggestionChip({
         />
         <Text
           numberOfLines={1}
-          style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+          style={{
+            flexShrink: 1,
+            fontSize: size,
+            color: colors.TEXT,
+            fontWeight: "500",
+          }}
         >
           {offered ? look.label : look.name}
         </Text>
@@ -848,7 +858,12 @@ function Line({
     >
       <Runs runs={runs} drawing={drawing} />
       {after === undefined ? null : (
-        <Text style={{ fontSize: ROLE_SIZE.TIME, color: drawing.colors.TEXT_MUTED }}>
+        <Text
+          style={{
+            fontSize: ROLE_SIZE.TIME,
+            color: drawing.colors.TEXT_MUTED,
+          }}
+        >
           {` ${after}`}
         </Text>
       )}

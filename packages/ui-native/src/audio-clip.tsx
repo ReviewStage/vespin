@@ -11,7 +11,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
@@ -19,6 +18,7 @@ import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaFailed } from "./media-failed.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -246,7 +246,13 @@ export function AudioClip({ source, label, onRetry }: AudioClipProps) {
           accessible
           accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
         >
-          <Text style={{ flexShrink: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+          <Text
+            style={{
+              flexShrink: 1,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
+          >
             {CANNOT_PLAY}
           </Text>
         </View>

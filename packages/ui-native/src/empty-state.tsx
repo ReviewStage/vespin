@@ -3,7 +3,6 @@
 import { ContentUnavailableView, ProgressView, ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
-  font,
   foregroundStyle,
   frame,
   multilineTextAlignment,
@@ -13,6 +12,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
+import { font } from "./font.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

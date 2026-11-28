@@ -17,7 +17,7 @@ import {
   useState,
 } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { useScaledSize } from "./accessibility.js";
+import { useBoldText, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
@@ -33,7 +33,7 @@ import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
-import { PROSE_SIZE } from "./tokens/type.js";
+import { LINE_HEIGHT_SCALE, PROSE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -42,7 +42,14 @@ const styles = StyleSheet.create({
   // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
   host: { alignSelf: "stretch" },
   // Note that the words being selected stand as the words drawn do, with no inset of the text view's own, so they don't move as the selection starts.
-  selecting: { padding: 0, paddingTop: 0, paddingBottom: 0, fontSize: PROSE_SIZE },
+  selecting: {
+    padding: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    fontFamily: TEXT_FONT,
+    fontSize: PROSE_SIZE,
+    lineHeight: PROSE_SIZE * LINE_HEIGHT_SCALE,
+  },
 });
 
 /** One act of a held thing's menu: its words, its glyph, and what a press does. */
@@ -716,6 +723,8 @@ function SelectedWords({ words, onDone }: { readonly words: string; readonly onD
   // Whether the words have stood selected, so the caret the view opens with never ends the selection before it is drawn.
   const spanned = useRef(false);
   const plain = markdownPlainText(words);
+  // Note that the words selected stand a step heavier under Bold Text, as the drawn words they stand in for do (`NativeText`).
+  const bold = useBoldText();
 
   // Note that the view takes the focus as it stands, so its selection shows its handles and the edit menu at once, as Messages' Select does.
   useEffect(() => {
@@ -742,7 +751,7 @@ function SelectedWords({ words, onDone }: { readonly words: string; readonly onD
         else if (spanned.current) onDone();
       }}
       onBlur={onDone}
-      style={[styles.selecting, { color: colors.TEXT_BODY }]}
+      style={[styles.selecting, { color: colors.TEXT_BODY, ...(bold && { fontWeight: "500" }) }]}
     />
   );
 }

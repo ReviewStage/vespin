@@ -18,7 +18,6 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   labelStyle,
@@ -34,6 +33,7 @@ import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspa
 import { memo } from "react";
 import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
 import { useRowInset } from "./layout-margin.js";

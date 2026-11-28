@@ -1,9 +1,10 @@
 // glyph-label.tsx -- a glyph as SwiftUI draws it, alone or beside an act's words, whether one of Lucide's from the asset catalog or an SF Symbol.
 
 import { Image, Label } from "@expo/ui/swift-ui";
-import { font, tag } from "@expo/ui/swift-ui/modifiers";
+import { tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useColorScheme } from "react-native";
+import { font } from "./font.js";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
 import { sectionInk } from "./section-ink.js";

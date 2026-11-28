@@ -2,11 +2,12 @@
 
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { SymbolView } from "expo-symbols";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs, useQuickLook } from "./held-menu.js";
 import { KEPT_KIND, type Kept } from "./keep-model.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -168,7 +169,11 @@ export function FileChip({
           <Text
             numberOfLines={large ? undefined : 1}
             ellipsizeMode="middle"
-            style={{ fontSize: ROLE_SIZE.ROW_TITLE, fontWeight: "500", color: colors.TEXT }}
+            style={{
+              fontSize: ROLE_SIZE.ROW_TITLE,
+              fontWeight: "500",
+              color: colors.TEXT,
+            }}
           >
             {name}
           </Text>

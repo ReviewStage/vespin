@@ -7,7 +7,6 @@ import {
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -17,6 +16,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { BAR_GLASS, BAR_MARGIN } from "./glass-bar.js";
 import { type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { Text } from "./text.js";

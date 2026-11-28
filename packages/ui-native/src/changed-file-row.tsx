@@ -2,7 +2,6 @@
 
 import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -14,6 +13,7 @@ import { CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
 import { folderAndName, STATUS_LETTER, STATUS_WORDS } from "@repo/features/changed-files";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { lineCount } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";

@@ -26,7 +26,6 @@ import {
   background,
   buttonStyle,
   disabled,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -50,6 +49,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { addressWords } from "./address-words-model.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage, LookIcon } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";

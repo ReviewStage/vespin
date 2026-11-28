@@ -3,7 +3,6 @@
 import { HStack, Image, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -16,6 +15,7 @@ import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

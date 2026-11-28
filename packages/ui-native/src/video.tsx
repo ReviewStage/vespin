@@ -7,7 +7,7 @@ import { useEvent } from "expo";
 import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoSource, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
@@ -15,6 +15,7 @@ import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { mediaFrame } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import {
   type PictureRef,
   type PictureSource,
@@ -191,7 +192,10 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
             {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
             {failed ? (
               <Text
-                style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+                style={{
+                  fontSize: ROLE_SIZE.ROW_LINE,
+                  color: colors.TEXT_MUTED,
+                }}
                 accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
               >
                 {CANNOT_PLAY}

@@ -1,10 +1,11 @@
 // media-failed.tsx -- what stands where a picture's, a recording's or a file's bytes did not land: the failure's glyph, the panel's short line, and Try again, which reads them again.
 
 import { SymbolView } from "expo-symbols";
-import { type StyleProp, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { InlineHost } from "./inline-host.js";
+import { NativeText as Text } from "./native-text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { ROLE_SIZE } from "./tokens/type.js";
@@ -58,7 +59,11 @@ export function MediaFailed({
           tintColor={colors.TEXT_MUTED}
         />
         <Text
-          style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED, textAlign: "center" }}
+          style={{
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT_MUTED,
+            textAlign: "center",
+          }}
         >
           {line}
         </Text>

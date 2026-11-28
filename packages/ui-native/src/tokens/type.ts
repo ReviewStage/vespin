@@ -30,6 +30,20 @@ export const TYPE_ROLE = {
   SIDEBAR_TITLE: "body",
 } as const;
 
+/** The face code is drawn in where React Native draws it, Geist Mono, which the app embeds (`apps/mobile/app.config.ts`). */
+export const MONOSPACE_FONT = "Geist Mono";
+
+/**
+ * How tall a line of React Native's words stands, as a share of its size: the
+ * system's own face's natural leading (SF Pro's 20.3 pt at 17 pt), pinned so
+ * Geist, whose natural leading is 1.3, reads as densely as the transcript did
+ * (the developer, Nov 28, 2026).
+ */
+export const LINE_HEIGHT_SCALE = 1.193;
+
+/** The face words are drawn in where React Native draws them, Geist, the face SwiftUI sets them in (`font.ts`). */
+export const TEXT_FONT = "Geist";
+
 /** The system's text styles, in points at the Large Dynamic Type size; React Native scales each by the reader's setting. */
 export const TEXT_SIZE = {
   TITLE_2: 22,
@@ -63,8 +77,8 @@ export const ROLE_SIZE = {
  * semibold, and a pushed page's path small and muted over its heading.
  */
 export const BAR_TITLE = {
-  SCREEN: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
-  PATH: { fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "500" },
+  SCREEN: { fontFamily: TEXT_FONT, fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
+  PATH: { fontFamily: TEXT_FONT, fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "500" },
 } as const;
 
 /**
@@ -73,6 +87,3 @@ export const BAR_TITLE = {
  * gives its words more lines rather than cut them to a word or two.
  */
 export const ACCESSIBILITY_SCALE = 1.4;
-
-/** The system's monospaced face, which code is drawn in. */
-export const MONOSPACE_FONT = "Menlo";

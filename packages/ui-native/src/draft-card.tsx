@@ -29,16 +29,11 @@ import {
   draftCopy,
 } from "@repo/features/draft-text";
 import { SymbolView } from "expo-symbols";
-import {
-  type AccessibilityActionEvent,
-  StyleSheet,
-  Text,
-  type TextStyle,
-  View,
-} from "react-native";
+import { type AccessibilityActionEvent, StyleSheet, type TextStyle, View } from "react-native";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";

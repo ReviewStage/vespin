@@ -1,0 +1,25 @@
+# open-foot-row.yaml -- opens the row `ROW` names where it stands at the list's foot on an iPhone, lifting the list a quarter of the window first so the tap lands clear of the tab bar.
+#
+# Note that the lift is made whatever the row's place, because a row at the
+# window's foot can stand with its top edge just above the floating tab bar
+# and its middle, where a tap lands, under the bar's glass: Maestro reads it
+# as wholly shown and above the bar (`clear-of-tabs.yaml` lets it be), and
+# the tap opens nothing. Only a row known to stand low is opened this way,
+# since the lift would carry a row high on the window under the bar at the
+# top. An iPad's tabs float at the window's top and cover no row.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    file: to-row.yaml
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - swipe:
+          start: "50%, 60%"
+          end: "50%, 35%"
+          duration: 800
+- waitForAnimationToEnd
+- tapOn: "${ROW}"

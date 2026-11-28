@@ -21,7 +21,6 @@ import {
   accessibilityLabel,
   buttonStyle,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   layoutPriority,
@@ -44,6 +43,7 @@ import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibili
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
 import { type ComposerSend, pressSend } from "./composer-press.js";
+import { font } from "./font.js";
 import {
   BAR_EDGE,
   BAR_FOOT_GAP,

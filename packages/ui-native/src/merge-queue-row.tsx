@@ -1,11 +1,12 @@
 // merge-queue-row.tsx -- a pull request a merge queue holds, on one line, as the panel's Merge queue page draws its row: the queued mark, its title, how its merge group's checks stand, who opened it, when it should merge, and its number.
 
 import { HStack } from "@expo/ui/swift-ui";
-import { fixedSize, font, foregroundStyle, monospacedDigit } from "@expo/ui/swift-ui/modifiers";
+import { fixedSize, foregroundStyle, monospacedDigit } from "@expo/ui/swift-ui/modifiers";
 import type { CheckSummary } from "@repo/features/agent-wire";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { untilText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
+import { font } from "./font.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { type LongPressGroup, RowFrame, RowHead } from "./list-row.js";
 import { Avatar, type FaceKind, ToneGlyph } from "./marks.js";

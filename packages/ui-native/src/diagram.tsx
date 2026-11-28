@@ -16,7 +16,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { StyleSheet, Text, useColorScheme, View } from "react-native";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
 import {
   DIAGRAM_ANSWER,
@@ -26,6 +26,7 @@ import {
   diagramDocument,
 } from "./diagram-page.js";
 import type { MediaSize } from "./media-frame.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -323,7 +324,13 @@ export function DiagramBlock({
         </Text>
         {drawing === undefined ? null : (
           <Press onPress={() => setShowingCode(!showingCode)} accessibilityRole="button">
-            <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT, fontWeight: "500" }}>
+            <Text
+              style={{
+                fontSize: ROLE_SIZE.ROW_LINE,
+                color: colors.TEXT,
+                fontWeight: "500",
+              }}
+            >
               {showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Text>
           </Press>

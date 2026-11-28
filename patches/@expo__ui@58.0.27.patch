@@ -414,6 +414,164 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49
    }
  
    private static func getHashableSetFromEither(_ array: [Either<String, Double>]?) -> Set<AnyHashable> {
+diff --git a/ios/Modifiers/FontModifier.swift b/ios/Modifiers/FontModifier.swift
+index a9e0dac9d371043fa9a99c1b7b6b9a0916dfbd50..a890f4f4ec8e5e27f26b918ca7f87a610adb4ea6 100644
+--- a/ios/Modifiers/FontModifier.swift
++++ b/ios/Modifiers/FontModifier.swift
+@@ -27,6 +27,21 @@ internal enum FontWeight: String, Enumerable {
+     case .black: .black
+     }
+   }
++
++  // A step heavier, as Bold Text sets a custom face (patched).
++  var bolder: FontWeight {
++    switch self {
++    case .ultraLight: .light
++    case .thin: .regular
++    case .light: .regular
++    case .regular: .medium
++    case .medium: .semibold
++    case .semibold: .bold
++    case .bold: .heavy
++    case .heavy: .black
++    case .black: .black
++    }
++  }
+ }
+ 
+ internal enum FontLeading: String, Enumerable {
+@@ -98,15 +113,20 @@ internal struct FontModifier: ViewModifier, Record {
+   @Field var smallCaps: Bool = false
+   @Field var leading: FontLeading?
+ 
++  // Bold Text, which thickens the system's faces on its own but never a
++  // custom family's: `resolveFont` sets a family's weight a step heavier
++  // while it is on, and SwiftUI redraws on its change (patched).
++  @Environment(\.legibilityWeight) private var legibilityWeight
++
+   func body(content: Content) -> some View {
+-    content.font(resolveFont())
++    content.font(resolveFont(boldText: legibilityWeight == .bold))
+   }
+ 
+   // Shared so the Text-concatenation path (`applyTextModifier`) resolves the
+   // same `Font` as the view path, instead of a fixed-size `Font.custom` that
+   // drops `relativeTo` (Dynamic Type) and `weight`.
+-  func resolveFont() -> Font {
+-    var font = resolveBaseFont()
++  func resolveFont(boldText: Bool = false) -> Font {
++    var font = resolveBaseFont(boldText: boldText)
+     if smallCaps {
+       font = font.smallCaps()
+     }
+@@ -116,7 +136,7 @@ internal struct FontModifier: ViewModifier, Record {
+     return font
+   }
+ 
+-  private func resolveBaseFont() -> Font {
++  private func resolveBaseFont(boldText: Bool) -> Font {
+     if let family = family {
+       let baseSize = size ?? 17
+       var font: Font = if let textStyle = textStyle {
+@@ -124,9 +144,8 @@ internal struct FontModifier: ViewModifier, Record {
+       } else {
+         Font.custom(family, size: baseSize)
+       }
+-      if let weight = weight {
+-        font = font.weight(weight.toSwiftUI())
+-      }
++      let named = weight ?? .regular
++      font = font.weight((boldText ? named.bolder : named).toSwiftUI())
+       return font
+     }
+ 
+diff --git a/ios/Modifiers/View+ModifierArray.swift b/ios/Modifiers/View+ModifierArray.swift
+index c88003a444c8f5bd75b505cedf1d9abdb4c927e7..36f294f1ddc05b21b8c69665d23c5a00da083df6 100644
+--- a/ios/Modifiers/View+ModifierArray.swift
++++ b/ios/Modifiers/View+ModifierArray.swift
+@@ -33,7 +33,7 @@ internal extension View {
+ }
+ 
+ internal extension Text {
+-  func applyTextModifiers(_ modifiers: ModifierArray?, appContext: AppContext?) -> Text {
++  func applyTextModifiers(_ modifiers: ModifierArray?, appContext: AppContext?, boldText: Bool = false) -> Text {
+     guard let modifiers, let appContext else { return self }
+ 
+     return modifiers.reduce(self) { currentText, modifierConfig in
+@@ -45,7 +45,8 @@ internal extension Text {
+         type,
+         to: currentText,
+         appContext: appContext,
+-        params: modifierConfig
++        params: modifierConfig,
++        boldText: boldText
+       )
+     }
+   }
+diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
+index 07a856574df36a69b802bd483caf4e33ae05a976..c5515aa0924c6df2dfba85ac25d6177097e428e5 100644
+--- a/ios/Modifiers/ViewModifierRegistry.swift
++++ b/ios/Modifiers/ViewModifierRegistry.swift
+@@ -1623,7 +1623,8 @@ public class ViewModifierRegistry {
+     _ type: String,
+     to text: Text,
+     appContext: AppContext,
+-    params: [String: Any]
++    params: [String: Any],
++    boldText: Bool = false
+   ) -> Text {
+     switch type {
+     case "bold":
+@@ -1634,7 +1635,7 @@ public class ViewModifierRegistry {
+       return text.monospacedDigit()
+     case "font":
+       guard let modifier = try? FontModifier(from: params, appContext: appContext) else { return text }
+-      return text.font(modifier.resolveFont())
++      return text.font(modifier.resolveFont(boldText: boldText))
+     case "foregroundColor":
+       guard let modifier = try? ForegroundColorModifier(from: params, appContext: appContext),
+             let color = modifier.color else { return text }
+diff --git a/ios/TextView.swift b/ios/TextView.swift
+index 7dfe0a9dc9fafb625067dbb29f80d82f767d63e1..9eb20278d5d7a09e450879a3044bbe8d76a0b4b2 100644
+--- a/ios/TextView.swift
++++ b/ios/TextView.swift
+@@ -32,17 +32,19 @@ public final class TextViewProps: UIBaseViewProps {
+ 
+ public struct TextView: ExpoSwiftUI.View {
+   @ObservedObject public var props: TextViewProps
++  // Bold Text, handed to the fonts of the Texts this one joins (patched).
++  @Environment(\.legibilityWeight) private var legibilityWeight
+ 
+   public init(props: TextViewProps) {
+     self.props = props
+   }
+ 
+   public var body: some View {
+-    buildText(applyModifiers: false)
++    buildText(applyModifiers: false, boldText: legibilityWeight == .bold)
+       .applyModifiers(props.modifiers, appContext: props.appContext, globalEventDispatcher: props.globalEventDispatcher)
+   }
+ 
+-  internal func buildText(applyModifiers: Bool = true) -> Text {
++  internal func buildText(applyModifiers: Bool = true, boldText: Bool = false) -> Text {
+     let text: Text
+ 
+     if #available(iOS 16.0, tvOS 16.0, *),
+@@ -62,12 +64,12 @@ public struct TextView: ExpoSwiftUI.View {
+     }
+ 
+     var result = applyModifiers
+-    ? text.applyTextModifiers(props.modifiers, appContext: props.appContext)
++    ? text.applyTextModifiers(props.modifiers, appContext: props.appContext, boldText: boldText)
+     : text
+ 
+     if let children = props.children {
+       result = children
+-        .compactMap { ($0.childView as? TextView)?.buildText(applyModifiers: true) }
++        .compactMap { ($0.childView as? TextView)?.buildText(applyModifiers: true, boldText: boldText) }
+         .reduce(result, +)
+     }
+     return result
 diff --git a/ios/ToolbarView.swift b/ios/ToolbarView.swift
 index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..c80e790d07f046ac8e39910826b65564e5b943b1 100644
 --- a/ios/ToolbarView.swift

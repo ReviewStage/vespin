@@ -3,7 +3,6 @@
 import { ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
-  font,
   foregroundStyle,
   frame,
   multilineTextAlignment,
@@ -13,6 +12,7 @@ import type { ReactNode } from "react";
 import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BrandMark } from "./brand-mark.js";
+import { font } from "./font.js";
 import { Spacer } from "./screen.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

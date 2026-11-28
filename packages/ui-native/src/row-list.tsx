@@ -26,7 +26,6 @@ import {
   buttonStyle,
   containerRelativeFrame,
   environment,
-  font,
   foregroundStyle,
   frame,
   listRowBackground,
@@ -58,6 +57,7 @@ import {
 import { useColorScheme } from "react-native";
 import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink, headerMenu, rowHeard, sideMargins, stackScrollEdge } from "./interactions.js";

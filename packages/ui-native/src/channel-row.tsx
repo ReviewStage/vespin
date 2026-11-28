@@ -4,10 +4,11 @@
 
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { InlineHost } from "./inline-host.js";
 import { Avatar, ManagerFace } from "./marks.js";
+import { NativeText as Text } from "./native-text.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -195,7 +196,14 @@ export function ChannelMessage({
               </Text>
             </SenderPress>
             {stamp === undefined ? null : (
-              <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{stamp}</Text>
+              <Text
+                style={{
+                  fontSize: ROLE_SIZE.TIME,
+                  color: colors.TEXT_MUTED,
+                }}
+              >
+                {stamp}
+              </Text>
             )}
           </View>
         ) : null}
@@ -243,7 +251,13 @@ export function ThreadReplies({
           />
         ))}
       </View>
-      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.TEXT }}>
+      <Text
+        style={{
+          fontSize: ROLE_SIZE.TIME,
+          fontWeight: "600",
+          color: colors.TEXT,
+        }}
+      >
         {thread.words}
       </Text>
     </Press>
@@ -257,7 +271,13 @@ export function NewRule({ words }: { readonly words: string }) {
   return (
     <View style={styles.rule}>
       <View style={[styles.ruleLine, { backgroundColor: colors.ACCENT }]} />
-      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.ACCENT_TEXT }}>
+      <Text
+        style={{
+          fontSize: ROLE_SIZE.TIME,
+          fontWeight: "600",
+          color: colors.ACCENT_TEXT,
+        }}
+      >
         {words}
       </Text>
     </View>

@@ -20,7 +20,6 @@ import {
   buttonStyle,
   controlSize,
   disabled,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -49,6 +48,7 @@ import {
   SkillSuggestions,
 } from "./composer-head.js";
 import type { ComposerSend } from "./composer-press.js";
+import { font } from "./font.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";

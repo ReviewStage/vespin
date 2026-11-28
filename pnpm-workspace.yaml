@@ -296,13 +296,17 @@ patchedDependencies:
 # `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
 # one `ToolbarItemGroup`, since iOS 26 centers a keyboard bar's lone item,
 # such as a number pad's Done, which neither a `Spacer` inside the item nor
-# a `ToolbarSpacer` moves to the trailing edge. It patches `build/`, which
+# a `ToolbarSpacer` moves to the trailing edge. And it sets a custom
+# family's weight a step heavier under Bold Text (`font` reading SwiftUI's
+# `legibilityWeight`, in a modifier and in a joined Text alike), since Bold
+# Text thickens the system's faces on its own but never an embedded one, such
+# as the app's Geist. It patches `build/`, which
 # Metro and TypeScript read, and the Swift under `ios/`, never `src/`; a modifier alone goes in the
 # app's own `modules/native-interactions` instead, as `sideMargins` does.
 # 58.0.29 changes none of the files it patches. Delete it when an `@expo/ui`
 # release offers a tinted image, a layered one, a photo and an emoji a menu
 # keeps, a catalog image and inks on an empty state, a list's edit mode as a
-# binding, and a toolbar spacer.
+# binding, a toolbar spacer, and a custom face that answers Bold Text.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@shopify/flash-list` 2.3.2 keeps a reader's place as rows above them change
