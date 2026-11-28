@@ -44,7 +44,6 @@ import {
   MARK_ALL_READ,
   MINE,
   narrowedByWhose,
-  SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import {
   filesLost,
@@ -210,6 +209,9 @@ const READING_ACTIVITY = `${readingWords("your activity")}…`;
 
 /** What Activity says where a read of its threads did not answer, in the tab's own word where the panel's says "inbox". */
 const ACTIVITY_NOT_READ = "Activity could not be read.";
+
+/** What Activity's search is named and says before anything is typed, in the tab's own word where the panel's says "inbox". */
+const SEARCH_ACTIVITY = "Search activity";
 
 /** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
 const TRY_AGAIN = "Try again";
@@ -1502,7 +1504,7 @@ function InboxStackList(held: InboxHeld) {
         {choosing !== undefined ? null : (
           <Stack.SearchBar
             ref={field}
-            placeholder={SEARCH_INBOX}
+            placeholder={SEARCH_ACTIVITY}
             placement={placement}
             allowToolbarIntegration={false}
             onChangeText={(event) => setSearch(event.nativeEvent.text)}
@@ -1678,7 +1680,7 @@ function inboxListColumn(
         ? {
             title: INBOX_TITLE,
             menu,
-            search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
+            search: { placeholder: SEARCH_ACTIVITY, text: search, onChange: setSearch },
           }
         : {
             title: choosing.title,

@@ -282,12 +282,12 @@ env:
 # holds the field itself.
 - runFlow:
     when:
-      notVisible: "Search inbox"
+      notVisible: "Search activity"
     commands:
       - tapOn:
           text: "Search"
           above: "Tab Bar"
-- tapOn: "Search inbox"
+- tapOn: "Search activity"
 - inputText: "digest"
 - assertVisible: "Verify the digest's sender domain"
 - assertNotVisible: "Invite limits"
