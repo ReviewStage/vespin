@@ -131,7 +131,9 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { agentActor } from "../tasks/agent-model.js";
+import { SendingAgent } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { useOpenPlace } from "../tasks/use-open-link.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useToast } from "../toast.js";
@@ -202,6 +204,9 @@ import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
 
 /** No Manager read yet, or none listed, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
+
+/** What a phone's row's menu says before its Manager's name, opening the Manager's page. */
+const OPEN_MANAGER = "Open";
 
 /** What a finished one-time automation's row says before when it ran. */
 const RAN_WORD = "Ran";
@@ -534,6 +539,8 @@ function WideAutomationRow({
         titleReplayMasked
         description={line}
         descriptionReplayMasked
+        // Note that the Manager's column presses to its page, so the columns stand beside the row's press, a press on them elsewhere still opening the automation.
+        metaPresses
         meta={
           <AutomationRowMeta
             lead={hiddenWorking}
@@ -592,7 +599,7 @@ function WideAutomationRow({
   );
 }
 
-/** A wide row's Manager column: the Manager's face and name, empty for one that hands its runs to none, and no column where the list names none. */
+/** A wide row's Manager column: the Manager's face and name, hanging its card and opening its page on a press, empty for one that hands its runs to none, and no column where the list names none. */
 function managerColumn(
   automation: AutomationSummary,
   managers: readonly ListedAgent[] | undefined,
@@ -600,7 +607,11 @@ function managerColumn(
   if (managers === undefined) return undefined;
   const manager = automationManager(automation, managers);
 
-  return manager === undefined ? null : <ManagerMark manager={manager} />;
+  if (manager === undefined) return null;
+  const name = agentName(manager);
+
+  // Note that the Manager is named as an agent is wherever it speaks: its face, its card while the pointer rests on it, and its page on a press.
+  return <SendingAgent actor={agentActor(manager, name)} agentId={manager.id} />;
 }
 
 /** The mark a phone's row leads with: its newest run's while that works or failed, else the mark of what fires it (`FiringGlyph`). */
@@ -623,8 +634,9 @@ function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.
  * works or failed; its name; when it runs next and what fires it, or "Off"
  * and what fires it; the Manager its runs land on, where one is, and how its newest run went; and at its end when that run
  * fired and a chevron, faded while it is off. It draws no switch: its menu,
- * a long press or its ⋯, turns it on or off beside Run now, then Copy link,
- * Take over where it may, and Delete.
+ * a long press or its ⋯, opens its Manager's page first where its runs land
+ * on one, turns it on or off beside Run now, then Copy link, Take over where
+ * it may, and Delete.
  */
 function PhoneAutomationRow({
   automation,
@@ -644,6 +656,19 @@ function PhoneAutomationRow({
   const run = automation.lastRun;
   const working = run !== null && automationRunStanding(run) === AUTOMATION_RUN_STANDING.WORKING;
   const manager = managers === undefined ? undefined : automationManager(automation, managers);
+  const openPlace = useOpenPlace();
+
+  // Note that the Manager stands inside the row's press on a phone, so its page opens from the row's menu, as the iOS app's long press opens it.
+  const openManager =
+    manager === undefined || openPlace === undefined
+      ? undefined
+      : {
+          label: `${OPEN_MANAGER} ${agentName(manager)}`,
+          icon: (
+            <ActorMark actor={agentActor(manager, agentName(manager))} size={ACTOR_SIZE.INLINE} />
+          ),
+          onSelect: () => openPlace({ kind: LINK_DESTINATION.AGENT, agentId: manager.id }),
+        };
 
   return (
     <RowHintOptions
@@ -680,6 +705,7 @@ function PhoneAutomationRow({
         menu={rowMenu(
           ROW_THING,
           automationActionGroups({
+            openManager,
             links,
             runNow: runNowAction(runNow.running, runNow.run),
             turn: {
