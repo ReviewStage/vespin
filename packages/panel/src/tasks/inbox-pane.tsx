@@ -26,6 +26,7 @@ import {
   readersItem,
   sentStamp,
 } from "@repo/features/inbox-list-model";
+import { askHasControls } from "@repo/features/inbox-settled-asks";
 import {
   filesLost,
   UNDELIVERED_FILES_LOST,
@@ -141,7 +142,6 @@ import {
   bareKey,
   DraftQuestion,
   HeldControls,
-  hasControls,
   INBOX_ASK_BOX,
   INBOX_ASK_KIND,
   INBOX_ASK_STANDING,
@@ -715,7 +715,7 @@ function HeldAsk({
   title: string;
 }): React.JSX.Element | null {
   // A to-do naming no steps draws the item's title as its one step, and a later post may have renamed the item since, so the title it drew then is not known.
-  if (!hasControls(ask) || (ask.type === INBOX_ASK.DO && ask.steps.length === 0)) return null;
+  if (!askHasControls(ask) || (ask.type === INBOX_ASK.DO && ask.steps.length === 0)) return null;
 
   return (
     <div

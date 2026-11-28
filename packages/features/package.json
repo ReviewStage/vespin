@@ -171,6 +171,7 @@
     "./inbox-write-words": "./src/inbox-write-words.js",
     "./inbox-ask-words": "./src/inbox-ask-words.js",
     "./inbox-draft": "./src/inbox-draft.js",
+    "./inbox-settled-asks": "./src/inbox-settled-asks.js",
     "./inbox-undelivered": "./src/inbox-undelivered.js",
     "./inbox-list-model": "./src/inbox-list-model.js",
     "./inbox-digest": "./src/inbox-digest.js",

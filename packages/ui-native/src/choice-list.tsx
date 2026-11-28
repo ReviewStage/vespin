@@ -20,6 +20,7 @@ import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider, RecommendedTag } from "
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
+import { useSteppedBack } from "./stepped-back.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -38,7 +39,8 @@ export type Choice = {
 export type NoneChoice = {
   readonly label: string;
   readonly picked: boolean;
-  readonly onPress: () => void;
+  /** Picks it; none for an ask no longer waiting, whose row stands as it was answered. */
+  readonly onPress?: (() => void) | undefined;
 };
 
 type ChoiceListProps = {
@@ -49,8 +51,8 @@ type ChoiceListProps = {
   readonly picked: readonly string[];
   /** Whether a person may pick several, each pick checked at its row's end; the caller says so in `title`, since the rows read the same either way. */
   readonly multiple?: boolean | undefined;
-  /** Called with the labels picked once a row is pressed. */
-  readonly onChange: (picked: readonly string[]) => void;
+  /** Called with the labels picked once a row is pressed; none for an ask no longer waiting, whose rows stand as it was answered and take no press. */
+  readonly onChange?: ((picked: readonly string[]) => void) | undefined;
   /** Words over the options, small and muted. */
   readonly title?: string | undefined;
   /** None of these, offered as a row after the options where their media asks a pick of them; none where it is not offered. */
@@ -106,13 +108,27 @@ function ChoiceRow({
   readonly choice: Choice;
   readonly picked: boolean;
   readonly recommended: boolean;
-  readonly onPress: () => void;
+  /** Picks the option; none for an ask no longer waiting, whose row stands as it was answered. */
+  readonly onPress: (() => void) | undefined;
   readonly repository: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
 }) {
   const stacked = useAccessibilitySize();
+  const stepped = useSteppedBack();
   const markSize = useScaledSize(MARK_SIZE.GLYPH);
   const tag = recommended ? <RecommendedTag /> : null;
+
+  const heard = [
+    accessibilityLabel(heardAs(choice, recommended)),
+    ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
+  ];
+
+  const end = (
+    <>
+      {stacked ? null : tag}
+      {picked ? <PickedCheck /> : null}
+    </>
+  );
 
   return (
     <HStack
@@ -125,7 +141,12 @@ function ChoiceRow({
       <VStack alignment="leading" spacing={SPACE.TIGHT}>
         <RNHostView matchContents={{ vertical: true }}>
           <Pressable accessible={false} onPress={onPress} style={{ gap: 2 }}>
-            <Markdown words={choice.label} repository={repository} onOpenLink={onOpenLink} />
+            <Markdown
+              words={choice.label}
+              look={stepped ? MARKDOWN_LOOK.STEPPED_BACK : MARKDOWN_LOOK.MESSAGE}
+              repository={repository}
+              onOpenLink={onOpenLink}
+            />
             {choice.detail === undefined ? null : (
               <Markdown
                 words={choice.detail}
@@ -138,26 +159,28 @@ function ChoiceRow({
         </RNHostView>
         {stacked ? tag : null}
       </VStack>
-      <Button
-        onPress={onPress}
-        modifiers={[
-          buttonStyle("plain"),
-          accessibilityLabel(heardAs(choice, recommended)),
-          ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
-        ]}
-      >
-        {/* Note that the end keeps the check's room while nothing is picked, so it is still a press and an element VoiceOver finds. */}
+      {onPress === undefined ? (
+        // Note that a row taking no press keeps its end as the element VoiceOver hears, the button's look and press left out.
         <HStack
           spacing={SPACE.ROW}
-          modifiers={[
-            frame({ minWidth: markSize, minHeight: markSize }),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          ]}
+          modifiers={[frame({ minWidth: markSize, minHeight: markSize }), ...heard]}
         >
-          {stacked ? null : tag}
-          {picked ? <PickedCheck /> : null}
+          {end}
         </HStack>
-      </Button>
+      ) : (
+        <Button onPress={onPress} modifiers={[buttonStyle("plain"), ...heard]}>
+          {/* Note that the end keeps the check's room while nothing is picked, so it is still a press and an element VoiceOver finds. */}
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[
+              frame({ minWidth: markSize, minHeight: markSize }),
+              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+            ]}
+          >
+            {end}
+          </HStack>
+        </Button>
+      )}
     </HStack>
   );
 }
@@ -177,7 +200,9 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
  * each, pressed to pick it, the recommended one tagged, with a hairline
  * between the rows. Each pick is checked at its row's end in copper, as
  * `PickRows` and iOS's own Settings check a choice, with no mark leading an
- * unpicked row, whether one or several may be picked.
+ * unpicked row, whether one or several may be picked. With no `onChange`,
+ * the rows stand as an answered ask left them, as the panel's held controls
+ * do: its picks checked at full strength, and no row taking a press.
  */
 export function ChoiceList(props: ChoiceListProps) {
   const {
@@ -218,7 +243,11 @@ export function ChoiceList(props: ChoiceListProps) {
               choice={choice}
               picked={picked.includes(choice.label)}
               recommended={recommended.includes(choice.label)}
-              onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
+              onPress={
+                onChange === undefined
+                  ? undefined
+                  : () => onChange(nextPicked(picked, choice.label, multiple))
+              }
               repository={repository}
               onOpenLink={onOpenLink}
             />
