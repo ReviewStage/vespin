@@ -930,9 +930,7 @@ function taskNumberedBy(query: string): SQL {
  * not reach is never found: the latest changed of those whose name holds
  * every word of it, at most `TASK_SEARCH_LIMIT`, and each whose number its
  * key names, which no limit leaves out. It is read once, as a window
- * searches, and never followed, so it wakes as the list does. Note that a
- * name is matched by a scan of the account's tasks with no index of its
- * own, as the list itself reads them all.
+ * searches, and never followed, so it wakes as the list does.
  */
 export const taskSearchRead = bindLiveRead(TASK_SEARCH_READ, {
   reads: TASK_LIST_TABLES,
