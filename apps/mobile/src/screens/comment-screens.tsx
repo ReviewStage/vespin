@@ -1,8 +1,9 @@
 // comment-screens.tsx -- one thread of a task's description comments, in the comment sheet over the task: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
 import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
-import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
+import { descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import { DESCRIPTION_COMMENT_SCOPE } from "@repo/features/description-comment-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
@@ -25,6 +26,7 @@ import {
   useColors,
   useFailureNotices,
 } from "@repo/ui-native";
+import { randomUUID } from "expo-crypto";
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
@@ -32,6 +34,7 @@ import { LINK_OPENS, useOpenLink } from "../open-link.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import {
   type CommentReply,
+  type StartSpan,
   threadMessages,
   threadOpen,
   useCommentMedia,
@@ -72,18 +75,35 @@ export function useOpenCommentThread(): (taskId: string, threadId: string) => vo
     router.push({ pathname: COMMENT_ROUTE.THREAD, params: { id: threadId, task: taskId } });
 }
 
-/** Opens a new thread on a span of a task's description, its Markdown offsets and the words it quotes, in the comment sheet over the screen in front. */
-export function useOpenNewComment(): (
-  taskId: string,
-  span: { readonly from: number; readonly to: number; readonly quote: string },
-) => void {
+/** A new thread's span: a block's, by its Markdown offsets and the words it quotes, or words selected, with the Markdown they were measured in. */
+type NewCommentSpan =
+  | { readonly from: number; readonly to: number; readonly quote: string }
+  | {
+      readonly from: number;
+      readonly to: number;
+      readonly quote: string;
+      readonly text: string;
+    };
+
+/** Opens a new thread on a span of a task's description in the comment sheet over the screen in front: a block's, found again in the description, or words selected, kept with the Markdown they were measured in. */
+export function useOpenNewComment(): (taskId: string, span: NewCommentSpan) => void {
   const router = useRouter();
 
-  return (taskId, { from, to, quote }) =>
-    router.push({
-      pathname: COMMENT_ROUTE.NEW,
-      params: { task: taskId, from: `${from}`, to: `${to}`, quote },
-    });
+  return (taskId, span) => {
+    const { from, to, quote } = span;
+    const params = { task: taskId, from: `${from}`, to: `${to}`, quote };
+
+    if (!("text" in span)) {
+      router.push({ pathname: COMMENT_ROUTE.NEW, params });
+
+      return;
+    }
+
+    const held = randomUUID();
+    const block = { from, to, quote, scope: DESCRIPTION_COMMENT_SCOPE.WORDS };
+    selectedSpans.set(held, { text: span.text, block });
+    router.push({ pathname: COMMENT_ROUTE.NEW, params: { ...params, held } });
+  };
 }
 
 /**
@@ -178,11 +198,20 @@ const openingThreads = new Set<string>();
 /** Refusals that came before their thread's page stood, by the thread's id, which the page reopens as it first stands. */
 const earlyRefusals = new Map<string, Reopening>();
 
-/** The block a refused start was measured on, with the description's text it was measured in, kept for the field it reopens. */
+/** The block or words a start is measured on, with the description's text it was measured in, kept for the field that sends it. */
 interface MeasuredBlock {
   readonly text: string;
-  readonly block: DescriptionBlock;
+  readonly block: StartSpan;
 }
+
+/**
+ * Words selected in the description for a new thread, by the key the new
+ * thread's route names, with the Markdown they were measured in, which is
+ * too large for a route to carry. Note that the field's Markdown may hold
+ * words not saved yet, so the span is never found again in the description
+ * as read, as a block's is.
+ */
+const selectedSpans = new Map<string, MeasuredBlock>();
 
 /**
  * The blocks refused starts were measured on, by the thread id each went
@@ -424,15 +453,17 @@ export function NewCommentScreen() {
     to = "",
     quote = "",
     again,
+    held,
   } = useLocalSearchParams<{
     task: string;
     from: string;
     to: string;
     quote: string;
     again?: string;
+    held?: string;
   }>();
 
-  return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} />;
+  return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} held={held} />;
 }
 
 /** A new thread on one block of a task's description, as `NewCommentScreen` describes it. */
@@ -442,6 +473,7 @@ function NewComment({
   to,
   quote,
   again,
+  held: selected,
 }: {
   readonly taskId: string;
   readonly from: string;
@@ -449,6 +481,8 @@ function NewComment({
   readonly quote: string;
   /** The thread id a refused start went under, whose field this opens again on the block it was measured on. */
   readonly again?: string | undefined;
+  /** The key words selected in the description were kept under (`selectedSpans`). */
+  readonly held?: string | undefined;
 }) {
   const router = useRouter();
   const half = useSheetAtHalf();
@@ -468,7 +502,11 @@ function NewComment({
 
   // Note that the block is kept as it stood when first found, with the text it was measured in, because an edit elsewhere moves its offsets while it is being commented on, and the service carries a span measured in that text over to the text as it stands.
   const [held, setHeld] = useState<MeasuredBlock | undefined>(() =>
-    again === undefined ? undefined : refusedBlocks.get(again),
+    again !== undefined
+      ? refusedBlocks.get(again)
+      : selected === undefined
+        ? undefined
+        : selectedSpans.get(selected),
   );
 
   if (held === undefined && found !== undefined) setHeld({ text: body, block: found });

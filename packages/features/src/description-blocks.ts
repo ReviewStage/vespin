@@ -9,6 +9,7 @@
  */
 
 import type { Nodes, Root } from "mdast";
+import { textChange } from "./description-comment-anchor.js";
 import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
 import { keptMarkdownTree, markdownTree } from "./markdown-tree.js";
 
@@ -143,4 +144,30 @@ function blocksIn(text: string, tree: Root): readonly DescriptionBlock[] {
 
       return { from, to, drawn: `${text.slice(from, to)}${after}`, quote: quote || undefined };
     });
+}
+
+/** The object character a rich field draws in the place of an inline thing that holds no words, such as a pill or a card. */
+const OBJECT_CHARACTER = "\uFFFC";
+
+/**
+ * The words selected in a rich field, `from` to `to` in `drawn`, the field's
+ * words as it draws them (a line each, each pill and card the object
+ * character), as a span of `markdown`, the Markdown the field would save
+ * now, and the words a thread on them quotes; none where the Markdown keeps
+ * none of them. Note that the two texts are laid over each other
+ * (`textChange`), as the desktop's editor measures a selection, so the
+ * Markdown's syntax in between puts nothing off.
+ */
+export function drawnSpan(
+  drawn: string,
+  markdown: string,
+  from: number,
+  to: number,
+): { readonly from: number; readonly to: number; readonly quote: string } | undefined {
+  const quote = drawn.slice(from, to).replaceAll(OBJECT_CHARACTER, "").trim();
+  const span = quote === "" ? undefined : textChange(drawn, markdown)({ from, to });
+
+  if (span === undefined) return undefined;
+
+  return { ...span, quote: quote.slice(0, DESCRIPTION_COMMENT_BOUNDS.MAX_QUOTE_CHARS) };
 }

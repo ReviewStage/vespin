@@ -3491,6 +3491,7 @@ function InlineDescriptionSection({
 }) {
   const { task } = overview;
   const inline = useInlineDescription(task.id, overview.workspace?.id, body, chrome);
+  const openNewComment = useOpenNewComment();
   const { field } = inline;
   // Note that what an `@` offers docks over the keyboard on a pushed page, so the caret's line keeps clear of it as of the keyboard; a split view's column ends over the offer at its foot, which the field clears on its own, and no dock stands around it there.
   const room = useDockRoom();
@@ -3520,6 +3521,7 @@ function InlineDescriptionSection({
             fitsWords
             keepClear={inline.mentions === undefined ? undefined : room}
             opensAt={inline.opensAt}
+            onComment={(commented) => openNewComment(task.id, commented)}
             testID={DESCRIPTION_FIELD_ID}
           />
         </FieldRow>

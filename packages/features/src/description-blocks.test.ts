@@ -4,6 +4,7 @@ import {
   DESCRIPTION_HEAD_MOST,
   descriptionBlocks,
   descriptionHeadBlocks,
+  drawnSpan,
 } from "./description-blocks.js";
 
 // A comment's anchor must stand over its block's own Markdown, measured as the service measures it, or the thread lands on the wrong words.
@@ -44,4 +45,18 @@ test("a long description's head holds its first blocks whole, each at its place 
   assert.ok(text.length > DESCRIPTION_HEAD_MOST);
   assert.ok(head.length > 0 && head.length < whole.length);
   assert.deepEqual(head, whole.slice(0, head.length));
+});
+
+// A thread started on words selected in the phone's rich field must anchor the same words in the Markdown, or it lands beside them once the field's look (bold, a link, a list's marker) has taken the syntax out.
+test("words selected in the drawn field stand over the same words in the Markdown, syntax and all", () => {
+  const markdown = "## Goal\n\nInvite by **email** or [link](https://example.com).\n\n- resend\n";
+  const drawn = "Goal\nInvite by email or link.\nresend";
+  const from = drawn.indexOf("email or link");
+  const span = drawnSpan(drawn, markdown, from, from + "email or link".length);
+
+  assert.deepEqual(span, {
+    from: markdown.indexOf("email"),
+    to: markdown.indexOf("link") + "link".length,
+    quote: "email or link",
+  });
 });
