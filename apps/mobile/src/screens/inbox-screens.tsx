@@ -18,7 +18,6 @@ import {
   holderTask,
   holderWorkspaceId,
   INBOX_MEDIA,
-  INBOX_NOT_READ,
   INBOX_READ_MARK,
   INBOX_RUN_LABEL,
   INBOX_SCOPES,
@@ -45,7 +44,6 @@ import {
   MARK_ALL_READ,
   MINE,
   narrowedByWhose,
-  READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import {
@@ -68,6 +66,7 @@ import {
   noResultsForWords,
   noSelectionWords,
   PATH_OPENS,
+  readingWords,
   SELECTION_WORDS,
   selectedWords,
   TERM,
@@ -205,6 +204,12 @@ import { useRemind } from "./inbox-remind.js";
 
 /** The Inbox's name, Activity, at its head and on its back button, as its tab and its sidebar place name it. */
 const INBOX_TITLE = "Activity";
+
+/** What Activity says while the account's feed of its threads is first read, in the tab's own word where the panel's says "inbox". */
+const READING_ACTIVITY = `${readingWords("your activity")}…`;
+
+/** What Activity says where a read of its threads did not answer, in the tab's own word where the panel's says "inbox". */
+const ACTIVITY_NOT_READ = "Activity could not be read.";
 
 /** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
 const TRY_AGAIN = "Try again";
@@ -586,12 +591,12 @@ function InboxEmpty({
 }) {
   // Note that a feed that failed stays failed, but one that answered still reads until the screen's own rows answered, since the kept rows load after the document says the feed stands.
   if (feed !== INBOX_FEED.FAILED && (feed === INBOX_FEED.READING || !read))
-    return <EmptyState title={READING_INBOX} symbol={GLYPH.ACTIVITY} loading />;
+    return <EmptyState title={READING_ACTIVITY} symbol={GLYPH.ACTIVITY} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
-        title={INBOX_NOT_READ}
+        title={ACTIVITY_NOT_READ}
         symbol={GLYPH.FAILED}
         action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
@@ -1334,12 +1339,12 @@ function ThreadNotDrawn({
   readonly onRetry: () => void;
 }) {
   if (feed === INBOX_FEED.READING)
-    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
+    return <EmptyState title={READING_ACTIVITY} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
-        title={INBOX_NOT_READ}
+        title={ACTIVITY_NOT_READ}
         symbol={GLYPH.FAILED}
         action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
