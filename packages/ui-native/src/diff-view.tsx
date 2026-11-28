@@ -1,14 +1,23 @@
 // diff-view.tsx -- one changed file's diff as the app draws it: the patch read into columns once (`diff-view-model.ts`) and handed to the native view with the file's path, which colors its code by the path's language, in the theme's inks and the footnote's size, scaled with Dynamic Type.
 
-import type { ReviewThread } from "@repo/features/agent-wire";
+import { DIFF_SIDE, type DiffSide, type ReviewThread } from "@repo/features/agent-wire";
 import { useMemo } from "react";
 import { StyleSheet, useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
-import { drawnDiff } from "./diff-view-model.js";
+import { DRAWN_ROW, drawnDiff } from "./diff-view-model.js";
 import { type NativeDiffLook, NativeDiffView } from "./diff-view-native.js";
 import { useColors } from "./tokens/colors.js";
 import { SYNTAX_COLORS } from "./tokens/syntax-colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
+
+/** What a code row's long press menu says, in the panel's words. */
+const LINE_MENU_WORDS = { comment: "Comment on line", copy: "Copy line" } as const;
+
+/** A line of the file a comment is asked on: its number, and the side it counts on. */
+export interface DiffLineTarget {
+  readonly line: number;
+  readonly side: DiffSide;
+}
 
 /** No threads, the same array every draw, so the diff is not read again for want of them. */
 const NO_THREADS: readonly ReviewThread[] = [];
@@ -29,7 +38,8 @@ const styles = StyleSheet.create({
  * module), in GitHub's light or dark theme as the window stands. Each
  * review thread on the file stands as a card under the line it is on, as
  * GitHub's diff stands it, saying who started it, their first line, and
- * how many replies follow; a press on it opens the thread. A patch that does not read as a unified
+ * how many replies follow; a press on it opens the thread. A long press on
+ * a line of code offers Comment on line and Copy line, the system's own menu. A patch that does not read as a unified
  * diff draws nothing, which its screen says in words (`fileNotice`).
  */
 export function DiffView({
@@ -38,6 +48,7 @@ export function DiffView({
   wrap = true,
   threads = NO_THREADS,
   onThreadPress,
+  onLineComment,
   testID,
 }: {
   readonly patch: string;
@@ -48,6 +59,8 @@ export function DiffView({
   readonly threads?: readonly ReviewThread[] | undefined;
   /** Opens a review thread whose card was pressed. */
   readonly onThreadPress?: ((thread: ReviewThread) => void) | undefined;
+  /** Comment on line, from a line's long press menu: the line, on the side it counts on, a removed line's on the old side and any other's on the new. */
+  readonly onLineComment?: ((target: DiffLineTarget) => void) | undefined;
   readonly testID?: string | undefined;
 }) {
   const colors = useColors();
@@ -81,6 +94,16 @@ export function DiffView({
 
         if (thread !== undefined) onThreadPress?.(thread);
       }}
+      onLineComment={({ nativeEvent }) => {
+        const { kinds, oldLines, newLines } = drawn.columns;
+        const removed = kinds[nativeEvent.row] === DRAWN_ROW.REMOVED;
+        const line = (removed ? oldLines : newLines)[nativeEvent.row];
+
+        if (line !== undefined && line > 0) {
+          onLineComment?.({ line, side: removed ? DIFF_SIDE.LEFT : DIFF_SIDE.RIGHT });
+        }
+      }}
+      words={LINE_MENU_WORDS}
       style={styles.fill}
       testID={testID}
     />

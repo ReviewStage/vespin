@@ -31,6 +31,12 @@ interface NativeDiffViewProps {
   readonly onThreadPress?:
     | ((event: NativeSyntheticEvent<{ readonly row: number }>) => void)
     | undefined;
+  /** Comment on line, from a code row's long press menu, by the row. */
+  readonly onLineComment?:
+    | ((event: NativeSyntheticEvent<{ readonly row: number }>) => void)
+    | undefined;
+  /** What a code row's long press menu says: commenting on its line, which its number follows, and copying it. */
+  readonly words: { readonly comment: string; readonly copy: string };
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;
 }

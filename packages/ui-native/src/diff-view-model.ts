@@ -1,6 +1,6 @@
 // diff-view-model.ts -- a changed file's patch as the app's native diff view takes it: one row per line of the diff, a hunk's header included, and a row for each review thread under the line it is on, handed as columns rather than an object per row, so a diff of thousands of lines crosses to the view as a handful of values.
 
-import { DIFF_SIDE, type ReviewThread } from "@repo/features/agent-wire";
+import { DIFF_SIDE, type DiffSide, type ReviewThread } from "@repo/features/agent-wire";
 import { DIFF_ROW, type DiffRowKind, patchHunks } from "@repo/features/diff-hunks";
 
 /** What a row of the drawn diff is, one letter each, as the view reads them: a hunk's header, a line of context, one added, one removed, or git's note on the line above it. */
@@ -32,15 +32,13 @@ export const THREAD_PARTS = "\u001f";
 /** What a thread row says where it stands on no line the diff shows, before its detail. */
 const UNPLACED_WORDS = "On a line this diff doesn't show";
 
-/** How many columns a tab is drawn as, so a row's width is its length in characters, as the view counts it. */
-const TAB_COLUMNS = 4;
-
 /**
  * A patch's rows as the view takes them, each column one value: the rows'
  * kinds, a letter each (`DRAWN_ROW`); their line numbers on the old side
  * and the new, `NO_LINE` where a row stands on no side of it; and their
- * words, a row to a line, a tab spelled as `TAB_COLUMNS` spaces, so every
- * character stands one column wide in the monospaced face.
+ * words, a row to a line, as the patch wrote them, tabs and all, so a
+ * line copied from the view is the file's own; the view draws a tab as
+ * spaces for its width.
  */
 export interface DiffColumns {
   readonly kinds: string;
@@ -95,7 +93,6 @@ export function drawnDiff(
   const newLines: number[] = [];
   const lines: string[] = [];
   const placedThreads = new Map<number, ReviewThread>();
-  const tab = " ".repeat(TAB_COLUMNS);
   const own = threads.filter((thread) => thread.path === path && thread.comments.length > 0);
 
   // The threads by the line they stand on, on each side, where they stand on one.
@@ -140,7 +137,7 @@ export function drawnDiff(
       kinds.push(ROW_LETTER[row.kind]);
       oldLines.push(row.oldLine ?? NO_LINE);
       newLines.push(row.newLine ?? NO_LINE);
-      lines.push(row.text.replaceAll("\t", tab));
+      lines.push(row.text);
 
       // A removed row stands the old side's threads under it, an added row the new side's, and a row of context both.
       const under = [
@@ -160,4 +157,22 @@ export function drawnDiff(
     columns: { kinds: kinds.join(""), oldLines, newLines, text: lines.join("\n") },
     threads: placedThreads,
   };
+}
+
+/** The words of one line of a patch, on the side it counts on, as a comment on it quotes them; none where the patch shows no such line. */
+export function diffLineText(patch: string, line: number, side: DiffSide): string | undefined {
+  for (const hunk of patchHunks(patch) ?? []) {
+    for (const row of hunk.rows) {
+      const at = side === DIFF_SIDE.LEFT ? row.oldLine : row.newLine;
+
+      if (
+        at === line &&
+        (side === DIFF_SIDE.LEFT ? row.kind !== DIFF_ROW.ADDED : row.kind !== DIFF_ROW.REMOVED)
+      ) {
+        return row.text;
+      }
+    }
+  }
+
+  return undefined;
 }

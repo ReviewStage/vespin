@@ -95,6 +95,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_COMMENT: "comment",
   /** One file a pull request changes, its diff, under its own route, the file named by its path in the query. */
   PULL_REQUEST_FILE: "file",
+  /** A new review comment on one line of a pull request's file, under its own route, the file, line, and side in the query. */
+  PULL_REQUEST_LINE_COMMENT: "line-comment",
   /** A person's page in the workspace the phone works in. */
   PERSON: "/tasks/person",
   /** One thread of a Manager's chat, by the message it hangs on, under its agent's route. */
@@ -350,6 +352,31 @@ export function iosPullRequestFileRoute(
   const query = new URLSearchParams({ [IOS_PULL_REQUEST_FILE_PARAM]: path });
 
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_FILE}?${query}`;
+}
+
+/** The queries a new review comment's route names its line by. */
+export const IOS_PULL_REQUEST_LINE_COMMENT_PARAM = {
+  PATH: "path",
+  LINE: "line",
+  SIDE: "side",
+} as const;
+
+/** The app's route for a new review comment on one line of a pull request's file, by the pull request's workspace, repository, and number, and the file's path, the line, and the side it counts on. */
+export function iosPullRequestLineCommentRoute(
+  pullRequest: {
+    readonly workspaceId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+  target: { readonly path: string; readonly line: number; readonly side: string },
+): string {
+  const query = new URLSearchParams({
+    [IOS_PULL_REQUEST_LINE_COMMENT_PARAM.PATH]: target.path,
+    [IOS_PULL_REQUEST_LINE_COMMENT_PARAM.LINE]: String(target.line),
+    [IOS_PULL_REQUEST_LINE_COMMENT_PARAM.SIDE]: target.side,
+  });
+
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_LINE_COMMENT}?${query}`;
 }
 
 /**
