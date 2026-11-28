@@ -641,10 +641,10 @@ export function taskBranches(rows: readonly DrawnTaskRow[]): readonly TaskBranch
   return top;
 }
 
-/** What a reader opened of a tree: the groups folded shut, and each group's parents standing open, by the group's key. */
+/** What a reader opened of a tree: whether a group stands folded shut, and the parents whose sub-tasks stand open, by id. */
 export interface TaskTreeShown {
-  readonly folded: ReadonlySet<string>;
-  readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly folded: (group: TaskTreeGroup) => boolean;
+  readonly opened: ReadonlySet<string>;
 }
 
 /**
@@ -659,18 +659,16 @@ export function drawnTaskIds(tree: TaskTree, shown: TaskTreeShown): ReadonlySet<
   const drawn = new Set<string>();
   const groups = [tree.pinned, tree.following, ...tree.sections, ...tree.tasks];
 
-  const walk = (branches: readonly TaskBranch[], opened: ReadonlySet<string> | undefined) => {
+  const walk = (branches: readonly TaskBranch[]) => {
     for (const { row, branches: under } of branches) {
       drawn.add(row.task.id);
 
-      if (opened?.has(row.task.id) === true) walk(under, opened);
+      if (shown.opened.has(row.task.id)) walk(under);
     }
   };
 
   for (const group of groups) {
-    if (group !== undefined && !shown.folded.has(group.key)) {
-      walk(taskBranches(group.rows), shown.opened.get(group.key));
-    }
+    if (group !== undefined && !shown.folded(group)) walk(taskBranches(group.rows));
   }
 
   return drawn;

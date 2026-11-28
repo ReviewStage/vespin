@@ -8,6 +8,7 @@ import {
   TASK_TREE_GROUP,
   type TaskBranch,
   type TaskTree,
+  type TaskTreeGroup,
   taskBranches,
   taskRowFace,
   taskTree,
@@ -303,12 +304,14 @@ test("a tree draws every group's top rows and an open parent's sub-tasks, none o
     ],
   };
 
-  const folded = new Set(["ideas"]);
+  const folded = (group: TaskTreeGroup) => group.key === "ideas";
 
-  expect([...drawnTaskIds(tree, { folded, opened: new Map() })]).toEqual(["Digest", "Invites"]);
-  expect([
-    ...drawnTaskIds(tree, { folded, opened: new Map([["ada/relay", new Set(["Invites"])]]) }),
-  ]).toEqual(["Digest", "Invites", "Invite copy"]);
+  expect([...drawnTaskIds(tree, { folded, opened: new Set() })]).toEqual(["Digest", "Invites"]);
+  expect([...drawnTaskIds(tree, { folded, opened: new Set(["Invites"]) })]).toEqual([
+    "Digest",
+    "Invites",
+    "Invite copy",
+  ]);
 });
 
 test("a row wears a teammate's face, the unassigned mark where no one is on it, and none for the reader's own", () => {

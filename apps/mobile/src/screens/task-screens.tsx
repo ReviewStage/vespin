@@ -4054,9 +4054,7 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
   const managers = useWorkspaceManagers(workspaceId);
   const managersListed = useManagersListed(workspaceId);
   const shared = useMemo(() => ({ screen, hold }), [screen, hold]);
-  const { tree } = screen.listing;
-  const { folded, opened } = hold;
-  const drawn = useMemo(() => drawnTaskIds(tree, { folded, opened }), [tree, folded, opened]);
+  const drawn = drawnTaskIds(screen.listing.tree, hold);
 
   const tasks = {
     sections: (
