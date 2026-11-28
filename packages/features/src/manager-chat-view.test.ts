@@ -177,7 +177,7 @@ test("a link to a message lands on its row in the chat, a reply standing in its 
   );
 });
 
-test("the line over a Manager's box names it while it works, says what waits on the reader over that, takes a client's words for a turn doing something else, offers Show work once the turn did work, and stands nowhere while no turn runs", () => {
+test("the line a Manager's chat ends on names it while it works, says what waits on the reader over that, takes a client's words for a turn doing something else, offers Show work once the turn did work, and stands nowhere while no turn runs", () => {
   const idle = { live: [] };
   const busy = { live: [{ kind: AGENT_PART.OTHER } as const] };
   const working = { working: true, name: "Release manager", waiting: 0 };

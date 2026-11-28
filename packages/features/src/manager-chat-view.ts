@@ -23,10 +23,9 @@
  * lines that reached it, and the messages and sets it sent. A turn that
  * has ended keeps its work folded over the Manager's first message of the
  * turn, words or a set, in the order it was done, as a chat app stands what
- * it thought over its answer; the turn under way's work opens at the
- * chat's end from the working line over its box instead
- * (`managerWorkingLine`), so a finished chat draws no more than its
- * messages and its folds.
+ * it thought over its answer; the turn under way's work opens above the
+ * working line the chat ends on instead (`managerWorkingLine`), so a
+ * finished chat draws no more than its messages and its folds.
  */
 
 import { waitingOnYouWords } from "./agent-approval-model.js";
@@ -118,7 +117,7 @@ export interface ManagerChatView {
   readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
   readonly sending: ChatSendingPlaces;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
-  /** The turn under way's work so far, which the working line over the box opens; none where no turn is under way or it has done none. */
+  /** The turn under way's work so far, which the working line the chat ends on opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
 }
 
@@ -289,9 +288,10 @@ export function chatWorkWords(shown: boolean): string {
 }
 
 /**
- * The line a Manager's chat stands just over its box while a turn runs, as
- * a channel says who is typing by its box: never a row of the chat, so the
- * chat holds only what was said. It says the Manager is working, or what a
+ * The quiet line a Manager's chat ends on while a turn runs, in its
+ * messages' column, as an agent's transcript or an agent session ends on
+ * its status: never a row of the Manager's, with a name and a picture, so
+ * the chat's rows hold only what was said. It says the Manager is working, or what a
  * client's own words name of a turn that is doing something else
  * (`phase`, such as stopping or waiting for a usage limit to reset), or,
  * while the Manager holds a call for the reader's answer, that it waits on
@@ -305,13 +305,13 @@ export interface ManagerWorkingLine {
   readonly work: boolean;
 }
 
-/** What a Manager's chat says over its box while it works: its name, or the bare working words where none is read yet. */
+/** What a Manager's chat ends on while it works: its name, or the bare working words where none is read yet. */
 function managerWorkingWords(name: string): string {
   return name === "" ? WORKING_LINE : `${name} is working…`;
 }
 
 /**
- * The line over a Manager's chat's box (`ManagerWorkingLine`): none while
+ * The line a Manager's chat ends on (`ManagerWorkingLine`): none while
  * no turn runs; the approvals waiting on the reader, where any does;
  * otherwise the client's own words for a turn that is doing something other
  * than working (`phase`), else that the Manager is working.
@@ -341,7 +341,7 @@ export function managerWorkingLine(
  * oldest first, each placed in its sender's run; each ended turn's work,
  * from the transcript held, folded over the Manager's first message of the
  * turn; and the work of the turn under way (`running`, its id), which the
- * working line over the box opens at the chat's end. A turn whose journal
+ * working line the chat ends on opens above it. A turn whose journal
  * is not held keeps its work nowhere, so its messages offer none.
  */
 export function managerChatView(
