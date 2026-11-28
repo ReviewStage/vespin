@@ -1049,8 +1049,6 @@ export const managerChatOlderParamsSchema = EffectSchema.Struct({
   before: countedNumber,
 });
 
-export type ManagerChatOlderParams = typeof managerChatOlderParamsSchema.Type;
-
 /**
  * Messaging an agent, as the window asks it: the agent, and the message
  * request the service takes, its key the window's own; and what the host
@@ -1559,8 +1557,6 @@ export const agentPictureFileParamsSchema = EffectSchema.Struct({
   ...agentPictureParamsSchema.fields,
   path: EffectSchema.NonEmptyString,
 });
-
-export type AgentPictureFileParams = typeof agentPictureFileParamsSchema.Type;
 
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
 export const agentPartParamsSchema = EffectSchema.Struct({
