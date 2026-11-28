@@ -86,6 +86,7 @@ export {
   productLoadMilliseconds,
   productOpenMilliseconds,
   productPictureBytes,
+  productResumeCounted,
   productSessionCountBucket,
   type RecordProductEvent,
 } from "./product-events.js";
