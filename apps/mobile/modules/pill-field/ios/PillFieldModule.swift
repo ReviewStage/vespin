@@ -25,15 +25,6 @@
 // and in the theme's colors, which JavaScript hands. Copy writes the
 // selection's Markdown as plain words, as the desktop's box copies, so a
 // paste back reads its mentions as pills again.
-//
-// A field that edits a document whole, such as a description, is also handed
-// each words run's looks (`@repo/features/markdown-styles`): a heading, bold,
-// code, a list's mark, and the marks that only spell a look. The words are
-// still the Markdown; the looks are drawn over them and kept on the text as
-// an attribute of their own, so they move with every edit until JavaScript
-// hands them again for the words now standing, which restyles in place and
-// leaves the caret and undo alone. The marks that only spell a look are
-// drawn faded.
 
 import ExpoModulesCore
 import SDWebImage
@@ -47,7 +38,7 @@ public final class PillFieldModule: Module {
       Events("onWords", "onHeight", "onFocusChange", "onPillPress")
 
       Prop("value") { (view: PillFieldView, value: ValueRecord) in
-        view.take(StyledRuns(value.runs), seen: value.seen)
+        view.take(joinedRuns(value.runs), seen: value.seen)
       }
 
       Prop("look") { (view: PillFieldView, look: LookRecord) in
@@ -79,7 +70,7 @@ public final class PillFieldModule: Module {
       }
 
       AsyncFunction("putBack") { (view: PillFieldView, runs: [RunRecord]) in
-        view.putBack(StyledRuns(runs).runs)
+        view.putBack(joinedRuns(runs))
       }
 
       AsyncFunction("focus") { (view: PillFieldView) in
@@ -183,8 +174,6 @@ struct PillRecord: Record {
 struct RunRecord: Record {
   @Field var text: String? = nil
   @Field var pill: PillRecord? = nil
-  /// The looks a run of words is drawn with (`MarkStyle`), none for plain words.
-  @Field var styles: [String] = []
 }
 
 /// The words a pick replaces, as JavaScript read them: where they stood in the drawn words, and the words themselves, such as `@Invite li`.
@@ -294,56 +283,32 @@ enum Run: Equatable {
   }
 }
 
-/// A look a span of the words is drawn with, as `@repo/features/markdown-styles`' `MARK_STYLE` names it.
+/// A look the document field lays on a span of its words, as `document-field-native.ts`' `FORMAT_ACT` names its marks.
 enum MarkStyle: String {
-  case heading1 = "heading-1"
-  case heading2 = "heading-2"
-  case heading3 = "heading-3"
   case strong
   case emphasis
   case strike
   case code
-  case codeBlock = "code-block"
-  case quote
-  case link
-  case listMark = "list-mark"
-  case rule
-  case syntax
 }
 
 /// The looks laid on the words as an attribute of their own, so they move with each edit.
 let markStylesKey = NSAttributedString.Key("VespinMarkStyles")
 
-/// The runs JavaScript hands, the words joined as the view holds them, and the looks of each span of the drawn words.
-struct StyledRuns {
-  let runs: [Run]
-  let spans: [(range: NSRange, styles: [String])]
+/// The runs JavaScript hands, side by side words joined as the view holds them.
+func joinedRuns(_ records: [RunRecord]) -> [Run] {
+  var runs: [Run] = []
 
-  init(_ records: [RunRecord]) {
-    var runs: [Run] = []
-    var spans: [(range: NSRange, styles: [String])] = []
-    var at = 0
+  for record in records {
+    guard let run = Run(record) else { continue }
 
-    for record in records {
-      guard let run = Run(record) else { continue }
-
-      // Note that side by side words are joined, as the view holds them, so a handing that only restyles reads as the same words.
-      if case .words(let text) = run, case .words(let before)? = runs.last {
-        runs[runs.count - 1] = .words(before + text)
-      } else {
-        runs.append(run)
-      }
-
-      if case .words = run, !record.styles.isEmpty {
-        spans.append((NSRange(location: at, length: run.drawnLength), record.styles))
-      }
-
-      at += run.drawnLength
+    if case .words(let text) = run, case .words(let before)? = runs.last {
+      runs[runs.count - 1] = .words(before + text)
+    } else {
+      runs.append(run)
     }
-
-    self.runs = runs
-    self.spans = spans
   }
+
+  return runs
 }
 
 /// The colors the field draws in, which follow the app's theme.
@@ -590,7 +555,6 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
       guard look != oldValue else { return }
       drawLook()
       redraw(heldRuns(), force: true)
-      restyle(spans)
     }
   }
 
@@ -613,9 +577,6 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     didSet { textView.isEditable = editable }
   }
 
-  /// The looks last handed, laid again where the words are drawn anew, such as at a new text size.
-  private var spans: [(range: NSRange, styles: [String])] = []
-
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     textView.field = self
@@ -637,30 +598,23 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     // Note that pills are drawn anew at a new text size, since each measured its words at the old one.
     registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (view: PillFieldView, _: UITraitCollection) in
       view.redraw(view.heldRuns(), force: true)
-      view.restyle(view.spans)
     }
   }
 
   // MARK: Doors JavaScript opens
 
   /// Takes the runs JavaScript hands, once it has heard every change typed, redrawing only where they differ from the words held.
-  func take(_ styled: StyledRuns, seen: Int) {
-    guard seen >= changes else { return }
+  func take(_ runs: [Run], seen: Int) {
+    guard seen >= changes, runs != heldRuns() else { return }
 
-    if styled.runs != heldRuns() {
-      // Note that words being composed, as a keyboard of marks or dictation holds them, are committed first, so a reset such as a cleared field lands rather than waiting on a composition that would then tell the old words back.
-      if textView.markedTextRange != nil {
-        quiet = true
-        textView.unmarkText()
-        quiet = false
-      }
-
-      redraw(styled.runs, force: false)
+    // Note that words being composed, as a keyboard of marks or dictation holds them, are committed first, so a reset such as a cleared field lands rather than waiting on a composition that would then tell the old words back.
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
     }
 
-    // Note that words being composed are left as the keyboard draws them, and take their looks with the handing after they are committed.
-    guard textView.markedTextRange == nil else { return }
-    restyle(styled.spans)
+    redraw(runs, force: false)
   }
 
   /// The range the pills go in: the word a pick replaces where it still stands where JavaScript read it, else the nearest such words before the caret on its line, else the caret, so a pick made while words were still being typed lands rather than being dropped.
@@ -974,87 +928,6 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
       case .pill(let pill): return pill.heard
       }
     }.joined()
-  }
-
-  // MARK: Looks
-
-  /// Lays the looks handed on the words they name, in place of those laid before, and draws them.
-  func restyle(_ handed: [(range: NSRange, styles: [String])]) {
-    let storage = textView.textStorage
-    let whole = NSRange(location: 0, length: storage.length)
-    // Note that a field handed no looks, as every composer is, lays none, so its words are never walked again on each key.
-    guard !(handed.isEmpty && spans.isEmpty) else { return }
-    spans = handed
-    // Note that a look changes the words' faces and so their height, which the next layout measures again rather than keeping the height measured before.
-    measured = nil
-
-    quiet = true
-    storage.beginEditing()
-    storage.removeAttribute(markStylesKey, range: whole)
-    for span in handed where NSMaxRange(span.range) <= storage.length {
-      storage.addAttribute(markStylesKey, value: span.styles, range: span.range)
-    }
-    storage.endEditing()
-    quiet = false
-    drawStyles()
-  }
-
-  /// Draws each span of the words in the looks laid on it, and plain words in the body's face.
-  private func drawStyles() {
-    let storage = textView.textStorage
-    let whole = NSRange(location: 0, length: storage.length)
-
-    quiet = true
-    storage.beginEditing()
-    storage.enumerateAttribute(markStylesKey, in: whole) { value, range, _ in
-      let styles = Set(((value as? [String]) ?? []).compactMap(MarkStyle.init))
-      storage.removeAttribute(.strikethroughStyle, range: range)
-      storage.removeAttribute(.underlineStyle, range: range)
-      storage.removeAttribute(.backgroundColor, range: range)
-      storage.addAttributes(lookAttributes(styles), range: range)
-    }
-    // Note that a pill keeps the body's face whatever words it stands among, so its line keeps its height and it its size.
-    storage.enumerateAttribute(.attachment, in: whole) { value, range, _ in
-      guard value is PillAttachment else { return }
-      storage.addAttributes(baseAttributes(), range: range)
-    }
-    storage.endEditing()
-    quiet = false
-    setNeedsLayout()
-  }
-
-  /// The attributes a span is drawn with: its face, sized by the reader's text size, and its color, a mark of syntax faded.
-  private func lookAttributes(_ styles: Set<MarkStyle>) -> [NSAttributedString.Key: Any] {
-    var attributes: [NSAttributedString.Key: Any] = [
-      .font: lookFont(styles),
-      .foregroundColor: styles.isDisjoint(with: [MarkStyle.syntax, .quote, .listMark, .rule]) ? look.text : look.placeholder,
-    ]
-
-    if styles.contains(.strike) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-    if styles.contains(.link) { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-    if styles.contains(.code) { attributes[.backgroundColor] = look.pillFill }
-
-    return attributes
-  }
-
-  /// A span's face: a heading's text style, bold and italic as its looks ask, and code in the monospaced face, each at the reader's text size.
-  private func lookFont(_ styles: Set<MarkStyle>) -> UIFont {
-    let base: UIFont =
-      styles.contains(.heading1) ? .preferredFont(forTextStyle: .title2)
-      : styles.contains(.heading2) ? .preferredFont(forTextStyle: .title3)
-      : styles.contains(.heading3) ? .preferredFont(forTextStyle: .headline)
-      : bodyFont()
-    let bold = styles.contains(.strong) || !styles.isDisjoint(with: [MarkStyle.heading1, .heading2])
-
-    if !styles.isDisjoint(with: [MarkStyle.code, .codeBlock]) {
-      return .monospacedSystemFont(ofSize: base.pointSize * 0.92, weight: bold ? .semibold : .regular)
-    }
-
-    var traits = base.fontDescriptor.symbolicTraits
-    if bold { traits.insert(.traitBold) }
-    if styles.contains(.emphasis) { traits.insert(.traitItalic) }
-
-    return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
   // MARK: Drawing
