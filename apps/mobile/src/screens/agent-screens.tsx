@@ -201,6 +201,7 @@ import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useChatThreadPanel, useOpenChatThread } from "../thread-panel.js";
 import { useDictation } from "../use-dictation.js";
 import { PicturesProvider, useAgentPictureFiles, usePictures } from "../use-pictures.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
@@ -233,6 +234,7 @@ const MENU_WORDS = {
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
   SETTINGS: "Settings…",
+  HIDE_THREAD: "Hide thread",
 } as const;
 
 /** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
@@ -1248,9 +1250,9 @@ const AgentConversation = memo(function AgentConversation({
   const openThread = (threadId: string) =>
     router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: threadId })));
 
-  // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
-  const openChatThread = (root: string) =>
-    router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
+  // Note that a chat message's thread opens beside the chat in an iPad's inspector, as Slack's iPad app stands a thread, and pushed over the chat in a compact window, as Slack's phone app does.
+  const openChatThread = useOpenChatThread(id);
+  const threadPanel = useChatThreadPanel(id);
 
   // The message a link named that the page has landed on, so it lands once.
   const landedOn = useRef<string | undefined>(undefined);
@@ -1631,6 +1633,16 @@ const AgentConversation = memo(function AgentConversation({
           </Stack.Toolbar.View>
         )}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
+        {/* Note that a thread open beside the chat is hidden from the chat's own bar, as an iPad's apps stand the inspector's toggle in the content's toolbar, since the system draws no close of its own on the inspector. */}
+        {threadPanel.open ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.INSPECTOR)}
+            accessibilityLabel={MENU_WORDS.HIDE_THREAD}
+            onPress={threadPanel.close}
+          >
+            {MENU_WORDS.HIDE_THREAD}
+          </Stack.Toolbar.Button>
+        ) : null}
         {/* Note that a Manager's Overview stands as a glyph in every window, nearest the ⋯, since on the desktop it is never hidden beside the chat. */}
         {openOverview === undefined ? null : (
           <Stack.Toolbar.Button

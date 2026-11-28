@@ -60,6 +60,9 @@ import { PicturesProvider, usePictures } from "../use-pictures.js";
 /** No row, while the thread is not read yet, the same array every render so nothing read off the rows reads again. */
 const NO_ROWS: readonly TranscriptItem[] = [];
 
+/** How a flow finds the thread's box, apart from the chat's own, since on an iPad both stand on screen. */
+const TEST_IDS = { FIELD: "thread-composer-field", ATTACH: "thread-composer-attach" } as const;
+
 /** What the page says while it reads the chat, and where it could not. */
 const READ_WORDS = {
   READING: "Reading the thread",
@@ -128,6 +131,7 @@ function ThreadComposer({
       onDropPictures={composer.dropPictures}
       onLongPaste={composer.pasteText}
       head={head}
+      testIds={{ field: TEST_IDS.FIELD, add: TEST_IDS.ATTACH }}
       focusAsk={composer.focusAsk}
       pills={composer.pills}
     />
@@ -135,30 +139,28 @@ function ThreadComposer({
 }
 
 /**
- * One thread of a Manager's chat, named by the route's `id` and `root`, the
+ * One thread of a Manager's chat, the agent `id`'s, named by `root`, the
  * message it hangs on: that message alone under its sender's name, a rule
  * counting the replies, the replies in their runs, and the reader's replies
  * on their way after them, each as the chat's channel draws it
  * (`managerThreadItems`), opening at its newest; and at its foot the box
- * that answers in it (`ThreadComposer`). It is pushed over the chat on the
- * agent's own stack in every window, as Slack's app pushes a thread, so its
- * back button leads to the chat. It reads the chat's own rows, so it moves
- * as the chat does: a root older than the pages read is read for a page at
- * a time, and a root gone from the chat, as a rewind drops it, says so.
+ * that answers in it (`ThreadComposer`). It stands as its own page pushed
+ * over the chat (`ManagerThreadScreen`), or on an iPad beside the chat in the
+ * system split view's inspector (`ThreadPanel`). It reads the chat's own
+ * rows, so it moves as the chat does: a root older than the pages read is
+ * read for a page at a time, and a root gone from the chat, as a rewind
+ * drops it, says so.
  */
-export function ManagerThreadScreen() {
-  const {
-    id = "",
-    root = "",
-    message,
-  } = useLocalSearchParams<{
-    id: string;
-    root: string;
-    /** The reply a link names, which the thread lands on once it holds it. */
-    message?: string;
-  }>();
-
-  const colors = useColors();
+export function ManagerThread({
+  id,
+  root,
+  message,
+}: {
+  readonly id: string;
+  readonly root: string;
+  /** The reply a link names, which the thread lands on once it holds it. */
+  readonly message?: string | undefined;
+}) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const agent = useFollowedAgent(id);
@@ -292,6 +294,64 @@ export function ManagerThreadScreen() {
       };
 
   return (
+    <GlassDock bar={<ThreadComposer composer={composer} note={undefined} />}>
+      <PicturesProvider owner={PICTURE_OWNER.AGENT} ownerId={id} kind={PRODUCT_PICTURE_KIND.AGENT}>
+        <AgentTranscript
+          items={rows}
+          head={null}
+          empty={empty}
+          reveal={reveal}
+          older={lacksRoot ? older : undefined}
+          repository={agent?.repository}
+          onOpenLink={openLink}
+          onToggle={(item) => setToggles((was) => toggledAt(was, item))}
+          onOpenPage={(item) =>
+            router.push({
+              pathname: onOwnTab("/tasks/agent/[id]/page"),
+              params: { id, page: item.page, version: String(item.version), title: item.title },
+            })
+          }
+          mediaSource={(mediaId) =>
+            pictureSet.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
+          }
+          fileSource={sentFiles.source}
+          onRetryFile={sentFiles.retry}
+          onRetryMedia={(mediaId) =>
+            pictureSet.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
+          }
+          onOpenAddress={openInSafari}
+          messageLink={messageLink}
+          messageMore={messageActs.more}
+          channel={chatFaces?.faces}
+          undelivered={undelivered}
+        />
+      </PicturesProvider>
+    </GlassDock>
+  );
+}
+
+/**
+ * A thread of a Manager's chat on its own page, named by the route's `id`
+ * and `root`, pushed over the chat on the agent's own stack, as Slack's app
+ * pushes a thread, so its back button leads to the chat: always in a compact
+ * window, and on an iPad once its split view collapses with a thread open
+ * beside the chat (`thread-panel.tsx`).
+ */
+export function ManagerThreadScreen() {
+  const {
+    id = "",
+    root = "",
+    message,
+  } = useLocalSearchParams<{
+    id: string;
+    root: string;
+    /** The reply a link names, which the thread lands on once it holds it. */
+    message?: string;
+  }>();
+
+  const colors = useColors();
+
+  return (
     <>
       <Stack.Screen
         options={{
@@ -299,43 +359,7 @@ export function ManagerThreadScreen() {
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
-      <GlassDock bar={<ThreadComposer composer={composer} note={undefined} />}>
-        <PicturesProvider
-          owner={PICTURE_OWNER.AGENT}
-          ownerId={id}
-          kind={PRODUCT_PICTURE_KIND.AGENT}
-        >
-          <AgentTranscript
-            items={rows}
-            head={null}
-            empty={empty}
-            reveal={reveal}
-            older={lacksRoot ? older : undefined}
-            repository={agent?.repository}
-            onOpenLink={openLink}
-            onToggle={(item) => setToggles((was) => toggledAt(was, item))}
-            onOpenPage={(item) =>
-              router.push({
-                pathname: onOwnTab("/tasks/agent/[id]/page"),
-                params: { id, page: item.page, version: String(item.version), title: item.title },
-              })
-            }
-            mediaSource={(mediaId) =>
-              pictureSet.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
-            }
-            fileSource={sentFiles.source}
-            onRetryFile={sentFiles.retry}
-            onRetryMedia={(mediaId) =>
-              pictureSet.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
-            }
-            onOpenAddress={openInSafari}
-            messageLink={messageLink}
-            messageMore={messageActs.more}
-            channel={chatFaces?.faces}
-            undelivered={undelivered}
-          />
-        </PicturesProvider>
-      </GlassDock>
+      <ManagerThread id={id} root={root} message={message} />
     </>
   );
 }

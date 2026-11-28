@@ -32,6 +32,7 @@ import { holdSplash } from "../splash.js";
 import { keepSplitHost, SidebarStandsContext, useSplitSidebar } from "../split-columns.js";
 import { useChipMarks } from "../tasks/chip-marks.js";
 import { useChipNames } from "../tasks/chip-names.js";
+import { ThreadPanel, ThreadPanelProvider, useInspectorProps } from "../thread-panel.js";
 import { VoiceCallProvider } from "../voice-call.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -78,7 +79,8 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
  * command and the columns' edges, which a person drags; the sidebar stands
  * only once an account is signed in. Elsewhere, the screens alone. Note that
  * the split view stands at the root, as UIKit has a split view stand, since
- * it may stand inside no other native navigator.
+ * it may stand inside no other native navigator; and beside the page, the
+ * thread of a Manager's chat opened there, in the split view's inspector.
  */
 function AppFrame() {
   const { data: signedIn = false } = useQuery({
@@ -86,30 +88,63 @@ function AppFrame() {
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
 
-  const sidebar = useSplitSidebar();
-
   if (!APP_SIDEBAR) return <Slot />;
 
   return (
     <SidebarTasksProvider>
       <PlacesHeldProvider>
-        <SidebarStandsContext value={sidebar.stands}>
-          <SplitView
-            ref={keepSplitHost}
-            {...sidebar.props}
-            primaryBackgroundStyle="sidebar"
-            displayModeButtonVisibility="automatic"
-            presentsWithGesture
-            topColumnForCollapsing="secondary"
-            columnMetrics={COLUMN_WIDTHS}
-            preferredDisplayMode={signedIn ? sidebar.preferred : "secondaryOnly"}
-          >
-            <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
-            <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>
-          </SplitView>
-        </SidebarStandsContext>
+        <ThreadPanelProvider>
+          <AppSplitView signedIn={signedIn} />
+        </ThreadPanelProvider>
       </PlacesHeldProvider>
     </SidebarTasksProvider>
+  );
+}
+
+/**
+ * The system's split view itself, telling the page columns whether its
+ * sidebar stands (`useSplitSidebar`), its inspector at the trailing edge
+ * holding the thread of a Manager's chat opened beside the chat
+ * (`ThreadPanel`), as Slack stands a thread on an iPad. Note that the
+ * inspector stands mounted always and only shows or hides, because the
+ * split view is built again whenever its count of columns changes.
+ */
+function AppSplitView({ signedIn }: { readonly signedIn: boolean }) {
+  const sidebar = useSplitSidebar();
+  const inspector = useInspectorProps();
+
+  // Note that the split view's collapse and expand are heard by both the sidebar's standing and the inspector's thread, so each event calls both.
+  const onCollapse = () => {
+    sidebar.props.onCollapse();
+    inspector?.onCollapse();
+  };
+
+  const onExpand = () => {
+    sidebar.props.onExpand();
+    inspector?.onExpand();
+  };
+
+  return (
+    <SidebarStandsContext value={sidebar.stands}>
+      <SplitView
+        ref={keepSplitHost}
+        onDisplayModeWillChange={sidebar.props.onDisplayModeWillChange}
+        showInspector={inspector?.showInspector ?? false}
+        onInspectorHide={inspector?.onInspectorHide}
+        onCollapse={onCollapse}
+        onExpand={onExpand}
+        primaryBackgroundStyle="sidebar"
+        displayModeButtonVisibility="automatic"
+        presentsWithGesture
+        topColumnForCollapsing="secondary"
+        columnMetrics={COLUMN_WIDTHS}
+        preferredDisplayMode={signedIn ? sidebar.preferred : "secondaryOnly"}
+      >
+        <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
+        <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>
+        <SplitView.Inspector>{signedIn ? <ThreadPanel /> : null}</SplitView.Inspector>
+      </SplitView>
+    </SidebarStandsContext>
   );
 }
 

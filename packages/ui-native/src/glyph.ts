@@ -305,6 +305,8 @@ export const GLYPH = {
   // Select text is the system's act on a held message, as Messages and ChatGPT draw it.
   SELECT_TEXT: system("selection.pin.in.out"),
   CLOSE: system("xmark"),
+  // The inspector's toggle, the system's own trailing sidebar, as iPadOS's apps stand it in the content's toolbar.
+  INSPECTOR: system("sidebar.trailing"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),

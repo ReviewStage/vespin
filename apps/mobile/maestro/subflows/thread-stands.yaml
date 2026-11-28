@@ -1,0 +1,19 @@
+# thread-stands.yaml -- waits for a Manager chat's thread to stand open: its page's "Thread" title in a compact window, and on an iPad the chat bar's Hide thread, standing while the split view's inspector holds it.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "Thread"
+          timeout: 10000
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "Hide thread"
+          timeout: 10000

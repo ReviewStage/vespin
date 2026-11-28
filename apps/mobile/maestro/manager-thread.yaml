@@ -1,4 +1,4 @@
-# manager-thread.yaml -- a Manager's chat as a team channel with threads: every message headed by its sender's face and name, the Manager's message the account answered in its thread summing its replies under it ("2 replies"), the thread opened from that summary on its own page (the message it hangs on, a rule counting the replies, the replies), a reply sent there landing in the thread, and Reply in thread from a message's long press, and from the long press of the picture a message of a picture alone sent, opening the thread of a message no one answered yet.
+# manager-thread.yaml -- a Manager's chat as a team channel with threads: every message headed by its sender's face and name, the Manager's message the account answered in its thread summing its replies under it ("2 replies"), the thread opened from that summary on its own page in a compact window, and on an iPad beside the chat in the split view's inspector, the channel still standing and counting replies live beside it, in either orientation (the message it hangs on, a rule counting the replies, the replies), a reply sent there landing in the thread, and Reply in thread from a message's long press, and from the long press of the picture a message of a picture alone sent, opening the thread of a message no one answered yet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -29,26 +29,55 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: manager-chat-channel
-# The summary opens the thread on its own page: the message it hangs on, the
-# rule counting its replies, and the replies in their runs.
+# The summary opens the thread: the message it hangs on, the rule counting
+# its replies, and the replies in their runs; on its own page in a compact
+# window, and on an iPad in the inspector beside the chat, whose own
+# messages still stand, with the chat's bar offering to hide it.
 - tapOn: "2 replies"
 - extendedWaitUntil:
     visible: "Which pull request is it?"
     timeout: 10000
-- assertVisible: "Thread"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertVisible: "Thread"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Hide thread"
+      - assertVisible: "Left before it ships.*"
 - assertVisible: "#128, Invite a teammate by email.*"
 - assertVisible: "On it. The invitations agent has its pull request open.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: manager-thread-open
-# Its box answers in the thread: a reply sent lands among its replies.
+# Turned on its side, an iPad keeps the thread beside the chat.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertVisible: "Which pull request is it?"
+      - assertVisible: "Left before it ships.*"
+      - takeScreenshot: manager-thread-open-landscape
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd:
+          timeout: 5000
+# Its box answers in the thread: a reply sent lands among its replies, and
+# on an iPad the chat beside it counts it at once.
 - tapOn:
-    id: "composer-field"
+    id: "thread-composer-field"
 - inputText: "Thanks, reviewing it now."
 - assertVisible:
     text: "Send"
     enabled: true
-- tapOn: "Send"
+- tapOn:
+    text: "Send"
+    enabled: true
 - extendedWaitUntil:
     visible: "Thanks, reviewing it now."
     timeout: 10000
@@ -57,9 +86,10 @@ env:
     timeout: 10000
 - runFlow: subflows/lower-keyboard.yaml
 - takeScreenshot: manager-thread-replied
-# Back in the chat, the summary counts the reply, which still stands in the
-# thread alone.
-- tapOn: "Back"
+# Back in the chat, or with the inspector hidden from the chat's bar, the
+# summary counts the reply, which still stands in the thread alone.
+- runFlow:
+    file: subflows/leave-thread.yaml
 - extendedWaitUntil:
     visible: "3 replies"
     timeout: 10000
@@ -68,16 +98,16 @@ env:
 # opens its thread with no reply yet.
 - longPressOn: "Left before it ships.*"
 - tapOn: "Reply in thread"
-- extendedWaitUntil:
-    visible: "Thread"
-    timeout: 10000
+- runFlow:
+    file: subflows/thread-stands.yaml
 - assertVisible: "Left before it ships.*"
 - assertNotVisible: "2 replies"
 - takeScreenshot: manager-thread-empty
 # A message of a picture alone, the account's first, sent with its ask,
 # leads its picture's long press with Reply in thread, as Messages leads a
 # photo's with Reply, which opens its thread.
-- tapOn: "Back"
+- runFlow:
+    file: subflows/leave-thread.yaml
 - extendedWaitUntil:
     visible: "3 replies"
     timeout: 10000
@@ -86,8 +116,7 @@ env:
     direction: UP
 - longPressOn: "invite-preview.png"
 - tapOn: "Reply in thread"
-- extendedWaitUntil:
-    visible: "Thread"
-    timeout: 10000
+- runFlow:
+    file: subflows/thread-stands.yaml
 - assertVisible: "invite-preview.png"
 - takeScreenshot: manager-thread-picture
