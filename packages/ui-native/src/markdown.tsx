@@ -221,6 +221,8 @@ const NO_NAMED_CHIPS: ReadonlyMap<MarkdownChip, string> = new Map();
 interface Drawing {
   readonly colors: BrandColors;
   readonly fontScale: number;
+  /** What a line's words are set in, by the words' look (`MARKDOWN_LOOK`). */
+  readonly prose: TextStyle;
   /** The widest a chip may stand, the window's width, which a chip's name is cut to. */
   readonly lineWidth: number;
   readonly openLink: (address: string) => void;
@@ -842,7 +844,7 @@ function Line({
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
-      style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
+      style={[drawing.prose, style]}
     >
       <Runs runs={runs} drawing={drawing} />
       {after === undefined ? null : (
@@ -1557,9 +1559,26 @@ function Blocks({
   ));
 }
 
+/** How a run of words is set: as a message's, in the body's size and ink, or as a row's muted line under its title, an option's detail say. */
+export const MARKDOWN_LOOK = {
+  MESSAGE: "message",
+  LINE: "line",
+} as const;
+
+export type MarkdownLook = (typeof MARKDOWN_LOOK)[keyof typeof MARKDOWN_LOOK];
+
+/** What a line's words are set in, by the look and the window's colors. */
+function proseOf(look: MarkdownLook, colors: BrandColors): TextStyle {
+  return look === MARKDOWN_LOOK.LINE
+    ? { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }
+    : { fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
+}
+
 type MarkdownProps = {
   /** The words, as written. */
   readonly words: string;
+  /** How its lines are set; a message's where none is given. */
+  readonly look?: MarkdownLook | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips; none where it has none. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as: on the app's own screen where it draws one, such as a `vespin.dev` place or a pull request, and in Safari otherwise. */
@@ -1662,6 +1681,7 @@ function noWordPicture(): undefined {
  */
 export function Markdown({
   words,
+  look = MARKDOWN_LOOK.MESSAGE,
   repository = null,
   onOpenLink,
   typed,
@@ -1731,6 +1751,7 @@ export function Markdown({
   const drawing: Drawing = {
     colors,
     fontScale,
+    prose: proseOf(look, colors),
     lineWidth: measured ?? known ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,

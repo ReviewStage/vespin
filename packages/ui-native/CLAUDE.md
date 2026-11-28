@@ -27,7 +27,9 @@ builds a control of its own.
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's rows (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
-  answer's fields, and `AskNote` for what a send that did not go said),
+  answer's fields, `ResolvableAsk` standing an open ask's × Resolve at its
+  top end, as the panel's question stands it, and `AskNote` for what a send
+  that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under its heading), `ConfirmAsk` (the question
@@ -460,7 +462,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   pick or press attaching its answer to the reply and taking it off pressed
   again, the box's Send sending it, as the panel's controls clear (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
-  checks one, a "Recommended" tag and a detail line; `AskActs`, an ask's
+  checks one, a "Recommended" tag before the check, and a detail line, its
+  label and detail drawn as Markdown so a link of ours stands as its chip,
+  whose press opens it and picks nothing; `AskActs`, an ask's
   presses at the system's regular size, outlined in the ink, or their
   words alone where quiet, filled in copper once pressed, VoiceOver hearing
   them selected, one recommended wearing the tag after it, stacked past the
@@ -472,13 +476,17 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   field: a text or number field under its label, the field plain inside the
   rows and prompting "Required" or "Optional" while empty, a text field
   stopping at the panel's most (`maxLength`), a number field's
-  pad standing one Done over it for the rows, a select's menu picker
-  under its label, reading "None" until a pick, a
-  boolean's words and its bare switch beside them (its label hidden and
-  heard, the words hidden from VoiceOver), the rows a SwiftUI `Form` holds, drawn as rows because
-  a `Form` scrolls on its own inside the head's scroll; the rows' words
-  line up with the field's, and their hairlines start where the words do,
-  as iOS insets a list's separator). **Cards** are kept for the pull request
+  pad standing one Done over it for the rows, a select's options as rows
+  under its label, the recommended one tagged as a decide's is and none
+  picked until the reader picks, as the panel's pills stand, and a yes or
+  no's round check beside its name, as a step's, never the system's switch,
+  since the panel's form draws a checkbox (the developer, Nov 27, 2026), the
+  rows a SwiftUI `Form` holds, drawn as rows because a `Form` scrolls on its
+  own inside the head's scroll; the rows' words line up with the field's,
+  and their hairlines start where the words do, as iOS insets a list's
+  separator; and `ResolvableAsk`'s × at their top end, muted, which
+  resolves the thread without an answer, as the panel's question stands
+  it). **Cards** are kept for the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
   red, and its acts as pills; a press on it opens its own page). A file's
   chip stands on `CARD`, the soft gray in light, so it reads off the page's

@@ -91,3 +91,20 @@ test("clearing the words lets the place go once, and a search ended starts afres
     ],
   );
 });
+
+test("a search left asks nothing more and lets nothing go, so what it found stands for a thread opened from it", () => {
+  const { asks, ask } = heldAsks();
+  const search = inboxServiceSearch({ place: INBOX_SEARCH_PLACE.EVERYTHING, ask });
+
+  search.type("ledger");
+  vi.advanceTimersByTime(INBOX_SEARCH_PAUSE_MILLIS);
+  search.type("ledger close");
+  search.leave();
+  vi.advanceTimersByTime(INBOX_SEARCH_PAUSE_MILLIS);
+
+  assert.deepEqual(
+    asks.map(({ params }) => params),
+    [{ place: INBOX_SEARCH_PLACE.EVERYTHING, query: "ledger" }],
+  );
+  assert.equal(search.searching(), false);
+});

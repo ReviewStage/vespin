@@ -40,7 +40,9 @@ import type { ListRowHint } from "./list-row-hint.js";
  * field drives is found by its id; a chevron says nothing to a reader; acts
  * shown on hover are still a Tab stop after the row; and an app hears
  * whether the title is cut short, and a regular row's description says
- * whether it is. Synthetic members.
+ * whether it is. Metadata holding a press of its own stands beside the
+ * row's press, its control pressed alone and the rest of it pressing the
+ * row. Synthetic members.
  */
 
 declare global {
@@ -214,6 +216,42 @@ test("pressing an act does not press its row, and pressing a row opens it", () =
   press(button(container, "More for ada"));
   press(button(container, "Grace Hoppergrace@example.comAdmin"));
   expect(container.querySelector("output")?.textContent).toBe("more ada,open grace");
+});
+
+test("metadata holding a press of its own stands beside the row's press: its control answers alone, and a press elsewhere on it opens the row", () => {
+  const heard: string[] = [];
+
+  const container = draw(
+    createElement(List, {
+      label: "Automations",
+      children: createElement(ListRow, {
+        title: "Nightly sweep",
+        onPress: () => heard.push("open sweep"),
+        metaPresses: true,
+        meta: createElement(
+          "span",
+          null,
+          createElement(IconButton, {
+            icon: glyph(),
+            label: "Open Release manager",
+            onClick: () => heard.push("open manager"),
+          }),
+          createElement("span", { className: "when" }, "Next: Mon"),
+        ),
+      }),
+    }),
+  );
+
+  const manager = button(container, "Open Release manager");
+  expect(manager.parentElement?.closest("button")).toBeNull();
+  press(manager);
+
+  const when = container.querySelector<HTMLElement>(".when");
+
+  if (when === null) throw new Error("No metadata drawn");
+  press(when);
+
+  expect(heard).toEqual(["open manager", "open sweep"]);
 });
 
 test("the open row is announced as current, and only it", () => {

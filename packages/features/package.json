@@ -361,6 +361,7 @@
     "./preview-sign-in": "./src/preview-sign-in.js",
     "./browser-acts": "./src/browser-acts.js",
     "./browser-live-wire": "./src/browser-live-wire.js",
+    "./browser-notes": "./src/browser-notes.js",
     "./browser-tabs-live": "./src/browser-tabs-live.js",
     "./browser-live-acts": "./src/browser-live-acts.js",
     "./port-forward-acts": "./src/port-forward-acts.js",
