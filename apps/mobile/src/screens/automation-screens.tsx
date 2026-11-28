@@ -39,6 +39,7 @@ import { agentName } from "@repo/features/model-label";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import { sinceText } from "@repo/features/time-format";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -64,6 +65,7 @@ import {
   useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Option } from "effect";
 import { Stack, useRouter } from "expo-router";
 import {
   type ComponentProps,
@@ -103,6 +105,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
+import { useViewChoice } from "../view-choices.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
 
@@ -110,6 +113,9 @@ import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sideb
 const SEARCH_AUTOMATIONS = "Search automations";
 
 /** What the folded group of finished one-time automations is called, as the desktop's list calls it. */
+/** What a fold that did not keep says in the failure notice. */
+const FOLDS_REFUSED = "Couldn't keep how the automations are folded.";
+
 /** Which of the list's groups stand folded until the reader folds or opens one: Finished alone, as the desktop's list folds it. */
 const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
 
@@ -368,14 +374,15 @@ function AutomationsList({
   const managers = useWorkspaceManagers(workspace.id);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
   const switcher = useWorkspaceSwitcher();
-  // Note that Finished opens folded, as the desktop's group does, since a one-time automation that ran is done with.
-  const [folded, setFolded] = useState<readonly AutomationListGroup[]>(FOLDED_AT_FIRST);
+  // Note that the folds are the account's, as the desktop's list keeps them, and Finished stands folded until one is chosen, since a one-time automation that ran is done with.
+  const folds = useViewChoice(VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED, null, FOLDS_REFUSED);
+  const folded = Option.getOrElse(folds.value, () => FOLDED_AT_FIRST);
 
   const fold = (group: AutomationListGroup) => ({
     foldable: true,
     folded: folded.includes(group),
     onFold: (next: boolean) =>
-      setFolded((was) => (next ? [...was, group] : was.filter((each) => each !== group))),
+      folds.choose(next ? [...folded, group] : folded.filter((each) => each !== group)),
   });
 
   const tokens = searchTokens(search);
