@@ -278,9 +278,10 @@ final class PicturePage: UIViewController, UIScrollViewDelegate, UIGestureRecogn
     return true
   }
 
-  /// Shows or hides the bars, unless the tap was Live Text's: one clearing selected words or opening a link, address, or date in the picture.
+  /// Shows or hides the bars, unless the tap was Live Text's: one clearing selected words, or one opening a link, address, or date, which a tap opens only while the Live Text button highlights them.
   @objc private func tapped(_ gesture: UITapGestureRecognizer) {
-    guard !selectedAtTouch, !liveText.hasDataDetector(at: gesture.location(in: imageView)) else { return }
+    let opensDetector = liveText.selectableItemsHighlighted && liveText.hasDataDetector(at: gesture.location(in: imageView))
+    guard !selectedAtTouch, !opensDetector else { return }
     onTap()
   }
 
