@@ -543,7 +543,7 @@ function AgentComposerArea({
   ending,
   tools,
   trailing,
-  onOpenThread,
+  onOpenInbox,
   pullRequest,
   onOpenPullRequest,
   apps,
@@ -568,8 +568,8 @@ function AgentComposerArea({
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
-  /** Opens one of the agent's Inbox threads by its id. */
-  readonly onOpenThread: (threadId: string) => void;
+  /** Opens the agent's own Inbox, its threads alone, which the row's threads capsule opens. */
+  readonly onOpenInbox: () => void;
   /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
   readonly pullRequest: AgentPullRequest | undefined;
   readonly onOpenPullRequest: (url: string) => void;
@@ -604,9 +604,7 @@ function AgentComposerArea({
         pullRequest={pullRequest}
         onOpenPullRequest={onOpenPullRequest}
         apps={apps}
-        threads={
-          threadsLine === undefined ? undefined : { line: threadsLine, onOpen: onOpenThread }
-        }
+        threads={threadsLine === undefined ? undefined : { line: threadsLine, onOpenInbox }}
       />
       <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk destructive {...composer.sendingEdit} />
@@ -1337,7 +1335,9 @@ const AgentConversation = memo(function AgentConversation({
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
-      onOpenThread={openThread}
+      onOpenInbox={() =>
+        router.push({ pathname: onOwnTab("/tasks/agent/[id]/inbox"), params: { id } })
+      }
       submenus={box.submenus}
       note={note}
       call={talk.call}

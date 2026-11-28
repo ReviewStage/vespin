@@ -1242,6 +1242,25 @@ export interface AgentThreadsLine {
   readonly opens: InboxRow;
 }
 
+/** Whether the agent `agentId` posted the thread, the one rule an agent's own Inbox, its Inbox tab and the line over its box count its threads by. */
+export function postedBy(agentId: string): (item: Pick<InboxFields, "agentId">) => boolean {
+  return (item) => item.agentId === agentId;
+}
+
+/** The groups narrowed to the threads the agent `agentId` posted, as an agent's own Inbox lists them, a group left with none let go. */
+export function agentInboxGroups<Holder extends InboxAnyHolder, Item extends InboxFields>(
+  groups: readonly InboxGroup<Holder, Item>[],
+  agentId: string,
+): InboxGroup<Holder, Item>[] {
+  const posts = postedBy(agentId);
+
+  return groups.flatMap((group) => {
+    const items = group.items.filter(posts);
+
+    return items.length === 0 ? [] : [{ holder: group.holder, items }];
+  });
+}
+
 /**
  * The line over an agent's box, as the panel's threads dock draws it: while
  * any of the agent's threads waits on the reader, Inbox and how many wait,
@@ -1254,7 +1273,7 @@ export function agentThreadsLine(
   readerId: string | undefined,
   now: number,
 ): AgentThreadsLine | undefined {
-  const posted = items.filter((item) => item.agentId === agentId);
+  const posted = items.filter(postedBy(agentId));
 
   const waiting = posted
     .filter((item) => waitsOnReaderNow(item, readerId, now))

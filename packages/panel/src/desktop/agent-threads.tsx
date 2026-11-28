@@ -12,6 +12,7 @@ import {
   inboxSearchWordsOf,
   listedItems,
   NOTHING_HERE,
+  postedBy,
 } from "@repo/features/inbox-list-model";
 import { searchTokens } from "@repo/features/search-tokens";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -151,7 +152,7 @@ export function AgentThreads({
 
   // Note that the list draws the agent's items as rows, and the pane draws the chosen one whole, found by its id.
   const posted = useMemo(
-    () => [...open, ...settled].filter((item) => item.agentId === agentId),
+    () => [...open, ...settled].filter(postedBy(agentId)),
     [open, settled, agentId],
   );
 
