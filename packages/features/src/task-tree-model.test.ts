@@ -13,6 +13,7 @@ import {
   taskRowFace,
   taskTree,
   treeDrawsSettled,
+  treeShowsSettledInFull,
   treeViewIn,
 } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
@@ -273,10 +274,26 @@ test("a settled task only Pinned holds draws no row the view's groups stand olde
       now,
     });
 
-  const canceled = treeUnder({ ...DEFAULT_TASK_TREE_VIEW, statuses: [TASK_STATUS.CANCELED] });
-  const all = treeUnder({ ...DEFAULT_TASK_TREE_VIEW, completed: COMPLETED_WINDOW.ALL });
+  const canceled: TaskTreeView = { ...DEFAULT_TASK_TREE_VIEW, statuses: [TASK_STATUS.CANCELED] };
+  const all: TaskTreeView = { ...DEFAULT_TASK_TREE_VIEW, completed: COMPLETED_WINDOW.ALL };
 
-  expect([treeDrawsSettled(canceled), treeDrawsSettled(all)]).toEqual([false, true]);
+  expect([
+    treeDrawsSettled(treeUnder(canceled), canceled),
+    treeDrawsSettled(treeUnder(all), all),
+  ]).toEqual([false, true]);
+});
+
+test("under All an open parent's finished sub-tasks past the list are read in whatever the statuses, while they fold under it", () => {
+  const todoAll: TaskTreeView = {
+    ...DEFAULT_TASK_TREE_VIEW,
+    statuses: [TASK_STATUS.TODO],
+    completed: COMPLETED_WINDOW.ALL,
+  };
+
+  expect([
+    treeShowsSettledInFull(todoAll),
+    treeShowsSettledInFull({ ...todoAll, subTasks: true }),
+  ]).toEqual([true, false]);
 });
 
 test("a search finds the workspace's tasks whatever their status, by name or key", () => {

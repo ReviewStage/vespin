@@ -7,8 +7,11 @@
  * for, its completed window at All or its statuses naming Done or Canceled,
  * once the list it reads has been read, and whether the tree draws a row a
  * settled task may stand in at all, since a tree that draws none has no run
- * to come to its end (`onDrawn`). The tree's groups tell it as their last row
- * comes and goes (`RowForEach`'s `onAtEnd`).
+ * to come to its end (`onDrawn`). The tree's groups that may hold one
+ * (`treeGroupMayHoldSettled`), which while sub-tasks fold under All is every
+ * group, since a finished sub-task nests under its open parent wherever the
+ * parent stands, tell it as their last row comes and goes (`RowForEach`'s
+ * `onAtEnd`).
  */
 
 import {
@@ -46,7 +49,7 @@ export function useTreeSettledPages({ workspaceId, treeView, tree }: TreeShown):
     settledPaging(tasksSettledPageAsk((page) => acts[ACT_KIND.TASKS_SETTLED_PAGE](page))),
   );
 
-  const drawsSettled = treeDrawsSettled(tree);
+  const drawsSettled = treeDrawsSettled(tree, treeView);
 
   // Note that the tree tells what it draws before the paging starts, as the panel's list does before its page, so a first page that draws none reads on as it lands.
   useEffect(() => {

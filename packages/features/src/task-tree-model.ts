@@ -533,16 +533,39 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   };
 }
 
-/** Whether the view shows settled tasks in full, as the Tasks page's does (`showsSettledInFull`): its statuses naming Done or Canceled, or, naming none, its completed window at All, so the list reads those finished before its live window from the service. */
-export function treeShowsSettledInFull(treeView: TaskTreeView): boolean {
-  return showsSettledInFull(viewFilter(treeView), viewDisplay(treeView));
+/**
+ * Whether a finished task past the list may nest under an open parent
+ * wherever the tree lists the parent, whatever the view's statuses: while
+ * sub-tasks fold under their parents and the completed window keeps every
+ * finished one, since the tree homes a finished sub-task by the window alone
+ * (`withSubTasks`).
+ */
+function nestsEverySettled(treeView: TaskTreeView): boolean {
+  return !treeView.subTasks && treeView.completed === COMPLETED_WINDOW.ALL;
 }
 
-/** Whether any of the view's groups that may hold settled tasks draws a row, whose run has an end to come to (`settledRowsDrawn`); Pinned, Following, and a section hold none the paging reads. */
-export function treeDrawsSettled(tree: TaskTree): boolean {
-  return tree.tasks.some(
-    (group) => group.head !== undefined && mayHoldSettled(group.head) && group.rows.length > 0,
+/** Whether the view shows settled tasks in full, so the list reads those finished before its live window from the service: as the Tasks page's does (`showsSettledInFull`), or while every finished sub-task may nest under an open parent (`nestsEverySettled`). */
+export function treeShowsSettledInFull(treeView: TaskTreeView): boolean {
+  return (
+    nestsEverySettled(treeView) || showsSettledInFull(viewFilter(treeView), viewDisplay(treeView))
   );
+}
+
+/** Whether a group of the tree may hold a settled task, whose run's end reads the next page: any group while every finished sub-task may nest under an open parent, else one of the view's groups the Tasks page says may (`mayHoldSettled`), never Pinned, Following, or a section, which hold only open tasks then. */
+export function treeGroupMayHoldSettled(group: TaskTreeGroup, treeView: TaskTreeView): boolean {
+  if (nestsEverySettled(treeView)) return true;
+
+  return group.head !== undefined && mayHoldSettled(group.head);
+}
+
+/** Whether any group of the tree that may hold a settled task draws a row, whose run has an end to come to (`settledRowsDrawn`). */
+export function treeDrawsSettled(tree: TaskTree, treeView: TaskTreeView): boolean {
+  return [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+    ...tree.tasks,
+  ].some((group) => treeGroupMayHoldSettled(group, treeView) && group.rows.length > 0);
 }
 
 /**
