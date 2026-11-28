@@ -1,6 +1,6 @@
 // conversation-rows.tsx -- a pull request's conversation as rows of its page: each comment or review by who wrote it, where a review left them, and when, its words a short plain preview until opened whole in Markdown; and each review thread by its file and lines, opened to its comments.
 
-import { HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -14,6 +14,7 @@ import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useMemo } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
+import { HostedViews } from "./hosted-views.js";
 import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
@@ -81,9 +82,9 @@ function EntryWords({
   if (open) {
     return (
       <UnderHead>
-        <RNHostView matchContents={{ vertical: true }}>
+        <HostedViews matchContents={{ vertical: true }}>
           <Markdown words={words} repository={repository} onOpenLink={onOpenLink} hidesHtml />
-        </RNHostView>
+        </HostedViews>
       </UnderHead>
     );
   }

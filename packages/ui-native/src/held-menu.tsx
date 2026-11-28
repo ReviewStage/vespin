@@ -1,6 +1,6 @@
 // held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted.
 
-import { Button, HStack, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, Menu } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame } from "@expo/ui/swift-ui/modifiers";
 import type { DraftCopy } from "@repo/features/draft-text";
@@ -20,6 +20,7 @@ import { StyleSheet, TextInput, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
+import { HostedViews } from "./hosted-views.js";
 import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
@@ -595,9 +596,9 @@ export function HeldMenu({
     <View style={styles.host} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <InlineHost matchContents={{ vertical: true }} style={styles.host}>
         <HeldSwiftMenu acts={acts} title={title}>
-          <RNHostView matchContents={{ vertical: true }}>
+          <HostedViews matchContents={{ vertical: true }}>
             <View style={width === undefined ? undefined : { width }}>{children}</View>
-          </RNHostView>
+          </HostedViews>
         </HeldSwiftMenu>
       </InlineHost>
     </View>

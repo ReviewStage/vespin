@@ -1,9 +1,10 @@
 // markdown-page.tsx -- a detail page of words: its title in SwiftUI, and the Markdown under it in React Native views hosted inside SwiftUI's scroller.
 
-import { RNHostView, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { View } from "react-native";
+import { HostedViews } from "./hosted-views.js";
 import { Markdown } from "./markdown.js";
 import { PageHeader } from "./page-header.js";
 import { SPACE } from "./tokens/space.js";
@@ -48,7 +49,7 @@ export function MarkdownPage({
         modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
       >
         <PageHeader title={title} summary={summary} status={status} />
-        <RNHostView matchContents={{ vertical: true }}>
+        <HostedViews matchContents={{ vertical: true }}>
           <View style={WORDS_FRAME}>
             <Markdown
               words={words}
@@ -58,7 +59,7 @@ export function MarkdownPage({
               headings
             />
           </View>
-        </RNHostView>
+        </HostedViews>
       </VStack>
     </ScrollView>
   );

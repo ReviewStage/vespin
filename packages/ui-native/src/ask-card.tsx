@@ -4,7 +4,6 @@ import {
   Divider,
   HStack,
   Image,
-  RNHostView,
   Spacer,
   Button as SwiftUIButton,
   TextField,
@@ -42,6 +41,7 @@ import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { HostedViews } from "./hosted-views.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
 import { PickedCheck } from "./settings-form.js";
@@ -319,7 +319,7 @@ function StepRow({
           <TickMark ticked={ticked} />
         </SwiftUIButton>
       )}
-      <RNHostView matchContents={{ vertical: true }}>
+      <HostedViews matchContents={{ vertical: true }}>
         <Pressable accessible={false} onPress={onPress}>
           <Markdown
             words={step}
@@ -328,7 +328,7 @@ function StepRow({
             onOpenLink={onOpenLink}
           />
         </Pressable>
-      </RNHostView>
+      </HostedViews>
     </HStack>
   );
 }

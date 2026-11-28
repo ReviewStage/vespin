@@ -4,7 +4,6 @@ import {
   Button,
   HStack,
   Image,
-  RNHostView,
   ScrollView,
   Spacer,
   Toolbar,
@@ -44,6 +43,7 @@ import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { CopyWordsSwiftMenu, PictureOriginProvider, PictureSetProvider } from "./held-menu.js";
+import { HostedViews } from "./hosted-views.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
@@ -599,7 +599,7 @@ function MessageView({
           </HStack>
         )}
         {message.values === undefined ? null : <AnswerValues values={message.values} />}
-        <RNHostView matchContents={{ vertical: true }}>
+        <HostedViews matchContents={{ vertical: true }}>
           <PictureOriginProvider origin={{ by: writer.name, at: message.at }}>
             <View style={styles.words}>
               {message.words.trim() === "" ? null : (
@@ -623,7 +623,7 @@ function MessageView({
               )}
             </View>
           </PictureOriginProvider>
-        </RNHostView>
+        </HostedViews>
         {message.held === undefined ? null : (
           <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
             {message.held}

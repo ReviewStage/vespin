@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, React Native's presses inside a SwiftUI host canceled as the scroll views around it start to scroll, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -19,6 +19,7 @@ private enum ModifierName {
   static let columnSubtitle = "vespinColumnSubtitle"
   static let stackSubtitle = "vespinStackSubtitle"
   static let stackScrollEdge = "vespinStackScrollEdge"
+  static let scrollCancelsPresses = "vespinScrollCancelsPresses"
   static let sideMargins = "vespinSideMargins"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
@@ -28,8 +29,8 @@ private enum ModifierName {
   static let rowHeard = RowHeardModifier.name
   static let headerMenu = HeaderMenuModifier.name
   static let all = [
-    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, dragLink, dropPictures,
-    dropLink, rowMenu, rowSwipes, rowHeard, headerMenu,
+    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, scrollCancelsPresses, sideMargins, dragLink,
+    dropPictures, dropLink, rowMenu, rowSwipes, rowHeard, headerMenu,
   ]
 }
 
@@ -53,6 +54,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.stackScrollEdge) { params, appContext, _ in
         return try StackScrollEdgeModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.scrollCancelsPresses) { params, appContext, _ in
+        return try ScrollCancelsPressesModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.sideMargins) { params, appContext, _ in
         return try SideMarginsModifier(from: params, appContext: appContext)
@@ -451,6 +455,92 @@ private final class StackScrollEdgeView: UIView {
       queue.append(contentsOf: next.subviews)
     }
     return nil
+  }
+}
+
+// MARK: - Scroll cancels presses
+
+/// React Native views hosted in SwiftUI (`RNHostView`) whose presses a scroll cancels, as UIKit cancels every control's touches when a scroll view's pan begins.
+///
+/// Note that React Native's touch handler, the surface root's
+/// `RCTSurfaceTouchHandler`, cancels its touches only for a gesture
+/// recognizer outside the surface (its `canBePreventedByGestureRecognizer`),
+/// and a SwiftUI list or scroll view inside a `Host` stands inside it. Nor
+/// does such a scroll send React Native the scroll events its responders
+/// give way on. So a press begun on hosted views was never canceled by the
+/// list scrolling around them, and fired as the finger lifted over them, which
+/// a drag always does, since the content moves with the finger: a swipe up a
+/// task's page opened its description's editor. The views carry a probe that
+/// watches the pan of every scroll view they stand in and, as one begins,
+/// cancels the touches of the touch handlers above it, as React Native
+/// cancels its own (`_cancelTouches`: disabled, then enabled again), so the
+/// presses get a touch cancel and run nothing, whichever press they are.
+internal struct ScrollCancelsPressesModifier: ViewModifier, Record {
+  func body(content: Content) -> some View {
+    content.background(ScrollCancelsPressesProbe())
+  }
+}
+
+/// The probe hosted views carry: an empty view behind them that watches the scroll views it stands in each time it's placed, since a list reuses its cells.
+private struct ScrollCancelsPressesProbe: UIViewRepresentable {
+  func makeUIView(context: Context) -> ScrollCancelsPressesView {
+    ScrollCancelsPressesView()
+  }
+
+  func updateUIView(_ view: ScrollCancelsPressesView, context: Context) {}
+}
+
+private final class ScrollCancelsPressesView: UIView {
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isUserInteractionEnabled = false
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+    var ancestor = superview
+    while let current = ancestor {
+      if let scrollView = current as? UIScrollView { ScrollPressCanceler.watch(scrollView) }
+      ancestor = current.superview
+    }
+  }
+}
+
+/// The one watcher a scroll view's pan carries, however many hosted views stand in it, kept with the scroll view itself.
+@MainActor
+private final class ScrollPressCanceler: NSObject {
+  /// The key the watcher is kept under on its scroll view.
+  private static var key: UInt8 = 0
+
+  /// Note that React Native's touch handler is found by its class's name, since its header is React Native's own and this module builds against ExpoUI alone.
+  private static let touchHandlerClass: AnyClass? = NSClassFromString("RCTSurfaceTouchHandler")
+
+  /// Watches the scroll view's pan where nothing watches it yet.
+  static func watch(_ scrollView: UIScrollView) {
+    if objc_getAssociatedObject(scrollView, &key) != nil { return }
+    let canceler = ScrollPressCanceler()
+    scrollView.panGestureRecognizer.addTarget(canceler, action: #selector(panned(_:)))
+    objc_setAssociatedObject(scrollView, &key, canceler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+  }
+
+  /// Cancels the touches of every React Native touch handler above the scroll view holding one, as its pan begins.
+  @objc private func panned(_ pan: UIPanGestureRecognizer) {
+    guard pan.state == .began, let handlerClass = Self.touchHandlerClass else { return }
+    var ancestor = pan.view?.superview
+    while let current = ancestor {
+      for handler in current.gestureRecognizers ?? [] where handler.isKind(of: handlerClass) {
+        guard handler.state == .began || handler.state == .changed else { continue }
+        handler.isEnabled = false
+        handler.isEnabled = true
+      }
+      ancestor = current.superview
+    }
   }
 }
 

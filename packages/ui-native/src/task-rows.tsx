@@ -4,7 +4,6 @@ import {
   HStack,
   Image,
   Rectangle,
-  RNHostView,
   Spacer,
   Button as SwiftUIButton,
   VStack,
@@ -54,6 +53,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { HostedViews } from "./hosted-views.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
 import {
@@ -934,9 +934,9 @@ export function FieldRow({ children }: { readonly children: ReactNode }) {
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
-      <RNHostView matchContents={{ vertical: true }}>
+      <HostedViews matchContents={{ vertical: true }}>
         <View>{children}</View>
-      </RNHostView>
+      </HostedViews>
     </VStack>
   );
 }
@@ -1103,7 +1103,7 @@ export function WordsRow({
 
   // Note that the press is the words' own, not VoiceOver's: the words stay read as words, and the section's Edit edits them.
   const host = (
-    <RNHostView matchContents={{ vertical: true }}>
+    <HostedViews matchContents={{ vertical: true }}>
       <Pressable
         accessible={false}
         disabled={onPressAt === undefined}
@@ -1124,7 +1124,7 @@ export function WordsRow({
           />
         </ChangedWords>
       </Pressable>
-    </RNHostView>
+    </HostedViews>
   );
 
   const held = <LongPressMenu groups={[menuActions, ...menuGroups]}>{host}</LongPressMenu>;

@@ -9,7 +9,6 @@ import {
   Menu,
   ProgressView,
   Rectangle,
-  RNHostView,
   ScrollView,
   Spacer,
   Toggle,
@@ -55,6 +54,7 @@ import {
 } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
+import { HostedViews } from "./hosted-views.js";
 import { dropPictures } from "./interactions.js";
 import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
@@ -718,7 +718,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   // Note that the field is UIKit's text view, which stands in the glass through a host of its own, its width the glass's and its height its words'.
   const field = (
     <VStack alignment="leading" modifiers={[room, span]}>
-      <RNHostView matchContents={{ vertical: true }}>
+      <HostedViews matchContents={{ vertical: true }}>
         <PillField
           ref={door}
           value={words}
@@ -733,7 +733,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
           autoFocus={props.autoFocus === true}
           testID={testIds?.field ?? "composer-field"}
         />
-      </RNHostView>
+      </HostedViews>
     </VStack>
   );
 
