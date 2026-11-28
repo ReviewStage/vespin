@@ -58,7 +58,8 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 # The Comments section lists the open thread, then a last row that swaps in
 # the resolved ones, as the panel's Resolved toggle does; a thread's bar
-# offers Resolve while it stands open and Reopen once resolved.
+# offers Resolve while it stands open and Reopen once resolved, and a
+# resolved thread stands no reply field, as the panel's resolved thread.
 - scrollUntilVisible:
     element: "Show resolved comments"
     direction: DOWN
@@ -71,6 +72,7 @@ appId: dev.vespin.ios
 - takeScreenshot: comments-resolved
 - tapOn: "Done in the email template."
 - assertVisible: "Reopen"
+- assertNotVisible: "Reply"
 - waitForAnimationToEnd
 - takeScreenshot: comment-resolved-thread
 - tapOn: "Close"
