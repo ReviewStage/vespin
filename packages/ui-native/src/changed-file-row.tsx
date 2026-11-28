@@ -14,9 +14,10 @@ import { CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
 import { folderAndName, STATUS_LETTER, STATUS_WORDS } from "@repo/features/changed-files";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { GLYPH } from "./glyph.js";
 import { lineCount } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
-import { UnreadDot } from "./marks.js";
+import { ToneGlyph, UnreadDot } from "./marks.js";
 import { Text } from "./text.js";
 import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -51,7 +52,7 @@ export function ChangedFileRow({
   viewed = false,
 }: {
   readonly file: AgentChangedFile;
-  /** Whether the member marked the file viewed, which fades its name. */
+  /** Whether the member marked the file viewed, which fades its name and ticks it, muted, before its counts. */
   readonly viewed?: boolean | undefined;
 }) {
   const colors = useColors();
@@ -91,6 +92,7 @@ export function ChangedFileRow({
       ink={viewed ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={
         <HStack spacing={SPACE.TIGHT}>
+          {viewed ? <ToneGlyph glyph={GLYPH.CHECK} tone={STATUS_TONE.NEUTRAL} hidden /> : null}
           {count(file.additions, "+", colors.COMPLETE)}
           {count(file.deletions, "−", colors.DANGER_TEXT)}
         </HStack>

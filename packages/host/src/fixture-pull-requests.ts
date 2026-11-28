@@ -11,9 +11,9 @@
  * keeps and lays over the parts: merged, out of the merge queue, into it,
  * closed, reopened, or turned to a draft and back, and its title as it was
  * last edited. The ready one's files changed are answered too
- * (`fixtureChanges`), a long generated file among them, so a flow opens Files
- * changed and times its longest diff. Every person, repository, and line here
- * is invented.
+ * (`fixtureChanges`), one of them marked viewed, a long generated file among
+ * them, so a flow opens Files changed and times its longest diff. Every
+ * person, repository, and line here is invented.
  */
 
 import {
@@ -54,10 +54,13 @@ import type {
   RepositoryOverviewChecksAnswerView,
   RepositoryOverviewConversationAnswerView,
   RepositoryOverviewPullRequestAnswerView,
+  RepositoryPullRequestViewedAnswerView,
 } from "@repo/features/pull-request-view";
 import {
+  FILE_VIEWED_STATE,
   MERGE_METHOD,
   PULL_REQUEST_ACTION,
+  PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestActionRequest,
   REACTION,
 } from "@repo/features/pull-request-write-wire";
@@ -568,6 +571,7 @@ const LAID = {
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: new WeakMap(),
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: new WeakMap(),
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: new WeakMap(),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: new WeakMap(),
 } as const satisfies Record<string, LaidReads>;
 
 /** Every part held of one read, its staged pull requests laid over the repository's in the fixture's workspace. */
@@ -656,6 +660,13 @@ export function pullRequestPartsAppState(
       moves,
       resolves,
       () => CHAPTERS,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: laid(
+      LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED],
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED],
+      moves,
+      resolves,
+      viewedMarks,
     ),
   };
 }
@@ -892,4 +903,23 @@ export function fixtureGeneratedChapters(number: number): PullRequestChaptersAns
   if (asked?.merging === undefined) return { pullRequest: null };
 
   return chaptersOf(number, toldFor(asked.merging.headSha));
+}
+
+/** The file of the ready pull request the member marked viewed, so Files changed draws one ticked. */
+const VIEWED_PATH = "docs/invitations.md";
+
+/** The member's viewed marks on the fixture's pull requests, as GitHub answers a read of them: one of the ready one's files viewed. */
+function viewedMarks(): ReadonlyMap<number, RepositoryPullRequestViewedAnswerView> {
+  return new Map([
+    [
+      FIXTURE_PULL_REQUEST.READY,
+      {
+        outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
+        files: READY_FILES.map((file) => ({
+          path: file.path,
+          state: file.path === VIEWED_PATH ? FILE_VIEWED_STATE.VIEWED : FILE_VIEWED_STATE.UNVIEWED,
+        })),
+      },
+    ],
+  ]);
 }

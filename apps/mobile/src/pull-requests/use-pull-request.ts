@@ -67,7 +67,7 @@ function refused(what: string): (cause: unknown) => void {
 }
 
 /** One part's read on the document, under the workspace, the repository, and the number. */
-function partIn<Part>(
+export function partIn<Part>(
   slice: AppRepositoryPullRequestHeld<Part>,
   key: PullRequestKey,
 ): AppHostRead<Part> | undefined {
