@@ -48,7 +48,7 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
-import type { ReactElement, ReactNode } from "react";
+import { type ReactElement, type ReactNode, useContext } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
@@ -80,6 +80,7 @@ import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
+import { RowSidebarPickedContext } from "./row-open.js";
 import type { RowPreview } from "./row-preview-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -690,6 +691,8 @@ type PlaceRowProps = {
 export function PlaceRow({ id, symbol, label, count }: PlaceRowProps) {
   const colors = useColors();
   const counted = count !== undefined && count > 0;
+  // Note that a selected place's count stands in the accent fill's own ink, as iOS's sidebar draws a count white on its accent, since the attention ink is copper and vanishes on the copper fill.
+  const selected = useContext(RowSidebarPickedContext) === id;
 
   return (
     <RowFrame
@@ -707,7 +710,14 @@ export function PlaceRow({ id, symbol, label, count }: PlaceRowProps) {
           }
           title={label}
           ink={colors.TEXT_BODY}
-          end={counted ? <EndWords words={String(count)} ink={colors.ATTENTION} /> : null}
+          end={
+            counted ? (
+              <EndWords
+                words={String(count)}
+                ink={selected ? colors.ON_ACCENT : colors.ATTENTION}
+              />
+            ) : null
+          }
         />
       }
     />

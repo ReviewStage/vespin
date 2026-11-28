@@ -73,6 +73,7 @@ import {
   RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
+  RowSidebarPickedContext,
   RowSystemLookContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
@@ -373,14 +374,18 @@ export function RowList({
         <RowSystemLookContext value={sidebar}>
           <RowOpenContext value={onSelect}>
             <RowSelectedContext value={choosing === undefined && !sidebar ? selected : undefined}>
-              {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
-              {lead === undefined || choosing !== undefined ? null : lead}
-              {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
-              {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-              <RowSearchedContext value={searchedWords}>
-                <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
-              </RowSearchedContext>
-              {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
+              <RowSidebarPickedContext value={sidebar ? selected : undefined}>
+                {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+                {lead === undefined || choosing !== undefined ? null : lead}
+                {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+                {scopes === undefined || choosing !== undefined ? null : (
+                  <ScopeRow scopes={scopes} />
+                )}
+                <RowSearchedContext value={searchedWords}>
+                  <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+                </RowSearchedContext>
+                {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
+              </RowSidebarPickedContext>
             </RowSelectedContext>
           </RowOpenContext>
         </RowSystemLookContext>
