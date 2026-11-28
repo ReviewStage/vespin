@@ -8,17 +8,73 @@ WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffl
 WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
 WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
 Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox-large})... COMPLETED
-Assert that "Recorded the invite flow" is visible... FAILED
-
-Assertion is false: "Recorded the invite flow" is visible
-
-Assertion '"Recorded the invite flow" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
-
-Possible causes:
-- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
-- Element may be temporarily unavailable due to loading state
-- This could be a real regression that needs to be addressed
-
+Assert that id: workspace-switcher is visible... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Run ../../subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "${TAB}" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks" is not visible and false is true... SKIPPED
+  Run flow when "${TAB}", id: place-row is visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks", id: place-row is visible and false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../../subflows/tab.yaml... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on "Release manager"... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Run _flick.yaml...
+  Run flow when ${DIR == 'down'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${DIR == 'up'} is true...
+    Swipe from (50%, 28%) to (50%, 78%) in 220 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+Run _flick.yaml... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on id: composer-field... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Input text What's left before it ships?... COMPLETED
+Tap on (Optional) "Send"... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Run ../../subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run ../../subflows/lower-keyboard.yaml... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) "[0-9]+ repl(y|ies)"... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) id: composer-field... COMPLETED
+Input text Thanks.... COMPLETED
+Tap on (Optional) "Send"... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) id: BackButton... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) id: BackButton...
 ==== Debug output (logs & screenshots) ====
 
-/Users/deanstratakos/vespin-ipad-agent/out/sjglitch1j/vjglitch1/j03-manager-chat/debug/.maestro/tests/2026-11-27_194846
+/Users/deanstratakos/vespin-ipad-agent/out/sjglitch1j/vjglitch1/j03-manager-chat/debug/.maestro/tests/2026-11-27_205541
