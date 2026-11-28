@@ -145,7 +145,10 @@ export const SHARE_DRAFT_PICTURE_FILES = [
 
 export type ShareDraftPictureFile = (typeof SHARE_DRAFT_PICTURE_FILES)[number];
 
-/** What the share sheet kept for New task: the words, the pictures' files, and the workspace and repository picked, for the account it was kept under. */
+/** The most places a draft names, past which it is refused rather than read. */
+const SHARE_DRAFT_MAX_DESTINATIONS = 50;
+
+/** What the share sheet kept for the app: the words, the pictures' files, the workspace and repository picked, and the places ticked, for the account it was kept under. */
 const shareDraftSchema = EffectSchema.Struct({
   accountId: EffectSchema.String,
   prompt: EffectSchema.String,
@@ -154,6 +157,12 @@ const shareDraftSchema = EffectSchema.Struct({
   ),
   workspaceId: EffectSchema.optionalKey(EffectSchema.String),
   repository: EffectSchema.optionalKey(EffectSchema.String),
+  /** The places ticked on the share page, by their ids (`SHARE_NEW_TASK_ID` for New task), which the app opens the page on again; none for a draft the Swift sheet kept for New task. */
+  destinations: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.String).check(
+      EffectSchema.isMaxLength(SHARE_DRAFT_MAX_DESTINATIONS),
+    ),
+  ),
   keptAt: EffectSchema.Number,
 });
 

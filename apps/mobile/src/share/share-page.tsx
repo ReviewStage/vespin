@@ -33,6 +33,7 @@ import {
 import {
   AGENT_ROW_STATE,
   AgentRow,
+  AskNote,
   COMPOSER_LOOK,
   Composer,
   type ComposerPills,
@@ -210,6 +211,10 @@ export interface SharePageProps {
   readonly pills: ComposerPills;
   /** Whether the field holds a picture, which a share may go with alone. */
   readonly holdsPictures: boolean;
+  /** The places ticked as the page opens, such as a kept draft's, by their ids; none ticked where none is given. */
+  readonly initialTicked?: readonly string[] | undefined;
+  /** What a send that did not go said, standing over the field; none while nothing did. */
+  readonly note?: string | undefined;
   /** Sends the words to the places ticked, by their ids (`SHARE_NEW_TASK_ID` for New task); whether it took them. */
   readonly onSend: (to: readonly string[], words: string) => boolean;
   readonly onCancel: () => void;
@@ -217,9 +222,9 @@ export interface SharePageProps {
 
 /** The share page: the places to tick over the composer that holds what was shared. */
 export function SharePage(props: SharePageProps) {
-  const { destinations, words, onWords, pills, holdsPictures, onSend, onCancel } = props;
+  const { destinations, words, onWords, pills, holdsPictures, note, onSend, onCancel } = props;
   const [search, setSearch] = useState("");
-  const [chosen, setChosen] = useState<readonly string[]>([]);
+  const [chosen, setChosen] = useState<readonly string[]>(props.initialTicked ?? []);
   const rows = destinations?.rows ?? [];
   const sections = useMemo(() => shareSections(rows, search), [rows, search]);
   const searching = search.trim() !== "";
@@ -253,6 +258,7 @@ export function SharePage(props: SharePageProps) {
             words={words}
             onWords={onWords}
             pills={pills}
+            head={note === undefined ? undefined : <AskNote words={note} />}
             sendable={!held && holdsPictures}
             sendHeld={held}
             onSend={(sent) => onSend(chosen, sent)}

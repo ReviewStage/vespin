@@ -17,6 +17,7 @@ import { CLIENT_PLATFORM } from "@repo/features/client-identity";
 import { shareDestinationsOf } from "@repo/features/ios-share-destinations";
 import {
   SHARE_DRAFT_PICTURE_FILES,
+  type ShareDestinations,
   type ShareDraftPictureFile,
   shareDraftOf,
   shareSnapshotOf,
@@ -49,23 +50,21 @@ const SHARE_SERVICE = {
 };
 
 /**
- * The snapshot's JSON for the account signed in, read off the document as it
- * changes; none while none is. Note that its tasks and agents are read only
- * once the launch's first screen stands, in no order and as the fields the
- * snapshot names alone (`newestRepositories`, `shareDestinationsOf`), since
- * a read of every task sorted held the launch's first frame at an account's
- * size, and the snapshot written at the last launch stands until then. Where
- * a share may go is read for the workspace the phone works in, from the
- * lists the Tasks tab and the Inbox read (`useListedAgents`, `useChosenInbox`).
+ * What the snapshot is read from, once `reading`: the workspace the phone
+ * works in, the account's tasks, and where a share may go there. Note that
+ * the tasks and agents are read in no order and as the fields the snapshot
+ * names alone (`newestRepositories`, `shareDestinationsOf`), since a read of
+ * every task sorted held the launch's first frame at an account's size.
+ * Where a share may go is read from the lists the Tasks tab and the Inbox
+ * read (`useListedAgents`, `useChosenInbox`).
  */
-function useSnapshotJson(accountId: string | undefined): string | undefined {
+function useShareReads(reading: boolean) {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
   const collections = useTaskListCollections();
-  const drawn = useSplashReleased();
 
   const read = useWindow((q) =>
-    drawn
+    reading
       ? q.from({ task: collections.tasks }).select(({ task }) => ({
           id: task.id,
           workspaceId: task.workspaceId,
@@ -78,9 +77,9 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
       : undefined,
   );
 
-  // Note that no snapshot is written until the tasks have been read, so the share sheet never offers an empty list of repositories.
+  // Note that nothing is read off the tasks until they have been read, so the share sheet never offers an empty list of repositories.
   const tasks = read.status === WINDOW_READ.ROWS ? read.rows : undefined;
-  const agents = useListedAgents(drawn);
+  const agents = useListedAgents(reading);
   const { groups: inbox } = useChosenInbox();
 
   const destinations = useMemo(
@@ -90,6 +89,23 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
         : shareDestinationsOf({ workspaceId: chosenId, agents, tasks, inbox }),
     [chosenId, agents, tasks, inbox],
   );
+
+  return { chosenId, tasks, destinations };
+}
+
+/** Where a share may go in the workspace the phone works in, read as the snapshot reads it, for the share page the app opens a draft on. */
+export function useShareDestinations(): ShareDestinations | undefined {
+  return useShareReads(true).destinations;
+}
+
+/**
+ * The snapshot's JSON for the account signed in, read off the document as it
+ * changes; none while none is. Note that it is read only once the launch's
+ * first screen stands (`useShareReads`), and the snapshot written at the
+ * last launch stands until then.
+ */
+function useSnapshotJson(accountId: string | undefined): string | undefined {
+  const { chosenId, tasks, destinations } = useShareReads(useSplashReleased());
 
   const select = useCallback(
     (state: AppStateSnapshot) =>
@@ -121,10 +137,11 @@ function removeDraftPictures(kept: readonly ShareDraftPictureFile[] = []): void 
 }
 
 /**
- * Opens New task on the draft the share sheet kept for `accountId`, where one
- * stands, and removes it. Its pictures go to New task by their files' names,
- * which New task reads from the group and deletes; a picture file no draft
- * for this account names is removed here.
+ * Opens the draft the share sheet kept for `accountId`, where one stands, and
+ * removes it: on the share page again where it names the places ticked
+ * (`/share`), else on New task. Its pictures go by their files' names, which
+ * the page reads from the group and deletes; a picture file no draft for this
+ * account names is removed here.
  */
 function useOpenDraft(accountId: string | undefined): void {
   const router = useRouter();
@@ -140,13 +157,32 @@ function useOpenDraft(accountId: string | undefined): void {
       removeDraftPictures(draft?.pictures);
 
       if (draft === undefined) return;
+
+      const pictures =
+        draft.pictures === undefined || draft.pictures.length === 0
+          ? undefined
+          : { pictures: JSON.stringify(draft.pictures) };
+
+      // Note that a draft the share page kept opens the page again on the places it ticked, and one the Swift sheet kept opens New task.
+      if (draft.destinations !== undefined && draft.destinations.length > 0) {
+        router.push({
+          pathname: "/share",
+          params: {
+            prompt: draft.prompt,
+            destinations: JSON.stringify(draft.destinations),
+            ...pictures,
+            ...(draft.repository === undefined ? undefined : { repository: draft.repository }),
+          },
+        });
+
+        return;
+      }
+
       router.push({
         pathname: "/start-task",
         params: {
           prompt: draft.prompt,
-          ...(draft.pictures === undefined || draft.pictures.length === 0
-            ? undefined
-            : { pictures: JSON.stringify(draft.pictures) }),
+          ...pictures,
           ...(draft.workspaceId === undefined ? undefined : { workspace: draft.workspaceId }),
           ...(draft.repository === undefined ? undefined : { repository: draft.repository }),
         },
