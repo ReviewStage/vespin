@@ -1,0 +1,58 @@
+pinned to 9045586518
+== bundle PJj11079t3 base 9045586518
+  built 9045586518 base app Vmain19.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main for A and B: 6506bf3b9e; A = 9045586518 (f89e2bfda8 on that main); order B-1x, B-3x, A-1x, A-3x, then B-3x-2 and A-3x-2; no keystroke trace
+== bundle PJj11079t3B base 6506bf3b9e
+  built 6506bf3b9e base app Vmain19.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+CORRECTNESS iphone-light-inbox-A: fails 1 shots 3 Assert that ".*walked the invite flow.*" is visible... FAILED
+CORRECTNESS ipad27-light-inbox-A: fails 1 shots 2 Assert that "Mark all as read" is visible... FAILED
+== bundle PJj11079t3W base 9045586518
+  built 9045586518 base app Vmain19.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-holdmoves.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+  n2A settled pick: 360 open decide threads no move names
+  n2A moves held from 1795852719966
+  n2A close wait: close logged 53 ms after the flow ended; outbox at terminate: 0 rows 
+  n2A moves released at 1795852810813
+n2A-write-1x fn2mark: 29 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 2: decide how a partial cent rounds in the billing rounding]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 2 on All] 12 steps Assert that "${SETTLED}" is visible... FAILED
+  n2A db after rows: at 1795852851003 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_b3kc2t6_1i collection_expected_keys leader_term c_dfh5mxy_1i collection_metadata persisted_index_registry cache_generation collection_registry t_b3kc2t6_1i cache_generation_claim collection_reset_epoch t_dfh5mxy_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:748c7d64-4f1c-4ad8-b360-097ecbc51a1f|c_b3kc2t6_1i|
+  n2A written.json: status present, polled until 131818 ms after the relaunch: {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true},"5eed0004-0000-4000-8000-0000003d0901":{"carried":true,"unread":false,"status":"closed","settledAt":1795852793472,"updatedAt":1795852793472,"revision":9}}
+  n2A times: second_launch_T=1795852718496 terminate_T=1795852810983 mark_end_T=1795852811116 relaunch_T=1795852811148 s1_end_T=1795852838142 s2_end_T=1795852929082 written_status_T=1795852942966 tries=0 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795852943297 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_b3kc2t6_1i collection_expected_keys leader_term c_dfh5mxy_1i collection_metadata persisted_index_registry cache_generation collection_registry t_b3kc2t6_1i cache_generation_claim collection_reset_epoch t_dfh5mxy_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:748c7d64-4f1c-4ad8-b360-097ecbc51a1f|c_b3kc2t6_1i|
+  n2A mark target: read writes named ['5eed0004-0000-4000-8000-0000003d09d9'] | the marked thread is 5eed0004-0000-4000-8000-0000003d09d9 | match
+  n2A seed rows: Thread 218: -> Thread 218: decide how a partial cent ro: id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-moves.json, id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-whole.json; Thread 2: -> Thread 2: decide how a partial cent roun: id 5eed0004-0000-4000-8000-0000003d0901 open in inbox-whole.json; 
+CORRECTNESS write check A done (n2A-write-1x); host sqlite after the relaunch:
+B-1x starts 08:02:27 UTC
+B-1x 1x: first rc 0, first app-ready {"launch_ms":1990.9009991884232,"local_ms":418.5455411672592,"started_ms":855.7317491769791,"screens_ms":1466.6732912063599,"inbox_ms":1239.1926661729813,"active_ms":292.2704162597656,"first_rows":"ke | first-answers  || second app-ready {"launch_ms":1992.5382496118546,"local_ms":430.96099960803986,"started_ms":842.8097075223923,"screens_ms":1469.3672915697098,"inbox_ms":1218.7907075881958,"active_ms":293.9943745136261,"first_rows":"k | second first-answers 
+B-1x app-ready in full: first {"launch_ms":1990.9009991884232,"local_ms":418.5455411672592,"started_ms":855.7317491769791,"screens_ms":1466.6732912063599,"inbox_ms":1239.1926661729813,"active_ms":292.2704162597656,"first_rows":"kept"} || second {"launch_ms":1992.5382496118546,"local_ms":430.96099960803986,"started_ms":842.8097075223923,"screens_ms":1469.3672915697098,"inbox_ms":1218.7907075881958,"active_ms":293.9943745136261,"first_rows":"kept"}
+B-3x starts 08:07:49 UTC
+B-3x 3x: first rc 0, first app-ready {"launch_ms":5005.272583127022,"local_ms":483.3148331642151,"started_ms":1880.2824991941452,"screens_ms":3451.459374189377,"inbox_ms":3096.599499106407,"active_ms":340.25574910640717,"first_rows":"kep | first-answers  || second app-ready {"launch_ms":4678.167832493782,"local_ms":568.3989164829254,"started_ms":1848.4267914295197,"screens_ms":3184.6264995336533,"inbox_ms":2949.589332461357,"active_ms":380.15099942684174,"first_rows":"ke | second first-answers 
+B-3x app-ready in full: first {"launch_ms":5005.272583127022,"local_ms":483.3148331642151,"started_ms":1880.2824991941452,"screens_ms":3451.459374189377,"inbox_ms":3096.599499106407,"active_ms":340.25574910640717,"first_rows":"kept"} || second {"launch_ms":4678.167832493782,"local_ms":568.3989164829254,"started_ms":1848.4267914295197,"screens_ms":3184.6264995336533,"inbox_ms":2949.589332461357,"active_ms":380.15099942684174,"first_rows":"kept"}
+A-1x starts 08:13:13 UTC
+A-1x 1x: first rc 0, first app-ready {"launch_ms":2666.3612492084503,"local_ms":406.88249909877777,"started_ms":791.4407081604004,"screens_ms":1435.632833123207,"inbox_ms":1188.99962413311,"active_ms":292.61508309841156,"first_rows":"fee | first-answers  || second app-ready {"launch_ms":1911.6949998140335,"local_ms":487.9666248559952,"started_ms":852.7711248397827,"screens_ms":1447.7469998598099,"inbox_ms":1232.5265408754349,"active_ms":327.2786659002304,"first_rows":"ke | second first-answers 
+A-1x app-ready in full: first {"launch_ms":2666.3612492084503,"local_ms":406.88249909877777,"started_ms":791.4407081604004,"screens_ms":1435.632833123207,"inbox_ms":1188.99962413311,"active_ms":292.61508309841156,"first_rows":"feed"} || second {"launch_ms":1911.6949998140335,"local_ms":487.9666248559952,"started_ms":852.7711248397827,"screens_ms":1447.7469998598099,"inbox_ms":1232.5265408754349,"active_ms":327.2786659002304,"first_rows":"kept"}
+A-3x starts 08:18:35 UTC
+A-3x 3x: first rc 0, first app-ready {"launch_ms":5330.034957766533,"local_ms":518.3512498140335,"started_ms":1866.3124997615814,"screens_ms":3318.8380827903748,"inbox_ms":2976.4177907705307,"active_ms":349.62429082393646,"first_rows":"f | first-answers  || second app-ready {"launch_ms":4314.097082853317,"local_ms":519.6190408468246,"started_ms":1563.7293328046799,"screens_ms":2853.7775408029556,"inbox_ms":2630.2018328905106,"active_ms":338.3767498731613,"first_rows":"ke | second first-answers 
+A-3x app-ready in full: first {"launch_ms":5330.034957766533,"local_ms":518.3512498140335,"started_ms":1866.3124997615814,"screens_ms":3318.8380827903748,"inbox_ms":2976.4177907705307,"active_ms":349.62429082393646,"first_rows":"feed"} || second {"launch_ms":4314.097082853317,"local_ms":519.6190408468246,"started_ms":1563.7293328046799,"screens_ms":2853.7775408029556,"inbox_ms":2630.2018328905106,"active_ms":338.3767498731613,"first_rows":"kept"}
+B-3x-2 starts 08:24:01 UTC
+B-3x-2 3x: first rc 0, first app-ready {"launch_ms":4903.730999827385,"local_ms":480.3187497854233,"started_ms":1804.5303328037262,"screens_ms":3391.88579082489,"inbox_ms":3003.670665740967,"active_ms":350.45437479019165,"first_rows":"kept | first-answers  || second app-ready {"launch_ms":4616.329874753952,"local_ms":587.723749756813,"started_ms":1842.0857907533646,"screens_ms":3113.9924577474594,"inbox_ms":2895.339082837105,"active_ms":398.1139158010483,"first_rows":"kept | second first-answers 
+B-3x-2 app-ready in full: first {"launch_ms":4903.730999827385,"local_ms":480.3187497854233,"started_ms":1804.5303328037262,"screens_ms":3391.88579082489,"inbox_ms":3003.670665740967,"active_ms":350.45437479019165,"first_rows":"kept"} || second {"launch_ms":4616.329874753952,"local_ms":587.723749756813,"started_ms":1842.0857907533646,"screens_ms":3113.9924577474594,"inbox_ms":2895.339082837105,"active_ms":398.1139158010483,"first_rows":"kept"}
+A-3x-2 starts 08:29:30 UTC
+A-3x-2 3x: first rc 0, first app-ready {"launch_ms":5296.87437415123,"local_ms":486.94837415218353,"started_ms":1841.1300830841064,"screens_ms":3294.3192081451416,"inbox_ms":2944.4525411129,"active_ms":339.01424908638,"first_rows":"feed"} | first-answers  || second app-ready {"launch_ms":4694.62791621685,"local_ms":617.1356241703033,"started_ms":1879.2348742485046,"screens_ms":3196.990958213806,"inbox_ms":2968.92349922657,"active_ms":398.41137421131134,"first_rows":"kept" | second first-answers 
+A-3x-2 app-ready in full: first {"launch_ms":5296.87437415123,"local_ms":486.94837415218353,"started_ms":1841.1300830841064,"screens_ms":3294.3192081451416,"inbox_ms":2944.4525411129,"active_ms":339.01424908638,"first_rows":"feed"} || second {"launch_ms":4694.62791621685,"local_ms":617.1356241703033,"started_ms":1879.2348742485046,"screens_ms":3196.990958213806,"inbox_ms":2968.92349922657,"active_ms":398.41137421131134,"first_rows":"kept"}
