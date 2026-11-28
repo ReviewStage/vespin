@@ -149,9 +149,9 @@ function PlacesSlot() {
   const router = useRouter();
   const onInbox = iosTabOfGroup(tabGroupOf(segments)) === IOS_TAB.INBOX;
 
-  // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it; it is heard once a sheet over it, such as Settings, has gone, as the route under the sheet comes back to stand.
+  // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it: by the same navigation the sidebar's Tasks row makes, heard only while a place's own route is focused, so never under a sheet such as Settings, only once it has gone.
   useEffect(() => {
-    if (!inboxShown && onInbox) router.replace(SPLIT_TAB.TASKS);
+    if (!inboxShown && onInbox) router.navigate(SPLIT_TAB.TASKS);
   }, [inboxShown, onInbox, router]);
 
   return <Slot />;
