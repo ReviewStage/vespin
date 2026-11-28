@@ -45,6 +45,7 @@ import {
   LIST_DENSITY,
   LIST_ROW_ACTIONS,
   LIST_ROW_CURRENT,
+  LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
   ListRow,
   type ListRowFold,
@@ -1429,6 +1430,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           ref={hold}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
+          currentLook={LIST_ROW_CURRENT_LOOK.FILL}
           leading={<PlanGlyph status={task.status} />}
           title={
             rename.editing ? (

@@ -76,18 +76,20 @@
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
      in place of a control's height, the body's size, the list's and
      section's gaps, a control's corner, a row's inset and a glyph's gap: how
-     tall a row stands, the size of its words, the room between two rows and
+     tall a row stands, a chunky button the pointer reads at a glance, and a
+     group's head, which keeps a control's height, the size of its words, the room between two rows and
      between the places at its top, the room over each group, a row's corner,
      how far it holds its glyph from its edge, and the room between its glyph
      and its words. */
-  --ui-sidebar-row-height: var(--ui-control-height);
-  --ui-sidebar-text-size: var(--ui-type-body-size);
-  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-row-height: var(--ui-space-40);
+  --ui-sidebar-head-height: var(--ui-control-height);
+  --ui-sidebar-text-size: 14px; /* off-scale: a chunky row's words, a step over the body's */
+  --ui-sidebar-row-gap: var(--ui-space-2);
   --ui-sidebar-places-gap: var(--ui-list-gap);
   --ui-sidebar-group-gap: var(--ui-space-8);
-  --ui-sidebar-row-radius: var(--ui-control-radius);
-  --ui-sidebar-row-inset: var(--ui-row-inset);
-  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  --ui-sidebar-row-radius: var(--ui-radius-8);
+  --ui-sidebar-row-inset: var(--ui-space-12);
+  --ui-sidebar-icon-gap: var(--ui-space-10);
   /* The sidebar's rail of places (`SidebarRail`): how wide it stands, the
      one square every tile fills, its head's and its foot's alike, and the
      glyph in it, the tile's corner, the one gap between any two tiles, and
@@ -411,18 +413,20 @@
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
      in place of a control's height, the body's size, the list's and
      section's gaps, a control's corner, a row's inset and a glyph's gap: how
-     tall a row stands, the size of its words, the room between two rows and
+     tall a row stands, a chunky button the pointer reads at a glance, and a
+     group's head, which keeps a control's height, the size of its words, the room between two rows and
      between the places at its top, the room over each group, a row's corner,
      how far it holds its glyph from its edge, and the room between its glyph
      and its words. */
-  --ui-sidebar-row-height: var(--ui-control-height);
+  --ui-sidebar-row-height: var(--ui-space-40);
+  --ui-sidebar-head-height: var(--ui-control-height);
   --ui-sidebar-text-size: var(--ui-type-body-size);
-  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-row-gap: var(--ui-space-2);
   --ui-sidebar-places-gap: var(--ui-list-gap);
   --ui-sidebar-group-gap: var(--ui-space-8);
-  --ui-sidebar-row-radius: var(--ui-control-radius);
-  --ui-sidebar-row-inset: var(--ui-row-inset);
-  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  --ui-sidebar-row-radius: var(--ui-radius-8);
+  --ui-sidebar-row-inset: var(--ui-space-12);
+  --ui-sidebar-icon-gap: var(--ui-space-10);
   /* The sidebar's rail of places (`SidebarRail`): how wide it stands, the
      one square every tile fills, its head's and its foot's alike, and the
      glyph in it, the tile's corner, the one gap between any two tiles, and

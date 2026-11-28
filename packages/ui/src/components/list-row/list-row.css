@@ -112,6 +112,12 @@
     background: var(--ui-color-fill-current);
   }
 
+  /* A sidebar's row stands open in the selected fill on its own box, solid
+     and flat, as its rail's tile does, in the dark as in the light. */
+  .ui-list-row[data-current="true"][data-current-look="fill"] {
+    background: var(--ui-color-fill-selected);
+  }
+
   /* A row chosen in its list's selection is filled as a Mac's list fills
      the rows chosen, over the open row's fill where it is both. Note that
      it names the look too, so it matches the open row's rules in weight and

@@ -119,6 +119,12 @@
   --ui-list-gap: var(--ui-sidebar-places-gap);
 }
 
+/* A group's head stays a control tall over its chunky rows, so a section
+   with nothing in it reads as a label rather than an empty row. */
+.desktop-sidebar .ui-group-header-head {
+  --ui-control-height: var(--ui-sidebar-head-height);
+}
+
 /* The head stands on the lines of the column under it and the buttons over
    it. Its tile, a face a step wider than a row's glyph, is centered where
    the rows' glyphs are: the row's start and the gap after the tile each give
@@ -133,6 +139,13 @@
 .sidebar-workspace,
 .desktop-sidebar .sidebar-account-row {
   --sidebar-workspace-overhang: calc((var(--spacing-avatar-row) - var(--ui-control-icon)) / 2);
+}
+
+/* Beside the rail, which draws the workspace's tile, the head draws its name
+   alone, so nothing overhangs and the name starts on the column the rows'
+   glyphs stand on. */
+.desktop-sidebar[data-rail] .sidebar-workspace {
+  --sidebar-workspace-overhang: 0px;
 }
 
 .sidebar-workspace .workspace-ref[data-size="head"],

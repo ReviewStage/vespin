@@ -21,6 +21,7 @@ import {
   type InlineEditHandle,
   LIST_DENSITY,
   LIST_ROW_CURRENT,
+  LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
   ListRow,
   type ListRowFold,
@@ -385,6 +386,7 @@ export function AgentListRow({
           ref={holdPress}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
+          currentLook={LIST_ROW_CURRENT_LOOK.FILL}
           leading={glyph}
           leadingControl={editing && face !== undefined}
           title={
