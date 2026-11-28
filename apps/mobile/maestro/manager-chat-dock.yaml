@@ -1,0 +1,111 @@
+# manager-chat-dock.yaml -- a Manager's chat run past the screen opens with its composer at the screen's foot and its newest message just above it, however the keyboard last stood: opened again after Back with the keyboard up, come back to from a thread whose keyboard stood, and opened from Search with its field's keyboard up.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+# Each opening is shot twice: as soon as its newest message stands, and once
+# every animation has ended, so a composer that settles late shows in the
+# first frame.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose release Manager's chat holds a
+# few messages (`@repo/host/fixture-inbox`'s `MANAGER_CHAT`); each line the
+# run sends lands as the chat's row (`fixture-host.ts`'s `keepChatSend`), so
+# six of them run the chat past the screen. Nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- tapOn: "Release manager"
+- extendedWaitUntil:
+    visible: "Left before it ships.*"
+    timeout: 15000
+- tapOn:
+    id: "composer-field"
+# Note that the keyboard is asserted by its space key, since a simulator with
+# its hardware keyboard connected draws none and types nothing.
+- assertVisible: "space"
+- evalScript: ${output.sent = 0}
+- repeat:
+    times: 6
+    commands:
+      - evalScript: ${output.sent = output.sent + 1}
+      - inputText: "Chat line ${output.sent} keeps the chat running well past the foot of the screen."
+      - tapOn: "Send"
+      - extendedWaitUntil:
+          visible: "Chat line ${output.sent} keeps.*"
+          timeout: 10000
+- assertVisible: "space"
+
+# Back with the keyboard up, then the chat opened again from its row.
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Release manager"
+    timeout: 10000
+- tapOn: "Release manager"
+- extendedWaitUntil:
+    visible: "Chat line 6 keeps.*"
+    timeout: 15000
+- takeScreenshot: manager-chat-reopened-first
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: manager-chat-reopened
+- assertVisible:
+    text: "Chat line 6 keeps.*"
+    above:
+      id: "composer-field"
+
+# A thread opened from the newest message's long press, its keyboard raised,
+# and Back to the chat with it up.
+- longPressOn: "Chat line 6 keeps.*"
+- tapOn: "Reply in thread"
+- extendedWaitUntil:
+    visible: "Thread"
+    timeout: 10000
+- tapOn:
+    id: "composer-field"
+- assertVisible: "space"
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: "Chat line 5 keeps.*"
+    timeout: 10000
+- takeScreenshot: manager-chat-from-thread-first
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: manager-chat-from-thread
+- assertNotVisible: "space"
+- assertVisible:
+    text: "Chat line 6 keeps.*"
+    above:
+      id: "composer-field"
+
+# Search's field holding the keyboard, and the Manager it finds opened.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Search
+- tapOn: "Search Vespin"
+- inputText: "release manager"
+- extendedWaitUntil:
+    visible: "Release manager"
+    timeout: 10000
+- assertVisible: "space"
+- tapOn:
+    text: "Release manager"
+    index: -1
+- extendedWaitUntil:
+    visible: "Chat line 6 keeps.*"
+    timeout: 15000
+- takeScreenshot: manager-chat-from-search-first
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: manager-chat-from-search
+- assertVisible:
+    text: "Chat line 6 keeps.*"
+    above:
+      id: "composer-field"

@@ -1,21 +1,40 @@
-// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, read frame by frame from UIKit's keyboard layout guide, stands it as its content's bottom scroll edge, and tells JavaScript how far the keyboard stands over it.
+// KeyboardDockModule.swift -- a screen that lifts the bar at its foot with the system's keyboard, followed by a view UIKit pins to the keyboard layout guide of the view controller that stands in the window, stands it as its content's bottom scroll edge, and tells JavaScript how far the keyboard stands over it.
 //
 // `@repo/ui-native`'s `GlassDock` stands its content and its bar inside this
 // view (`keyboard-dock.ts`), the bar as its last child. React Native hears the
 // keyboard only as it is announced to rise or fall, so a bar it lifts stands
 // still while a drag pulls the keyboard down under the finger, then jumps.
 // UIKit's keyboard layout guide follows the keyboard through that drag, the
-// suggestion strip's growth and a form sheet's own lift, so the lift is read
-// here at each layout pass, inside the keyboard's own animation, after it
-// settles, and on each frame drawn while the keyboard stands, and set on the
-// bar as a transform, which React Native's layout leaves alone. A view that
-// stops being the bar, as a page goes back with the keyboard up, is set down
-// before Fabric can draw it anew elsewhere still lifted. The bar is the last
-// child React mounted, never a view UIKit adds of its own, such as one a
-// selection in the field stands beside it. Note that the display
-// link holds this view while it runs, so it stops as the view leaves its
-// window, which it does before it goes. JavaScript
-// hears the same overlap, so the content under the bar leaves room for it.
+// suggestion strip's growth and a form sheet's own lift, so a view of no
+// height stands in the window with its foot pinned to such a guide, and
+// UIKit moves it with the keyboard on every frame the keyboard moves, inside
+// the keyboard's own animation; the dock hears it move and sets the bar's lift
+// as a transform, which React Native's layout leaves alone. Note that the bar
+// moves by a transform rather than a constraint on the guide, because it is
+// React's view, whose frame Yoga sets on each commit, so a constraint would
+// fight Fabric; the accessibility tree is told the layout changed wherever
+// the lift settles, so VoiceOver and XCTest read the bar where it stands.
+// Nothing polls and nothing counts frames: the bar moves only as UIKit moves
+// the keyboard. A view that stops being the bar, as a page goes back with the keyboard up, is
+// set down before Fabric can draw it anew elsewhere still lifted. The bar is
+// the last child React mounted, never a view UIKit adds of its own, such as
+// one a selection in the field stands beside it. JavaScript hears the same
+// overlap where the keyboard settles, so the content under the bar leaves
+// room for it.
+//
+// The guide followed is the root view controller's view's, never this view's.
+// UIKit moves a view's keyboard layout guide only as the keyboard's notices
+// post, and only for a view standing in a window then, so a dock out of its
+// window as the keyboard fell kept the risen keyboard in its own guide: a
+// Manager's chat come back to from a thread whose keyboard stood held its
+// composer a keyboard's height up the screen, over its newest messages, until
+// the keyboard next moved. The root view stands in the window while the app
+// runs, so its guide stands where the keyboard does; where it leaves, under a
+// page presented full screen, the tracker moves to the topmost presented
+// view's guide, as react-native-keyboard-controller's tracker does on iOS 26.
+// Note that the window's own guide is never followed: UIKit never moved it,
+// its top standing at the window's top, so the bar stood lifted to the top of
+// the screen with no keyboard up.
 //
 // The bar is lifted over the typing field's input accessory too, such as the
 // Done bar SwiftUI stands over a number pad (`ToolbarItem(placement:
@@ -63,9 +82,6 @@ private let edgeLookPause: TimeInterval = 0.5
 /// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
 private let scrollViewDepth = 8
 
-/// Whether the system's keyboard stands, as its own notices last said, kept for every dock and read and written only on the main thread, where UIKit posts them, since a dock that comes into its window after the keyboard rose, as a start page whose field takes the keyboard as it opens, heard none of them while it stood out of a window.
-nonisolated(unsafe) private var keyboardStands = false
-
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
@@ -75,8 +91,11 @@ final class KeyboardDockView: ExpoView {
   /// The bottom safe area last told to JavaScript, which the bar pads its foot by while the dock lifts it, so the lift and the padding are one number; none yet.
   private var toldInset: CGFloat?
 
-  /// Whether the dock is following a frame drawn, when it moves the bar without telling JavaScript.
-  private var framing = false
+  /// The lift VoiceOver and the accessibility tree were last told of; none yet.
+  private var announcedLift: CGFloat?
+
+  /// Whether the dock is following the keyboard's tracker as it moves, when it moves the bar without telling JavaScript.
+  private var tracking = false
 
   /// The view the dock last lifted, so a view that stops being the bar, as a page goes Back with the keyboard up, is set down before Fabric draws it anew elsewhere.
   private weak var lifted: UIView?
@@ -88,8 +107,11 @@ final class KeyboardDockView: ExpoView {
   private var looksLeft = edgeLooks
   private var lookPending = false
 
-  /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
-  private var frames: CADisplayLink?
+  /// A view of no height standing in the dock's window with its foot pinned to a keyboard layout guide UIKit keeps moving, so UIKit moves it with the keyboard on every frame the keyboard moves, a drag that pulls it down under the finger included, and the bar follows it; none while the dock stands in no window.
+  private var tracker: KeyboardTracker?
+
+  /// Hears the tracker move, which UIKit's layout pass does as the guide moves.
+  private var trackerMoves: NSKeyValueObservation?
 
   /// What last took the keyboard, read as the keyboard moves, whose input accessory the bar is lifted over too.
   private weak var typing: UIResponder?
@@ -99,26 +121,22 @@ final class KeyboardDockView: ExpoView {
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    keyboardLayoutGuide.followsUndockedKeyboard = false
-    // Note that the guide's top then stands at this view's foot while the keyboard is down, rather than at the safe area's, so no keyboard reads as no overlap.
-    keyboardLayoutGuide.usesBottomSafeArea = false
     let center = NotificationCenter.default
     center.addObserver(self, selector: #selector(keyboardWillMove), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardDidMove), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-    center.addObserver(self, selector: #selector(keyboardDidShow), name: UIResponder.keyboardDidShowNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
   }
 
+  // Note that the tracker needs no letting go here, since a view stands in a window only while a superview holds it, so it has always left its window, and let the tracker go there, before it goes.
   deinit {
     NotificationCenter.default.removeObserver(self)
-    frames?.invalidate()
   }
 
-  /// Lays the view out inside the keyboard's announced move, so the bar's lift rides the keyboard's own curve rather than landing after it.
+  /// Notes what took the keyboard as its move is announced, whose input accessory the bar stands over, and lays the window out inside the keyboard's own animation, so the tracker stands where the keyboard ends, the bar's lift rides its curve, and JavaScript hears where it ends as it starts.
   @objc private func keyboardWillMove() {
     typing = FirstResponder.current()
-    setNeedsLayout()
-    layoutIfNeeded()
+    window?.layoutIfNeeded()
+    follow()
   }
 
   /// Reads the overlap again once the keyboard has settled, since a form sheet lifts itself after the keyboard's announced move, which only moves this view's place, not its size.
@@ -127,50 +145,49 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
-  /// Follows the keyboard frame by frame while it stands.
-  @objc private func keyboardDidShow() {
-    keyboardStands = true
-    typing = FirstResponder.current()
-    followFrames()
-  }
-
-  /// Starts following the keyboard each frame, where it is not already followed.
-  private func followFrames() {
-    guard frames == nil, window != nil else { return }
-    let link = CADisplayLink(target: self, selector: #selector(frameDrawn))
-    link.add(to: .main, forMode: .common)
-    frames = link
-  }
-
   @objc private func keyboardDidHide() {
-    keyboardStands = false
-    frames?.invalidate()
-    frames = nil
     follow()
   }
 
-  /// Reads the keyboard on each frame drawn, moving the bar alone. Note that the view is laid out first, so the guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
-  @objc private func frameDrawn() {
-    framing = true
-    layoutIfNeeded()
+  /// Moves the bar with the tracker, never telling JavaScript, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles, from the keyboard's notices.
+  private func trackerMoved() {
+    tracking = true
     follow()
-    framing = false
+    tracking = false
   }
 
-  /// Follows the keyboard as the dock comes into a window with the keyboard already standing, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; stops following as it leaves.
+  /// Stands the tracker in the window, its foot on the keyboard layout guide of the view controller standing there, and follows where it stands now, as a page come back to over a keyboard that announced its fall before the dock could hear it.
+  private func standTracker(in window: UIWindow) {
+    letTrackerGo()
+    let view = KeyboardTracker(frame: .zero)
+    view.attach(in: window)
+    tracker = view
+    window.layoutIfNeeded()
+    trackerMoves = view.observe(\.center, options: [.new]) { [weak self] _, _ in
+      MainActor.assumeIsolated { self?.trackerMoved() }
+    }
+  }
+
+  /// Lets the tracker go as the dock leaves its window.
+  private func letTrackerGo() {
+    trackerMoves?.invalidate()
+    trackerMoves = nil
+    tracker?.letGo()
+    tracker = nil
+  }
+
+  /// Follows the keyboard as the dock comes into a window, from where the keyboard stands then, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; lets it go as the dock leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    guard window == nil else {
-      looksLeft = edgeLooks
-      // Note that the keyboard is followed frame by frame wherever it stands as the dock comes in, whether the dock lifted for it before or never heard it rise, so the suggestion strip growing over a start page's field lifts the bar with it.
-      if keyboardStands { typing = FirstResponder.current() }
-      follow()
-      if keyboardStands || (told ?? 0) > 0 { followFrames() }
+    guard let window else {
+      letTrackerGo()
+      setDown()
       return
     }
-    frames?.invalidate()
-    frames = nil
-    setDown()
+    looksLeft = edgeLooks
+    typing = FirstResponder.current()
+    standTracker(in: window)
+    follow()
   }
 
   override func mountChildComponentView(_ childComponentView: UIView, index: Int) {
@@ -211,7 +228,7 @@ final class KeyboardDockView: ExpoView {
   private func standAsEdge() {
     if edgeStands() { return }
     letEdgeGo()
-    // Note that a layout pass walks the content even once the timed looks are spent, so a list that mounts late, with the dock laid out after it, is still found; the walk is shallow and a frame drawn never makes it.
+    // Note that a layout pass walks the content even once the timed looks are spent, so a list that mounts late, with the dock laid out after it, is still found; the walk is shallow and a move of the tracker never makes it.
     findEdge()
   }
 
@@ -243,7 +260,7 @@ final class KeyboardDockView: ExpoView {
     return edge.view === bar && mounted.dropLast().contains(where: { held.isDescendant(of: $0) })
   }
 
-  /// On a frame drawn, lets a scroll view the content no longer holds go and looks for its successor a moment later, without walking the content on the frame.
+  /// On a move of the tracker, lets a scroll view the content no longer holds go and looks for its successor a moment later, without walking the content on the move.
   private func keepEdge() {
     guard !edgeStands() else { return }
     letEdgeGo()
@@ -273,9 +290,10 @@ final class KeyboardDockView: ExpoView {
     }
   }
 
-  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn.
-  private func follow() {
-    guard window != nil else { return }
+  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a move of the tracker; answers the overlap read.
+  @discardableResult
+  private func follow() -> CGFloat {
+    guard window != nil else { return 0 }
     let overlap = max(0, bounds.maxY - keyboardTop())
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
@@ -285,26 +303,34 @@ final class KeyboardDockView: ExpoView {
       lifted = bar
     }
 
-    // Note that a frame drawn only checks the content's scroll view still stands, which costs nothing, while a layout pass looks for it again where it does not.
-    if framing { keepEdge() } else { standAsEdge() }
+    // Note that a move of the tracker only checks the content's scroll view still stands, which costs nothing, while a layout pass looks for it again where it does not.
+    if tracking { keepEdge() } else { standAsEdge() }
 
-    guard !framing else { return }
+    guard !tracking else { return overlap }
+
+    // Note that the accessibility tree is told the layout changed wherever the lift settles, since a transform moves the bar without a layout pass, and VoiceOver and XCTest kept reading it where it stood before, at its foot under the keyboard, so a tap on Send in landscape landed on the keyboard.
+    if abs((announcedLift ?? 0) - lift) >= overlapStep {
+      announcedLift = lift
+      UIAccessibility.post(notification: .layoutChanged, argument: nil)
+    }
 
     // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone, and so is a new bottom safe area, which the bar pads its foot by.
     let inset = safeAreaInsets.bottom
     let insetMoved = toldInset.map { abs($0 - inset) >= overlapStep } ?? true
 
-    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
+    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return overlap }
     told = overlap
     toldInset = inset
     onOverlap(["overlap": overlap, "inset": inset])
+    return overlap
   }
 }
 
 extension KeyboardDockView {
-  /// Where the keyboard's top stands in this view: the layout guide's, or the typing field's input accessory's where one stands docked on it. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
+  /// Where the keyboard's top stands in this view: the tracker's, on its layout guide, or the typing field's input accessory's where one stands docked on it; this view's foot where it or the tracker stands in no window. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
   fileprivate func keyboardTop() -> CGFloat {
-    let guideTop = keyboardLayoutGuide.layoutFrame.minY
+    guard let window, let tracker, tracker.window === window else { return bounds.maxY }
+    let guideTop = convert(tracker.bounds, from: tracker).maxY
     guard let accessory = typing?.inputAccessoryView, accessory.window != nil, !accessory.isHidden else {
       return guideTop
     }
@@ -312,6 +338,68 @@ extension KeyboardDockView {
     let placed = accessory.convert(accessory.bounds, to: self)
     return placed.maxY >= guideTop - overlapStep ? min(guideTop, placed.minY) : guideTop
   }
+}
+
+/// A view of no height, hidden and untouchable, whose foot is pinned to the keyboard layout guide of the root view controller's view, which stands in the window while the app runs, or, where a page presented full screen took the root's place, of the topmost presented view; it moves to the next as the one holding it leaves the window, until the dock lets it go.
+private final class KeyboardTracker: UIView {
+  /// Whether the dock still holds the tracker, which it lets go as it leaves its window; and whether it is moving to a view of its own accord, which is not a leave.
+  private var held = true
+  private var attaching = false
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isHidden = true
+    isUserInteractionEnabled = false
+    translatesAutoresizingMaskIntoConstraints = false
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) is not used")
+  }
+
+  /// Stands the tracker on the guide of the view controller standing in the window, passing over the view it is leaving with.
+  func attach(in window: UIWindow, passingOver leaving: UIView? = nil) {
+    guard held, let host = trackerHost(in: window, passingOver: leaving), host !== superview else { return }
+    attaching = true
+    defer { attaching = false }
+    host.addSubview(self)
+    let guide = host.keyboardLayoutGuide
+    // Note that the guide follows a keyboard docked at the window's foot alone, a floating or undocked iPad keyboard standing over nothing, and its top stands at the view's foot while the keyboard is down, rather than at the safe area's, so no keyboard reads as no overlap.
+    guide.followsUndockedKeyboard = false
+    guide.usesBottomSafeArea = false
+    NSLayoutConstraint.activate([
+      leadingAnchor.constraint(equalTo: host.leadingAnchor),
+      widthAnchor.constraint(equalToConstant: 0),
+      heightAnchor.constraint(equalToConstant: 0),
+      bottomAnchor.constraint(equalTo: guide.topAnchor),
+    ])
+  }
+
+  /// Leaves the window for good.
+  func letGo() {
+    held = false
+    removeFromSuperview()
+  }
+
+  /// Moves to the next view controller's view as the one holding it leaves the window, as the root's view does under a page presented full screen.
+  override func willMove(toWindow newWindow: UIWindow?) {
+    super.willMove(toWindow: newWindow)
+    guard newWindow == nil, held, !attaching, let window else { return }
+    attach(in: window, passingOver: superview)
+  }
+}
+
+/// The view whose keyboard layout guide the tracker follows: the root view controller's while it stands in the window, else the topmost presented view controller's that does, never the one being left.
+@MainActor
+private func trackerHost(in window: UIWindow, passingOver leaving: UIView?) -> UIView? {
+  guard let root = window.rootViewController else { return nil }
+  let standing = sequence(first: root, next: { $0.presentedViewController })
+    .compactMap(\.viewIfLoaded)
+    .filter { $0.window === window && $0 !== leaving }
+  guard let first = standing.first else { return nil }
+
+  return first === root.viewIfLoaded ? first : standing.last
 }
 
 /// The app's first responder, found by the one action every responder answers, which UIKit sends to the first responder alone.
