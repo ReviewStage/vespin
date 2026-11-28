@@ -1,7 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
   glassEffect,
@@ -21,8 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardDockArea } from "./keyboard-dock.js";
-import { useColors } from "./tokens/colors.js";
-import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { BAR_HEIGHT, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 
 /** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
 const DOCK_ROOM_UNMEASURED = 72;
@@ -42,19 +40,18 @@ const DockInset = createContext<number | undefined>(undefined);
 /** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
 
-/** How round the bar stands: a rounded field, as a composer's is. */
-export const BAR_RADIUS = 24;
+/** How round the bar stands: a capsule while it holds one line, as the composer's pill does, a rounded field once it grows. */
+export const BAR_RADIUS = BAR_HEIGHT / 2;
 
 /**
- * How far the bar's row stands in from its edge: little, since the row's
- * presses carry frames of a press's size (`PRESS_SIZE`), which stand them as
- * far in as the bar's edge did before, so the bar draws as it did while each
- * press takes Apple's least target.
+ * How far the bar's row stands in from its edge: what the bar's height
+ * (`BAR_HEIGHT`) leaves around a press's frame (`PRESS_SIZE`), since each of
+ * the row's presses carries one, which holds its mark well in from the glass.
  */
-export const BAR_EDGE = 2;
+export const BAR_EDGE = (BAR_HEIGHT - PRESS_SIZE) / 2;
 
-/** How far the bar stands in from its column's edges, so what stands over its end, such as Jump to latest, can stand over its last press. */
-export const BAR_MARGIN = SPACE.ROW + 2;
+/** How far the bar stands in from its column's edges: the screen's edge, as Messages stands its field, so what stands over it, such as an agent's capsules and Jump to latest, lines up with it. */
+export const BAR_MARGIN = SPACE.EDGE;
 
 /** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
 export const BAR_ROW_SPACING = 0;
@@ -137,18 +134,6 @@ export function useKeyboardHeight(moves = true): number {
   return height;
 }
 
-/** The filled ground a field's row and what heads it stand on inside the glass, so their words read over a bright picture scrolling under the bar. */
-function useFieldGround(radius: number): readonly ModifierConfig[] {
-  const colors = useColors();
-
-  return [
-    SwiftModifiers.background(
-      colors.RAISED,
-      SwiftModifiers.shapes.roundedRectangle({ cornerRadius: radius }),
-    ),
-  ];
-}
-
 /**
  * The glass a SwiftUI piece floating over the screen stands in, rounded as a
  * bar is, such as a composer's bar, the failure notice and a split view's
@@ -173,46 +158,23 @@ export const BAR_GLASS: readonly ModifierConfig[] = [
  * docks on, and with the keyboard up on the folded iPhone Duo a share of the
  * whole window left the transcript a line or two.
  */
-export function BarHead({
-  children,
-  filled = false,
-}: {
-  readonly children: ReactNode;
-  /** Whether it stands on the field's filled ground, as the field's row does inside the glass, so its words read over a bright picture scrolling under the bar. */
-  readonly filled?: boolean;
-}) {
+export function BarHead({ children }: { readonly children: ReactNode }) {
   const { height: window } = useWindowDimensions();
   const keyboard = useKeyboardHeight(false);
   const [tall, setTall] = useState(0);
   const most = Math.round(Math.max(0, window - keyboard) * HEAD_SHARE);
-  const ground = useFieldGround(BAR_RADIUS - BAR_EDGE);
-
-  // Note that a filled head spans the bar's width, as the field's pill under it does, rather than hugging its words.
-  const fill = filled
-    ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }), ...ground]
-    : [];
-
   const scrolls = tall > most;
 
   const stack = (
     <VStack
       alignment="leading"
-      modifiers={[
-        padding(BAR_HEAD_INSET),
-        onGeometryChange(({ height }) => setTall(height)),
-        ...(scrolls ? [] : fill),
-      ]}
+      modifiers={[padding(BAR_HEAD_INSET), onGeometryChange(({ height }) => setTall(height))]}
     >
       {children}
     </VStack>
   );
 
-  // Note that a head that scrolls takes its ground on the scroll's frame, so the fill stands still while its words scroll over it.
-  return scrolls ? (
-    <ScrollView modifiers={[frame({ height: most }), ...fill]}>{stack}</ScrollView>
-  ) : (
-    stack
-  );
+  return scrolls ? <ScrollView modifiers={[frame({ height: most })]}>{stack}</ScrollView> : stack;
 }
 
 /**
@@ -263,7 +225,6 @@ export function GlassBar({
   foot,
   above,
   modifiers = [],
-  field = false,
   heads = false,
 }: {
   readonly children: ReactNode;
@@ -271,8 +232,6 @@ export function GlassBar({
   readonly foot?: ReactNode;
   /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box, across the bar's whole column, its content inset as far as the bar stands in (`BAR_MARGIN`); nothing where none is given. */
   readonly above?: ReactNode;
-  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
-  readonly field?: boolean;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
@@ -280,9 +239,6 @@ export function GlassBar({
   /** Whether a head may come and go over a row that must never be drawn anew, such as a field of pills holding the keyboard: the bar then keeps the column a head stands in even while none does. */
   readonly heads?: boolean;
 }) {
-  const ground = useFieldGround(PRESS_SIZE / 2);
-  const pill = field ? ground : [];
-
   // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
   const glass = [
     frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
@@ -292,7 +248,7 @@ export function GlassBar({
 
   // Note that a bar whose head comes and goes keeps one shape, because a row moved into a column is drawn anew, and a field drawn anew lets go of the keyboard between one key and the next.
   const alone = !heads && head === undefined && foot === undefined;
-  const rowModifiers = alone ? [...modifiers, ...pill, ...glass] : [...pill];
+  const rowModifiers = alone ? [...modifiers, ...glass] : [];
 
   // Note that a row over a foot holds the field alone, so it stands in a column that hands it the bar's width as it is, rather than a row that sizes the field's text view again for each width it tries.
   const row =
@@ -312,7 +268,7 @@ export function GlassBar({
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+          {head === undefined ? null : <BarHead>{head}</BarHead>}
           {foot === undefined ? (
             row
           ) : (

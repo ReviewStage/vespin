@@ -54,6 +54,9 @@ export const MARK_SIZE = {
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
 export const PRESS_SIZE = 44;
 
+/** How tall a bar of glass at a screen's foot stands holding one line, such as the composer's pill: a press (`PRESS_SIZE`) with a hair of glass around it, as Messages' field stands. */
+export const BAR_HEIGHT = 48;
+
 /** How round the bordered pieces stand: a card, such as an ask's or a pull request's, and a tag. */
 export const RADIUS = {
   CARD: 14,
