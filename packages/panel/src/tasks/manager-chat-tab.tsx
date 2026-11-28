@@ -14,11 +14,12 @@
  * end and keeps to it as messages land, and which ⌘F reads by its words.
  *
  * The transcript is the work under the chat, read beside it only for what
- * a chat shows of it: whether a turn is under way, which the working line
- * just over the box says, never a row of the chat (`manager-working-dock.tsx`),
- * and each turn's work, which Show work opens under the Manager's first
- * message of the turn, among its actions and in its menu, and which the
- * working line's Show work opens at the chat's end for the turn under way.
+ * a chat shows of it: whether a turn is under way, which the quiet working
+ * line the chat ends on says, never a row of the Manager's
+ * (`chat-working-line.tsx`), and each turn's work, which Show work opens
+ * under the Manager's first message of the turn, among its actions and in
+ * its menu, and which the working line's Show work opens above it for the
+ * turn under way.
  * A call the Manager holds for the reader's answer stands at the chat's
  * foot, its answers under it, since the work it stands in is a press away. A
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
@@ -137,6 +138,7 @@ import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ManagerChatSkeleton, ManagerThreadSkeleton } from "./agent-tab-skeleton.js";
 import { useChatMessageMenu } from "./chat-message-menu.js";
 import { type ChatWorkToggle, WorkMessageAction } from "./chat-work.js";
+import { ChatWorkingLine, useLiveWorkToggle } from "./chat-working-line.js";
 import { CopyMessageAction } from "./copy-message.js";
 import {
   type ChatEdit,
@@ -157,7 +159,6 @@ import {
   ThreadSummary,
   useThreadDoors,
 } from "./manager-chat-threads.js";
-import { ManagerWorkingDock, useLiveWorkToggle } from "./manager-working-dock.js";
 import { CHAT_MESSAGE_GONE, useMessageReveal } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { SentMessage } from "./skill-chip.js";
@@ -1208,7 +1209,10 @@ export function ManagerChatTab({
 
   // What stands after the messages is drawn inside the last of them, as an agent's log draws it, so the run measures it with the row and keeps to it.
   const trailing =
-    !liveShown && asks.length === 0 && ended === undefined && endTrail === undefined ? null : (
+    workingLine === undefined &&
+    asks.length === 0 &&
+    ended === undefined &&
+    endTrail === undefined ? null : (
       <>
         {asks.length === 0 ? null : (
           // Note that only the foot's calls offer the answers, since the same call drawn in the turn's work Show work opens would offer them twice.
@@ -1220,11 +1224,12 @@ export function ManagerChatTab({
             </div>
           </ApprovalsProvider>
         )}
-        {liveShown ? (
-          <div className="manager-live-work">
-            <TurnWorkRows parts={view.live} moving delegation={delegation} />
+        {workingLine === undefined ? null : (
+          <div className="manager-turn-under-way">
+            {liveShown ? <TurnWorkRows parts={view.live} moving delegation={delegation} /> : null}
+            <ChatWorkingLine line={workingLine} face={agent.face} toggle={liveWork} />
           </div>
-        ) : null}
+        )}
         {ended === undefined && endTrail === undefined ? null : (
           <div className="agent-end flex flex-col items-start gap-control-gap">
             {ended === undefined ? null : (
@@ -1320,7 +1325,6 @@ export function ManagerChatTab({
         <UndeliveredLines value={marks}>
           {log}
           <AgentTabFoot>
-            <ManagerWorkingDock line={workingLine} face={agent.face} toggle={liveWork} />
             <ThreadsDock threads={threads} />
             {chatBox.dock({
               box,

@@ -535,7 +535,7 @@ test("a person's picture stands as its chip where their words name it, not as a 
   );
 });
 
-test("a message on its way stands in its sender's run as its row will, under the message before it, and the Manager working on it says so over the box, never in a row of the chat", async () => {
+test("a message on its way stands in its sender's run as its row will, under the message before it, and the Manager working on it says so in a quiet line the chat ends on, never in a row of its own", async () => {
   const { container } = await drawChat(
     [
       row("ask", 1, "Ship the invite flow.", DEAN),
@@ -554,14 +554,17 @@ test("a message on its way stands in its sender's run as its row will, under the
     },
   );
 
-  // Note that the Manager at work on it draws no row of the chat, only the line over the box.
+  // Note that the Manager at work on it draws no row of the chat, only the quiet line the chat's log ends on.
   assert.deepEqual(rowsIn(container), [
     [DEAN.name, "Ship the invite flow."],
     ["Iris", "On it."],
     [DEAN.name, "Seven days."],
     [null, "Not five."],
   ]);
-  assert.equal(container.querySelector("[data-manager-working]")?.textContent, "Iris is working…");
+  assert.equal(
+    container.querySelector('[role="log"] [data-manager-working]')?.textContent,
+    "Iris is working…",
+  );
 });
 
 test("a thread's reply the service refused stands marked in its thread, and Retry sends it again there under its own key, with its files", async () => {

@@ -7,8 +7,8 @@
  * among the actions of its first message and in that message's menu
  * (`manager-chat-tab.tsx`, `chat-message-menu.tsx`), which draws the work
  * under it as the transcript draws a turn's; the turn under way offers it
- * beside its working line over the box, which draws the work at the chat's
- * end (`manager-working-dock.tsx`). Hide work folds either away again, so a
+ * beside the working line its chat ends on, which draws the work above the
+ * line (`chat-working-line.tsx`). Hide work folds either away again, so a
  * finished chat draws no more than its messages.
  */
 
@@ -36,7 +36,7 @@ export function WorkMessageAction({ toggle }: { toggle: ChatWorkToggle }): React
   );
 }
 
-/** Show work beside the working line over the box, its words standing, since no message's hover shows it there. */
+/** Show work beside the working line a chat ends on, its words standing, since the line is no message whose hover would show it. */
 export function WorkingWorkAction({ toggle }: { toggle: ChatWorkToggle }): React.JSX.Element {
   return (
     <Button
