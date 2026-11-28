@@ -88,6 +88,12 @@
   --ui-sidebar-row-radius: var(--ui-control-radius);
   --ui-sidebar-row-inset: var(--ui-row-inset);
   --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  /* The sidebar's rail of places (`SidebarRail`): how wide it stands, the
+     square each place's tile fills and the glyph in it, and the tile's corner. */
+  --ui-rail-width: 64px;
+  --ui-rail-tile: 48px;
+  --ui-rail-icon: var(--ui-icon-20);
+  --ui-rail-tile-radius: var(--ui-radius-12);
   /* A task list's row: the room it keeps over and under a control's height. */
   --ui-task-row-block: var(--ui-space-6);
   /* How many lines an agent's empty box stands, before it grows with its words. */
@@ -413,6 +419,12 @@
   --ui-sidebar-row-radius: var(--ui-control-radius);
   --ui-sidebar-row-inset: var(--ui-row-inset);
   --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  /* The sidebar's rail of places (`SidebarRail`): how wide it stands, the
+     square each place's tile fills and the glyph in it, and the tile's corner. */
+  --ui-rail-width: 64px;
+  --ui-rail-tile: 48px;
+  --ui-rail-icon: var(--ui-icon-20);
+  --ui-rail-tile-radius: var(--ui-radius-12);
   /* A task list's row: the room it keeps over and under a control's height. */
   --ui-task-row-block: var(--ui-space-6);
   /* How many lines an agent's empty box stands, before it grows with its words. */

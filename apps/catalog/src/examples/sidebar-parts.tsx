@@ -6,13 +6,16 @@ import {
   GearIcon,
   IconButton,
   NAV_CURRENT,
+  NAV_ITEM_VARIANT,
   NavItem,
   ProductMark,
   SearchIcon,
+  SIDEBAR_FOOT_LOOK,
   SidebarAccountRow,
   SidebarFoot,
   SidebarIdentity,
   SidebarPlaces,
+  SidebarRail,
   SidebarRule,
 } from "@repo/ui";
 import type { Example } from "../example";
@@ -21,7 +24,8 @@ import { CatalogSection } from "../section";
 /**
  * sidebar-parts.tsx -- the parts every surface drawing the app's sidebar
  * shares: the app's head, and the same head naming the surface it stands on;
- * the places over their rule; and the foot's account row.
+ * the places over their rule; the foot's account row; and the rail, its
+ * places as tiles between a head and a foot.
  */
 
 function SidebarParts(): React.JSX.Element {
@@ -63,6 +67,32 @@ function SidebarParts(): React.JSX.Element {
             </SidebarAccountRow>
           </SidebarFoot>
         </div>
+      </CatalogSection>
+      <CatalogSection id="sidebar-rail" title="Rail of tiles">
+        <SidebarRail
+          label="Sidebar places"
+          head={<Avatar name="Acme" size={AVATAR_SIZE.CARD} decorative />}
+          foot={
+            <SidebarFoot look={SIDEBAR_FOOT_LOOK.RAIL}>
+              <SidebarAccountRow look={SIDEBAR_FOOT_LOOK.RAIL}>
+                <IconButton icon={<GearIcon />} label="Settings" />
+              </SidebarAccountRow>
+            </SidebarFoot>
+          }
+        >
+          <NavItem variant={NAV_ITEM_VARIANT.TILE} hint="Search" icon={<SearchIcon />}>
+            Search
+          </NavItem>
+          <NavItem
+            variant={NAV_ITEM_VARIANT.TILE}
+            hint="New task"
+            icon={<ComposeIcon />}
+            current={NAV_CURRENT.PAGE}
+            count={{ value: 3, noun: "waiting on you" }}
+          >
+            New task
+          </NavItem>
+        </SidebarRail>
       </CatalogSection>
     </>
   );
