@@ -199,6 +199,13 @@ test("a surface picking tells its owner where the pointer goes and what it press
     },
   });
 
+  const press = new MouseEvent("mousedown", {
+    bubbles: true,
+    cancelable: true,
+    clientX: 40,
+    clientY: 25,
+  });
+
   const escapePress = new KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
@@ -207,7 +214,7 @@ test("a surface picking tells its owner where the pointer goes and what it press
 
   act(() => {
     canvas.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 30, clientY: 20 }));
-    canvas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 40, clientY: 25 }));
+    canvas.dispatchEvent(press);
     canvas.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 40, clientY: 25 }));
     canvas.dispatchEvent(
       new MouseEvent("mousedown", { bubbles: true, clientX: 40, clientY: 25, button: 2 }),
@@ -218,5 +225,7 @@ test("a surface picking tells its owner where the pointer goes and what it press
   expect(picked).toEqual([{ x: 40, y: 25 }]);
   expect(ended).toBe(1);
   expect(escapePress.defaultPrevented).toBe(true);
+  // The press moves no focus of the browser's own, so a field the pick opens keeps it.
+  expect(press.defaultPrevented).toBe(true);
   expect([pointers, keys]).toEqual([[], []]);
 });

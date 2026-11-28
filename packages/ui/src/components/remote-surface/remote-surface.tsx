@@ -194,7 +194,9 @@ export function RemoteSurface({
     if (picking !== undefined) {
       if (action === REMOTE_POINTER_ACTION.MOVE) picking.onInspect(at(event));
 
+      // Note that the press's own focus is held back, because the owner may open a field on the pick that takes the focus, and the browser would move it back onto the surface.
       if (action === REMOTE_POINTER_ACTION.DOWN && event.button === 0) {
+        event.preventDefault();
         event.currentTarget.focus();
         picking.onPick(at(event));
       }
