@@ -1,4 +1,4 @@
-// ask-card.tsx -- the rows a do ask's steps and an answer ask's fields stand in, as a decide ask's options do, inside the composer over its field: a row each, a hairline between them, and the ask's acts under them.
+// ask-card.tsx -- the rows a do ask's steps and an answer ask's fields stand in, as a decide ask's options do, inside the composer over its field, or in a thread's card once answered or held: a row each, a hairline between them, and the ask's acts under them.
 
 import {
   Divider,
@@ -20,6 +20,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  background,
   buttonStyle,
   fixedSize,
   font,
@@ -36,7 +37,7 @@ import { fieldValueWords } from "@repo/features/inbox-wire";
 import { linkLabels } from "@repo/features/mention-link";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactNode, useRef } from "react";
+import { createContext, Fragment, type ReactNode, useContext, useRef } from "react";
 import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
@@ -53,17 +54,32 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** What a flow finds an ask's note by. */
 const ASK_NOTE_ID = "ask-note";
 
-/** A row's inner margins, as a decide option's: none at its sides, since the composer's head already stands its rows in as far as the field's words, so the two line up. */
-export const ASK_ROW_PADDING = { horizontal: 0, vertical: SPACE.ROW + 1 } as const;
+/** How far a row's words stand in from its sides: none in the composer's head, which already stands its rows in as far as the field's words, so the two line up; a card's margin in a thread's card. */
+const ROW_SIDE = { BARE: 0, CARDED: SPACE.EDGE - 2 } as const;
+
+/** How far a row's words stand from its top and its foot, as a decide option's. */
+const ROW_VERTICAL = SPACE.ROW + 1;
+
+/** How thick a thread's card's edge is drawn: a hairline. */
+const HAIRLINE = 0.5;
+
+/** The side margin of the rows an ask's controls stand in, which `AskRows` sets for its rows. */
+const AskRowSide = createContext<number>(ROW_SIDE.BARE);
+
+/** A row's inner margins where it stands: in the composer's head or in a thread's card. */
+export function useAskRowPadding() {
+  return { horizontal: useContext(AskRowSide), vertical: ROW_VERTICAL };
+}
 
 /** Where a row's words start among the ask's rows: past its margin, and past its leading mark where it has one, as a step's round check. */
-export const CARD_WORDS_INSET = {
-  BARE: ASK_ROW_PADDING.horizontal,
-  MARKED: ASK_ROW_PADDING.horizontal + MARK_SIZE.LEAD + SPACE.ROW,
-} as const;
+function useWordsInset() {
+  const side = useContext(AskRowSide);
+
+  return { BARE: side, MARKED: side + MARK_SIZE.LEAD + SPACE.ROW };
+}
 
 /** A hairline between an ask's rows, starting where the words do, as iOS insets a list's separator past a row's leading mark. */
-export function CardDivider({ inset }: { readonly inset: number }) {
+function CardDivider({ inset }: { readonly inset: number }) {
   return <Divider modifiers={[padding({ leading: inset })]} />;
 }
 
@@ -105,32 +121,59 @@ export type AskAct = {
 };
 
 /**
- * An ask's rows, a hairline between each from where their words start,
- * standing on the composer's glass with no card of their own, as the
- * panel's box holds an ask's controls as its body with no card, border, or
- * head of their own (`inbox-answer-box.tsx`).
+ * An ask's rows, a hairline between each from where their words start. An
+ * open ask's stand on the composer's glass with no card of their own, as
+ * the panel's box holds an ask's controls as its body with no card, border,
+ * or head of their own (`inbox-answer-box.tsx`); an answered or held ask's
+ * stand in a thread's message in the bordered card on its own fill
+ * (`CARD`), set off from the page's ground, as the panel's answered card and
+ * held ask stand there.
  */
-function AskRows({
-  inset,
+export function AskRows({
+  marked,
+  carded,
   children,
 }: {
-  readonly inset: number;
+  /** Whether the rows lead with a mark, such as a step's round check, which the hairlines start past. */
+  readonly marked: boolean;
+  /** Whether they stand in a thread's card rather than on the composer's glass. */
+  readonly carded: boolean;
   readonly children: readonly ReactNode[];
 }) {
+  const colors = useColors();
+  const side = carded ? ROW_SIDE.CARDED : ROW_SIDE.BARE;
+  const inset = marked ? side + MARK_SIZE.LEAD + SPACE.ROW : side;
+
+  const card = [
+    background(colors.CARD, SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+    strokeBorder({
+      content: colors.CHIP_EDGE,
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+      shape: "roundedRectangle",
+      cornerRadius: RADIUS.CARD,
+      style: { lineWidth: HAIRLINE },
+    }),
+  ];
+
   return (
-    <VStack
-      alignment="leading"
-      spacing={0}
-      modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
-    >
-      {children.map((child, index) => (
-        // Note that the rows are keyed by their place, since they never reorder while the ask stands.
-        <Fragment key={index}>
-          {index === 0 ? null : <CardDivider inset={inset} />}
-          {child}
-        </Fragment>
-      ))}
-    </VStack>
+    <AskRowSide.Provider value={side}>
+      <VStack
+        alignment="leading"
+        spacing={0}
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          ...(carded ? card : []),
+        ]}
+      >
+        {children.map((child, index) => (
+          // Note that the rows are keyed by their place, since they never reorder while the ask stands.
+          <Fragment key={index}>
+            {index === 0 ? null : <CardDivider inset={inset} />}
+            {child}
+          </Fragment>
+        ))}
+      </VStack>
+    </AskRowSide.Provider>
   );
 }
 
@@ -283,6 +326,7 @@ function StepRow({
   readonly repository: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
 }) {
+  const rowPadding = useAskRowPadding();
   const heard = linkLabels(step);
   const stepped = useSteppedBack();
   const heardAs = accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard);
@@ -292,7 +336,7 @@ function StepRow({
       spacing={SPACE.ROW}
       alignment="top"
       modifiers={[
-        padding(ASK_ROW_PADDING),
+        padding(rowPadding),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
@@ -342,7 +386,7 @@ export function StepList({
   return (
     <VStack alignment="leading" spacing={SPACE.ROW}>
       {steps.length === 0 ? null : (
-        <AskRows inset={CARD_WORDS_INSET.MARKED}>
+        <AskRows marked carded={onToggle === undefined}>
           {steps.map((step, index) => (
             <StepRow
               key={step}
@@ -408,12 +452,13 @@ function TypedFieldRow({
   /** Called with the field and whether it now holds the keyboard, so the card's Done lowers the one focused. */
   readonly onFocused: (field: TextFieldRef | null, focused: boolean) => void;
 }) {
+  const rowPadding = useAskRowPadding();
   const colors = useColors();
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
   const fieldRef = useRef<TextFieldRef>(null);
 
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ASK_ROW_PADDING)]}>
+    <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(rowPadding)]}>
       <FieldWords
         label={field.label}
         optional={false}
@@ -457,6 +502,7 @@ function SelectOptionRow({
   readonly picked: boolean;
   readonly onPress: () => void;
 }) {
+  const rowPadding = useAskRowPadding();
   const colors = useColors();
 
   return (
@@ -471,7 +517,7 @@ function SelectOptionRow({
       <HStack
         spacing={SPACE.TIGHT + 2}
         modifiers={[
-          padding(ASK_ROW_PADDING),
+          padding(rowPadding),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
@@ -500,12 +546,14 @@ function SelectRows({
   readonly field: AnswerField;
   readonly onChange: (value: string) => void;
 }) {
+  const wordsInset = useWordsInset();
+  const rowPadding = useAskRowPadding();
   const colors = useColors();
   const picked = Predicate.isString(field.value) ? field.value : "";
 
   return (
     <VStack alignment="leading" spacing={0}>
-      <VStack alignment="leading" modifiers={[padding({ ...ASK_ROW_PADDING, bottom: 0 })]}>
+      <VStack alignment="leading" modifiers={[padding({ ...rowPadding, bottom: 0 })]}>
         <FieldWords
           label={field.label}
           optional={!field.required}
@@ -515,7 +563,7 @@ function SelectRows({
       </VStack>
       {(field.options ?? []).map((option, index) => (
         <Fragment key={option}>
-          {index === 0 ? null : <CardDivider inset={CARD_WORDS_INSET.BARE} />}
+          {index === 0 ? null : <CardDivider inset={wordsInset.BARE} />}
           <SelectOptionRow
             option={option}
             recommended={option === field.recommended}
@@ -542,6 +590,7 @@ function BooleanRow({
   readonly field: AnswerField;
   readonly onChange: (value: boolean) => void;
 }) {
+  const rowPadding = useAskRowPadding();
   const colors = useColors();
   const ticked = field.value === true;
   const optional = !field.required;
@@ -556,7 +605,7 @@ function BooleanRow({
         spacing={SPACE.ROW}
         alignment="top"
         modifiers={[
-          padding(ASK_ROW_PADDING),
+          padding(rowPadding),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
@@ -580,6 +629,7 @@ function BooleanRow({
  * stays empty where the answer left it so.
  */
 function HeldFieldRow({ field }: { readonly field: AnswerField }) {
+  const rowPadding = useAskRowPadding();
   const colors = useColors();
   const ink = useSteppedBack() ? colors.TEXT_MUTED : colors.TEXT;
 
@@ -590,7 +640,7 @@ function HeldFieldRow({ field }: { readonly field: AnswerField }) {
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
-          padding(ASK_ROW_PADDING),
+          padding(rowPadding),
           SwiftModifiers.accessibilityElement("combine"),
           accessibilityLabel(field.label),
           // Note that the answer is heard as its value, yes or no, so a no is said rather than left silent; a yes or no the answer left empty says nothing.
@@ -618,7 +668,7 @@ function HeldFieldRow({ field }: { readonly field: AnswerField }) {
       alignment="leading"
       spacing={SPACE.TIGHT}
       modifiers={[
-        padding(ASK_ROW_PADDING),
+        padding(rowPadding),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
         SwiftModifiers.accessibilityElement("combine"),
       ]}
@@ -658,7 +708,7 @@ export function AnswerFields({
 }) {
   if (onChange === undefined) {
     return (
-      <AskRows inset={CARD_WORDS_INSET.BARE}>
+      <AskRows marked={false} carded>
         {fields.map((field) => (
           <HeldFieldRow key={field.label} field={field} />
         ))}
@@ -686,7 +736,7 @@ function OpenFields({
   };
 
   const card = (
-    <AskRows inset={CARD_WORDS_INSET.BARE}>
+    <AskRows marked={false} carded={false}>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
 
